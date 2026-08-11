@@ -112,6 +112,11 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
         health: p.health, alive: p.alive, flashlight: p.flashlight,
         aimAmount: p.aimAmount, grounded: p.grounded,
         weapon: p.weapon, kills: p.kills, deaths: p.deaths,
+        // Carried so a client replaying its pending inputs continues the
+        // recoil climb and the jump timer from the host's numbers rather than
+        // its own guess.
+        burstShots: p.burstShots, sinceShot: p.sinceShot,
+        jumpCooldown: p.jumpCooldown, airborne: p.airborne,
       };
     }
     const doors = {};

@@ -3,9 +3,44 @@
 // Pure — no engine types cross this boundary.
 
 import { rayBox, boxOverlaps, clamp } from './math.js';
+import { DOOR } from './constants.js';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
+
+// Is the panel clear of the walls at this angle? Sampled along the leaf at a
+// few heights — enough for rectangular rooms, and it runs once at load.
+function panelFits(geometry, hinge, theta, width) {
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  for (const along of [0.35, 0.6, 0.85, 1.0]) {
+    const px = hinge.x + cos * width * along;
+    const pz = hinge.z + sin * width * along;
+    for (const py of [0.25, 1.0, 1.9]) {
+      for (const b of geometry) {
+        if (
+          px > b.min.x && px < b.max.x &&
+          py > b.min.y && py < b.max.y &&
+          pz > b.min.z && pz < b.max.z
+        ) return false;
+      }
+    }
+  }
+  return true;
+}
+
+// How far this particular door can actually swing before it hits something.
+// Doors open wide by default; one that would sweep into a wall stops short
+// rather than clipping through it.
+function swingLimit(map, hinge, base, swingSign, width) {
+  const STEPS = 20;
+  const MIN = Math.PI / 2;
+  for (let i = 0; i <= STEPS; i++) {
+    const angle = DOOR.openAngle - (DOOR.openAngle - MIN) * (i / STEPS);
+    if (panelFits(map.geometry, hinge, base + swingSign * angle, width)) return angle;
+  }
+  return MIN;
+}
 
 export function buildWorld(map) {
   const doors = map.doors.map((d) => {
@@ -36,6 +71,7 @@ export function buildWorld(map) {
       hinge,
       base,
       swingSign,
+      maxAngle: d.maxAngle ?? swingLimit(map, hinge, base, swingSign, d.width),
       pos: { ...d.pos },
       localBox: {
         min: { x: 0, y: 0, z: -DOOR_THICKNESS / 2 },
@@ -56,7 +92,9 @@ export function buildWorld(map) {
 // ── Door frames ───────────────────────────────────────────────────────────
 
 export function doorAngle(door, openAmount) {
-  return door.base + door.swingSign * openAmount * (Math.PI / 2);
+  // Each door carries its own limit: most swing the full 170°, but one that
+  // would otherwise sweep into a wall stops where the wall is.
+  return door.base + door.swingSign * openAmount * (door.maxAngle ?? DOOR.openAngle);
 }
 
 export function doorFrame(door, openAmount) {
@@ -110,6 +148,15 @@ function resolveAxis(world, pos, radius, height, axis, delta, stepHeight) {
 
   for (const b of world.boxes) {
     if (!boxOverlaps(pb, b)) continue;
+
+    // Vertical moves may only resolve against surfaces we were already clear
+    // of. Without this, a player standing flush against a wall gets snapped to
+    // the top of it by gravity — falling "onto" a surface they were beside
+    // rather than above.
+    if (axis === 'y') {
+      if (delta < 0 && b.max.y > pos.y + 1e-3) continue;
+      if (delta > 0 && b.min.y < pos.y + height - 1e-3) continue;
+    }
 
     // Step over low obstacles instead of stopping dead on them.
     if (axis !== 'y' && b.max.y - pos.y <= stepHeight + 1e-4) {

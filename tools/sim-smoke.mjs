@@ -180,6 +180,117 @@ check(
   `phase=${state.phase} hp=${pd.health}`,
 );
 
+// ── Leaning moves where you shoot from, not just where the camera is ──────
+{
+  resetRound(world, state);
+  const p = state.players.a1;
+  p.pos = { x: 0, y: 0, z: 8 };
+  p.look = { yaw: 0, pitch: 0 };
+  p.lean = 0;
+  const centred = eyePosition(p);
+  p.lean = 1; // lean right
+  const leaned = eyePosition(p);
+  check(
+    'leaning shifts the eye sideways',
+    Math.abs(leaned.x - centred.x) > 0.3 && Math.abs(leaned.z - centred.z) < 0.01,
+    `dx=${(leaned.x - centred.x).toFixed(2)}`,
+  );
+
+  // Facing north, leaning right must move the eye toward +X.
+  check('lean goes to the correct side', leaned.x > centred.x, `x=${leaned.x.toFixed(2)}`);
+
+  // And a leaning player is hittable where they are exposed: shoot at the
+  // leaned-out head position and it must connect.
+  state.phase = 'live';
+  state.phaseTime = 60;
+  const shooter = state.players.d1;
+  const victim = state.players.a1;
+  victim.pos = { x: 0, y: 0, z: 8 };
+  victim.look = { yaw: 0, pitch: 0 };
+  victim.lean = 1;
+  shooter.pos = { x: 0, y: 0, z: 5.5 };
+  const target = eyePosition(victim);
+  const from = eyePosition(shooter);
+  const dx = target.x - from.x;
+  const dz = target.z - from.z;
+  shooter.look = {
+    yaw: Math.atan2(-dx, -dz),
+    pitch: Math.atan2(target.y - from.y, Math.hypot(dx, dz)),
+  };
+  const hpBefore = victim.health;
+  for (let i = 0; i < TICK_RATE && victim.health === hpBefore; i++) {
+    stepSim(world, state, {
+      d1: { ...createInput(), yaw: shooter.look.yaw, pitch: shooter.look.pitch, fire: true, aim: true },
+      a1: { ...createInput(), lean: 1, yaw: 0 },
+    });
+  }
+  check('a leaning player can be hit where they lean out', victim.health < hpBefore,
+    `hp=${victim.health.toFixed(0)}`);
+}
+
+// ── Leaning stops at cover instead of passing through it ──────────────────
+{
+  resetRound(world, state);
+  const p = state.players.a1;
+  // Stand just clear of the landing's east wall (inner face at x = 2.875) and
+  // lean into it. Unclamped, the eye would reach 2.55 + 0.42 = 2.97.
+  p.pos = { x: 2.55, y: 0, z: 8 };
+  p.look = { yaw: 0, pitch: 0 };
+  for (let i = 0; i < TICK_RATE; i++) {
+    stepSim(world, state, { a1: { ...createInput(), lean: 1, yaw: 0 }, d1: createInput() });
+  }
+  const eye = eyePosition(p);
+  check('lean is blocked by the wall beside you', eye.x < 2.8, `eye.x=${eye.x.toFixed(2)}`);
+  check('the player did not get lifted onto the wall', Math.abs(p.pos.y) < 0.01, `y=${p.pos.y.toFixed(2)}`);
+}
+
+// ── Recoil climbs, and climbs harder the longer you hold the trigger ──────
+{
+  resetRound(world, state);
+  state.phase = 'live';
+  state.phaseTime = 60;
+  const p = state.players.a1;
+  p.pos = { x: 0, y: 0, z: 8 };
+  p.look = { yaw: 0, pitch: 0 };
+
+  const fire = { ...createInput(), yaw: 0, pitch: 0, fire: true };
+  stepSim(world, state, { a1: fire, d1: createInput() });
+  const afterFirst = p.recoil.pitch;
+  check('a single shot kicks the sights up', afterFirst > 0.01, `pitch=${afterFirst.toFixed(4)}`);
+
+  let prevStep = afterFirst;
+  let lastStep = afterFirst;
+  for (let i = 0; i < 40; i++) {
+    const before = p.recoil.pitch;
+    const ammo = p.weapon.ammo;
+    stepSim(world, state, { a1: fire, d1: createInput() });
+    if (p.weapon.ammo < ammo) {
+      prevStep = lastStep;
+      lastStep = p.recoil.pitch - before;
+    }
+  }
+  check('sustained fire kicks harder than the first shot', lastStep > afterFirst,
+    `first=${afterFirst.toFixed(4)} late=${lastStep.toFixed(4)}`);
+
+  // Let go and the climb settles back down.
+  const peak = p.recoil.pitch;
+  for (let i = 0; i < TICK_RATE * 2; i++) {
+    stepSim(world, state, { a1: { ...createInput(), yaw: 0 }, d1: createInput() });
+  }
+  check('the sights settle after the burst', p.recoil.pitch < peak * 0.2,
+    `peak=${peak.toFixed(3)} now=${p.recoil.pitch.toFixed(3)}`);
+}
+
+// ── Doors swing wide, and never into a wall ───────────────────────────────
+{
+  const anglesOk = world.doors.every((d) => d.maxAngle >= Math.PI / 2 - 1e-6);
+  check('every door opens at least 90°', anglesOk);
+  const wide = world.doors.filter((d) => d.maxAngle > (140 * Math.PI) / 180).length;
+  check('most doors swing wide open', wide >= 5, `${wide} of ${world.doors.length} past 140°`);
+  console.log('       swing limits: ' +
+    world.doors.map((d) => `${d.id} ${Math.round((d.maxAngle * 180) / Math.PI)}°`).join(', '));
+}
+
 // ── Determinism: same seed + same inputs => identical outcome ─────────────
 function run(seed) {
   const w = buildWorld(APARTMENT);

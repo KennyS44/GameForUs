@@ -57,6 +57,8 @@ function createPlayer(id, team, spawn, name) {
     useCooldown: 0,
     jumpCooldown: 0,
     airborne: false,
+    burstShots: 0,
+    sinceShot: 99,
     lastNoise: 0,
     kills: 0,
     deaths: 0,
@@ -129,25 +131,69 @@ function playerHeight(p) {
   return PLAYER.heightCrouch + (PLAYER.heightStand - PLAYER.heightCrouch) * p.stance;
 }
 
+// Sideways offset of the head when leaning. The renderer moves the camera by
+// exactly this much, so muzzle, eye and hitbox all agree: if you can see round
+// the corner, you can shoot round it — and be shot.
+export function leanOffset(p) {
+  const amount = (p.lean ?? 0) * PLAYER.leanMax;
+  return {
+    x: Math.cos(p.look.yaw) * amount,
+    z: -Math.sin(p.look.yaw) * amount,
+  };
+}
+
+// Cast sideways from the spine at head height: whatever the shoulder would
+// pass through is where the lean has to stop.
+const LEAN_CLEARANCE = 0.16;
+
+function clampLeanToCover(world, state, p) {
+  if (!p.lean) return;
+  const h = playerHeight(p);
+  const from = { x: p.pos.x, y: p.pos.y + h - PLAYER.eyeOffset, z: p.pos.z };
+  const side = Math.sign(p.lean);
+  const dir = {
+    x: Math.cos(p.look.yaw) * side,
+    y: 0,
+    z: -Math.sin(p.look.yaw) * side,
+  };
+  const reach = Math.abs(p.lean) * PLAYER.leanMax + LEAN_CLEARANCE;
+  const hits = raycastGeometry(world, state, from, dir, reach);
+  if (!hits.length) return;
+  const room = Math.max(0, hits[0].t - LEAN_CLEARANCE);
+  p.lean = side * Math.min(Math.abs(p.lean), room / PLAYER.leanMax);
+}
+
 export function eyePosition(p) {
   const h = playerHeight(p);
-  return { x: p.pos.x, y: p.pos.y + h - PLAYER.eyeOffset, z: p.pos.z };
+  const off = leanOffset(p);
+  return {
+    x: p.pos.x + off.x,
+    y: p.pos.y + h - PLAYER.eyeOffset,
+    z: p.pos.z + off.z,
+  };
 }
 
 function hitboxes(p) {
   const h = playerHeight(p);
+  const off = leanOffset(p);
+  // Leaning is a movement of the upper body: the head swings out fully, the
+  // chest follows part way, the legs stay planted behind cover.
+  const hx = p.pos.x + off.x;
+  const hz = p.pos.z + off.z;
+  const tx = p.pos.x + off.x * 0.6;
+  const tz = p.pos.z + off.z * 0.6;
   const { x, z } = p.pos;
   const y = p.pos.y;
   return [
     {
       zone: 'head',
-      min: { x: x - 0.12, y: y + h - 0.26, z: z - 0.12 },
-      max: { x: x + 0.12, y: y + h, z: z + 0.12 },
+      min: { x: hx - 0.12, y: y + h - 0.26, z: hz - 0.12 },
+      max: { x: hx + 0.12, y: y + h, z: hz + 0.12 },
     },
     {
       zone: 'torso',
-      min: { x: x - 0.22, y: y + h * 0.45, z: z - 0.19 },
-      max: { x: x + 0.22, y: y + h - 0.26, z: z + 0.19 },
+      min: { x: tx - 0.22, y: y + h * 0.45, z: tz - 0.19 },
+      max: { x: tx + 0.22, y: y + h - 0.26, z: tz + 0.19 },
     },
     {
       zone: 'limb',
@@ -417,6 +463,9 @@ function stepPlayer(world, state, p, input, dt) {
   if (Math.abs(p.pos.z - before.z) < Math.abs(p.vel.z * dt) * 0.5) p.vel.z *= 0.2;
 
   const fallSpeed = p.vel.y;
+  // Leaning must stop at the wall you are hiding behind, not pass through it.
+  clampLeanToCover(world, state, p);
+
   p.grounded = groundedAt(world, p.pos, PLAYER.radius);
   if (p.grounded && p.vel.y < 0) p.vel.y = 0;
 
@@ -482,6 +531,10 @@ function stepWeapon(world, state, p, input, dt) {
 
   w.cooldown = Math.max(0, w.cooldown - dt);
 
+  // Let go of the trigger for a moment and the muzzle climb starts over.
+  p.sinceShot = (p.sinceShot ?? 0) + dt;
+  if (p.sinceShot > def.burstResetTime) p.burstShots = 0;
+
   if (w.reloading > 0) {
     w.reloading -= dt;
     if (w.reloading <= 0) {
@@ -514,6 +567,7 @@ function stepWeapon(world, state, p, input, dt) {
 
   w.ammo--;
   w.cooldown = 60 / def.rpm;
+  p.sinceShot = 0;
 
   const eye = eyePosition(p);
   const moving = Math.hypot(p.vel.x, p.vel.z) > 1.2;
@@ -530,9 +584,16 @@ function stepWeapon(world, state, p, input, dt) {
   fireBullet(world, state, p, eye, dir);
   checkLightHits(world, state, eye, dir, p);
 
-  // Recoil kicks the aim up and wanders sideways.
-  p.recoil.pitch += def.recoilVertical * (0.7 + nextRandom(state) * 0.6);
-  p.recoil.yaw += (nextRandom(state) - 0.5) * 2 * def.recoilHorizontal;
+  // Recoil kicks the aim up and wanders sideways, and the longer you hold the
+  // trigger the harder it climbs. Aiming down the sights and crouching brace
+  // the weapon, so a controlled burst stays on target where a spray will not.
+  p.burstShots = (p.burstShots ?? 0) + 1;
+  const ramp = Math.min(1 + (p.burstShots - 1) * def.recoilRamp, def.recoilRampMax);
+  let brace = 1 - p.aimAmount * 0.25;
+  if (p.crouching) brace *= 0.85;
+
+  p.recoil.pitch += def.recoilVertical * ramp * brace * (0.85 + nextRandom(state) * 0.3);
+  p.recoil.yaw += (nextRandom(state) - 0.5) * 2 * def.recoilHorizontal * ramp * brace;
 
   emit(state, { type: 'shot', by: p.id, pos: eye, dir, weapon: w.id });
   makeNoise(state, p.pos, def.loudness, 'shot', p.id);
@@ -572,7 +633,10 @@ function stepDoors(world, state, dt) {
     const ds = state.doors[door.id];
     if (ds.open !== ds.target) {
       const before = ds.open;
-      ds.open = approach(ds.open, ds.target, (ds.speed / (Math.PI / 2)) * dt);
+      // `open` is a fraction, `speed` is radians per second — convert using
+      // this door's own swing, so every door moves at the same real rate.
+      const sweep = door.maxAngle || DOOR.openAngle;
+      ds.open = approach(ds.open, ds.target, (ds.speed / sweep) * dt);
       if (before !== ds.open && ds.open === ds.target && ds.speed >= DOOR.kickSpeed) {
         emit(state, { type: 'doorSlam', doorId: door.id });
       }

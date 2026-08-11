@@ -63,10 +63,16 @@ export const WEAPONS = {
     muzzleVelocity: 400,
     reloadTime: 2.4,
     reloadTimeEmpty: 3.1,
-    // Recoil: vertical climb per shot plus a horizontal wander.
-    recoilVertical: 0.0085,
-    recoilHorizontal: 0.0035,
-    recoilRecovery: 7.0,
+    // Recoil. The first shot is controllable; a held trigger climbs fast and
+    // starts wandering sideways, so bursts beat spraying.
+    recoilVertical: 0.021, // radians of climb on the first shot
+    recoilHorizontal: 0.0075,
+    recoilRecovery: 5.2, // how quickly the sights settle back
+    // Each further shot in the same burst kicks harder, up to this multiplier.
+    recoilRamp: 0.085,
+    recoilRampMax: 2.4,
+    // Trigger released for this long and the climb resets.
+    burstResetTime: 0.28,
     // Cone of fire (radians) added on top of recoil.
     spreadHip: 0.032,
     spreadAim: 0.0035,
@@ -78,6 +84,9 @@ export const WEAPONS = {
 };
 
 export const DOOR = {
+  // A door swings almost flat against the wall, not to a tidy right angle, so
+  // an opened doorway is genuinely clear instead of half blocked by its panel.
+  openAngle: (170 * Math.PI) / 180,
   openSpeed: 2.2, // radians/sec when pushed open normally
   sneakSpeed: 0.5, // slow, quiet nudge
   kickSpeed: 11.0,

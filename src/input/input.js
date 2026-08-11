@@ -19,7 +19,7 @@ export const DEFAULT_BINDINGS = {
   leanRight: 'KeyE',
   use: 'KeyF',
   kick: 'KeyV',
-  flashlight: 'KeyL',
+  flashlight: 'KeyT',
   reload: 'KeyR',
   scoreboard: 'KeyB',
 };
