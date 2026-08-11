@@ -44,15 +44,34 @@ export function normaliseCode(raw) {
 
 const peerId = (code) => `${PREFIX}-${code}`;
 
+// STUN alone only works when at least one side's router allows a direct
+// connection. Behind a symmetric NAT — common on mobile networks and corporate
+// Wi-Fi — the two browsers can see each other's addresses and still fail to
+// talk. A TURN server relays the traffic in that case, at the cost of an extra
+// hop. These are free public relays: better than a failed match, but a real
+// dedicated server is what removes the problem for good.
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  {
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      'turn:openrelay.metered.ca:443?transport=tcp', // last resort через 443/TCP
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+];
+
 const PEER_OPTIONS = {
   debug: 0,
-  config: {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:global.stun.twilio.com:3478' },
-    ],
-  },
+  config: { iceServers: ICE_SERVERS, iceCandidatePoolSize: 4 },
 };
+
+// Relaying can take noticeably longer to negotiate than a direct connection,
+// so the wait is generous before giving up.
+const JOIN_TIMEOUT_MS = 25000;
 
 // Data channel tuned for a game: unordered, no retransmits. A stale snapshot
 // is worthless, so never wait for one to be re-sent.
@@ -176,16 +195,49 @@ export function createClientTransport({ code, name, onStatus }) {
 
   const ready = loadPeerLib().then((Peer) => new Promise((resolve, reject) => {
     peer = new Peer(PEER_OPTIONS);
+    // A wrong or closed room fails fast and separately, with "комната не
+    // найдена". Reaching this timeout therefore means the host *was* found and
+    // the two browsers still could not open a channel to each other — a
+    // network problem, not a typo. Saying "check the code" here would send the
+    // player looking in the wrong place.
     const timeout = setTimeout(() => {
       if (!conn?.open) {
-        status('Комната не отвечает. Проверьте код и что хост в игре.', 'error');
-        reject(new Error('timeout'));
+        status(
+          'Хост найден, но прямое соединение не установилось — мешает сеть ' +
+          'или роутер. Попробуйте другую сеть (например, мобильный интернет) ' +
+          'или пусть комнату создаст второй игрок.',
+          'error',
+        );
+        reject(new Error('ice-timeout'));
       }
-    }, 12000);
+    }, JOIN_TIMEOUT_MS);
 
     peer.on('open', (myId) => {
       status('Подключаемся к комнате…');
       conn = peer.connect(peerId(code), { ...CONN_OPTIONS, metadata: { name } });
+
+      // Watch the underlying WebRTC connection. When NAT traversal gives up it
+      // says so, and reporting that immediately beats making the player stare
+      // at a spinner until the timeout expires.
+      const watchIce = () => {
+        const pc = conn?.peerConnection;
+        if (!pc) {
+          if (!closed && !conn?.open) setTimeout(watchIce, 250);
+          return;
+        }
+        pc.addEventListener('iceconnectionstatechange', () => {
+          if (pc.iceConnectionState !== 'failed' || conn.open || closed) return;
+          clearTimeout(timeout);
+          status(
+            'Не удалось пробиться к хосту через сеть. Помогает другая сеть ' +
+            '(например, мобильный интернет) или поменяться ролями — пусть ' +
+            'комнату создаст второй игрок.',
+            'error',
+          );
+          reject(new Error('ice-failed'));
+        });
+      };
+      watchIce();
 
       conn.on('open', () => {
         clearTimeout(timeout);
