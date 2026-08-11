@@ -277,6 +277,13 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
   border: 1px solid var(--line);
   border-radius: var(--radius);
   color: var(--accent);
+  transition: color 0.24s var(--ease), opacity 0.24s var(--ease);
+}
+/* The code exists but the room is not registered yet — do not hand it out. */
+.roomcode.pending {
+  color: var(--text-faint);
+  opacity: 0.6;
+  animation: pulse 1.6s var(--ease) infinite;
 }
 
 .lobby-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }

@@ -147,7 +147,14 @@ $('btn-host').addEventListener('click', async () => {
   audio.resume();
   const code = makeRoomCode();
   showScreen('lobby');
+
+  // The room does not exist until the broker has registered it. Handing out
+  // the code before then means the other player types a correct code and is
+  // told there is no such room — so it stays visibly "not ready yet", and the
+  // copy button waits with it.
   $('room-code').textContent = code;
+  $('room-code').classList.add('pending');
+  $('btn-copy').disabled = true;
   $('btn-start').hidden = false;
   setStatus($('lobby-status'), 'Открываем комнату…');
 
@@ -160,8 +167,12 @@ $('btn-host').addEventListener('click', async () => {
   try {
     await transport.ready;
   } catch {
+    $('room-code').classList.remove('pending');
     return; // the status line already explains what went wrong
   }
+
+  $('room-code').classList.remove('pending');
+  $('btn-copy').disabled = false;
 
   hostSession = createHostSession({
     map: APARTMENT,
