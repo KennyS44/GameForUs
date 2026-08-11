@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GameForUs — тактический шутер</title>
+<meta name="description" content="Хардкорный тактический шутер в тёмной квартире: свет, звук и двери решают больше, чем реакция.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<canvas id="game" aria-label="Игровое поле"></canvas>
+
+<!-- ── In-game HUD ────────────────────────────────────────────────────── -->
+<div id="hud" class="hud" hidden>
+  <div class="crosshair" id="crosshair" aria-hidden="true">
+    <span class="ch ch-t"></span><span class="ch ch-r"></span>
+    <span class="ch ch-b"></span><span class="ch ch-l"></span>
+  </div>
+
+  <div class="hitmarker" id="hitmarker" aria-hidden="true"></div>
+  <div class="vignette" id="vignette" aria-hidden="true"></div>
+
+  <div class="topbar">
+    <div class="round" id="round-info">
+      <span class="round-phase" id="round-phase">Подготовка</span>
+      <span class="round-timer" id="round-timer">0:05</span>
+    </div>
+    <div class="alive" id="alive-count"></div>
+  </div>
+
+  <div class="killfeed" id="killfeed" aria-live="polite"></div>
+
+
+  <div class="prompt" id="prompt" hidden></div>
+
+  <div class="bottombar">
+    <div class="vitals">
+      <div class="health" id="health-wrap">
+        <div class="health-bar"><span id="health-fill"></span></div>
+        <span class="health-num" id="health-num">100</span>
+      </div>
+      <div class="stance" id="stance">СТОЯ</div>
+    </div>
+    <div class="ammo">
+      <span class="ammo-mag" id="ammo-mag">30</span>
+      <span class="ammo-sep">/</span>
+      <span class="ammo-reserve" id="ammo-reserve">4</span>
+      <span class="ammo-flag" id="flashlight-flag" hidden>ФОНАРЬ</span>
+    </div>
+  </div>
+
+  <div class="click-to-play" id="click-to-play" hidden>
+    <p>Нажмите, чтобы взять управление</p>
+  </div>
+
+  <div class="dead-notice" id="dead-notice" hidden>
+    <p class="dead-title">Вы убиты</p>
+    <p class="dead-sub" id="dead-sub"></p>
+  </div>
+</div>
+
+<!-- ── Scoreboard ─────────────────────────────────────────────────────── -->
+<div id="scoreboard" class="scoreboard" hidden>
+  <table>
+    <thead><tr><th>Игрок</th><th>Команда</th><th>Убийства</th><th>Смерти</th><th>Пинг</th></tr></thead>
+    <tbody id="scoreboard-body"></tbody>
+  </table>
+</div>
+
+<!-- ── Menus ──────────────────────────────────────────────────────────── -->
+<div id="overlay" class="overlay">
+
+  <!-- Main menu -->
+  <section class="screen" id="screen-main">
+    <header class="brand">
+      <h1>GameForUs</h1>
+      <p class="tagline">Тёмная квартира. Одна жизнь за раунд. Слушай.</p>
+    </header>
+
+    <div class="panel">
+      <label class="field">
+        <span class="field-label">Позывной</span>
+        <input type="text" id="player-name" maxlength="14" placeholder="Alpha" autocomplete="off">
+      </label>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-solo">Тренировка (один)</button>
+        <button class="btn" id="btn-host">Создать комнату</button>
+      </div>
+
+      <div class="join">
+        <label class="field field-inline">
+          <span class="field-label">Код комнаты</span>
+          <input type="text" id="join-code" maxlength="6" placeholder="ABC123" autocomplete="off" spellcheck="false">
+        </label>
+        <button class="btn" id="btn-join">Подключиться</button>
+      </div>
+
+      <p class="net-status" id="net-status" role="status"></p>
+    </div>
+
+    <div class="panel panel-quiet">
+      <h2>Управление</h2>
+      <dl class="keys">
+        <div><dt>W A S D</dt><dd>движение</dd></div>
+        <div><dt>Shift</dt><dd>бегом (шумно)</dd></div>
+        <div><dt>Tab</dt><dd>тихий шаг</dd></div>
+        <div><dt>Ctrl</dt><dd>присесть</dd></div>
+        <div><dt>Space</dt><dd>прыжок</dd></div>
+        <div><dt>Q / E</dt><dd>наклон из-за угла</dd></div>
+        <div><dt>ЛКМ</dt><dd>огонь</dd></div>
+        <div><dt>ПКМ</dt><dd>прицел</dd></div>
+        <div><dt>R</dt><dd>перезарядка</dd></div>
+        <div><dt>F</dt><dd>дверь: открыть / закрыть</dd></div>
+        <div><dt>Tab + F</dt><dd>приоткрыть тихо</dd></div>
+        <div><dt>V</dt><dd>выбить дверь ногой</dd></div>
+        <div><dt>L</dt><dd>фонарь</dd></div>
+        <div><dt>B</dt><dd>таблица счёта</dd></div>
+      </dl>
+      <p class="hint">
+        Лампы простреливаются. Гипсокартонные стены — тоже. Бетон — нет.
+        Выбитая дверь распахивается с одного удара, но закрыть её уже нельзя.
+        Шаги слышно дальше, чем вам кажется.
+      </p>
+    </div>
+
+    <div class="panel panel-quiet">
+      <h2>Настройки</h2>
+      <label class="field">
+        <span class="field-label">Чувствительность мыши <b id="sens-value">2.2</b></span>
+        <input type="range" id="sens" min="0.4" max="6" step="0.1" value="2.2">
+      </label>
+      <label class="field">
+        <span class="field-label">Громкость <b id="vol-value">55</b>%</span>
+        <input type="range" id="vol" min="0" max="100" step="1" value="55">
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" id="invert-y">
+        <span>Инвертировать вертикаль</span>
+      </label>
+    </div>
+  </section>
+
+  <!-- Lobby -->
+  <section class="screen" id="screen-lobby" hidden>
+    <header class="brand">
+      <h1>Комната</h1>
+      <p class="tagline">Передайте код второму игроку.</p>
+    </header>
+    <div class="panel">
+      <div class="roomcode" id="room-code">------</div>
+      <button class="btn" id="btn-copy">Скопировать код</button>
+      <ul class="lobby-list" id="lobby-list"></ul>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-start" hidden>Начать раунд</button>
+        <button class="btn btn-ghost" id="btn-leave">Выйти</button>
+      </div>
+      <p class="net-status" id="lobby-status" role="status"></p>
+    </div>
+  </section>
+
+  <!-- Pause -->
+  <section class="screen screen-narrow" id="screen-pause" hidden>
+    <div class="panel">
+      <h2>Пауза</h2>
+      <p class="hint">Раунд продолжается. Вас всё ещё можно убить.</p>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-resume">Вернуться в игру</button>
+        <button class="btn btn-ghost" id="btn-quit">Выйти в меню</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Round over -->
+  <section class="screen screen-narrow" id="screen-round" hidden>
+    <div class="panel">
+      <h2 id="round-result">Раунд окончен</h2>
+      <p class="hint" id="round-detail"></p>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-next">Следующий раунд</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Loading -->
+  <section class="screen screen-narrow" id="screen-loading" hidden>
+    <div class="panel">
+      <h2>Загрузка</h2>
+      <p class="hint" id="loading-detail">Собираем квартиру…</p>
+    </div>
+  </section>
+</div>
+
+<!-- Desktop-only notice, shown instead of everything on touch devices -->
+<div id="desktop-only" class="desktop-only" hidden>
+  <div class="panel">
+    <h1>Нужен компьютер</h1>
+    <p>
+      Это тактический шутер от первого лица: он управляется мышью и клавиатурой,
+      а прицеливание использует захват курсора, которого нет на телефонах.
+    </p>
+    <p>Откройте эту страницу на ноутбуке или ПК.</p>
+  </div>
+</div>
+
+<noscript>
+  <div class="desktop-only">
+    <div class="panel">
+      <h1>Нужен JavaScript</h1>
+      <p>Игра целиком работает в браузере. Включите JavaScript, чтобы играть.</p>
+    </div>
+  </div>
+</noscript>
+
+<!--
+  Start-up watchdog. Deliberately inline, and deliberately not a module.
+
+  Two different failures look identical to a player — the menu draws, and then
+  clicking does nothing:
+
+    1. the game module threw while starting up;
+    2. the module never ran at all, because the server returned 404 or served
+       the file with a content type browsers refuse to execute (a module must
+       arrive as JavaScript; anything else is rejected without a word).
+
+  Case 2 is exactly why this cannot live in its own .js file: on a host that
+  mishandles JavaScript the reporter would be blocked too, and the failure
+  would stay invisible. An inline script always runs, so this can always speak.
+-->
+<script>
+(function () {
+  var shown = false;
+  var REQUIRED = ['src/main.js', 'src/sim/sim.js', 'vendor/three.module.js', 'styles.css'];
+  var JS_TYPE = /^(text|application)\/(java|ecma)script/i;
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  function show(headline, message, lines) {
+    if (shown) return;
+    shown = true;
+    var box = el('div', 'crash-banner');
+    box.setAttribute('role', 'alert');
+    box.appendChild(el('p', 'crash-title', headline));
+    box.appendChild(el('p', 'crash-text', message));
+    if (lines && lines.length) {
+      var d = el('div', 'crash-detail');
+      for (var i = 0; i < lines.length; i++) d.appendChild(el('div', null, lines[i]));
+      box.appendChild(d);
+    }
+    var b = el('button', 'crash-reload', 'Обновить страницу');
+    b.type = 'button';
+    b.addEventListener('click', function () { window.location.reload(); });
+    box.appendChild(b);
+    function attach() { document.body.appendChild(box); }
+    if (document.body) attach();
+    else document.addEventListener('DOMContentLoaded', attach);
+  }
+
+  // Ask the server about every file the game needs, and report its answers.
+  var diagnosing = false;
+  function diagnose() {
+    if (diagnosing || shown) return;
+    diagnosing = true;
+    var lines = [];
+    var left = REQUIRED.length;
+
+    function finish() {
+      if (--left > 0) return;
+      lines.sort();
+      show('Файлы игры не загрузились',
+        'Меню нарисовано, но код игры не запустился. Вот что ответил сервер на каждый нужный файл:',
+        lines);
+    }
+
+    REQUIRED.forEach(function (path) {
+      fetch(new URL(path, window.location.href).href, { cache: 'no-store' })
+        .then(function (res) {
+          var type = res.headers.get('content-type') || 'без типа';
+          var verdict = !res.ok ? ' — НЕ НАЙДЕН'
+            : (/\.js$/.test(path) && !JS_TYPE.test(type)) ? ' — НЕВЕРНЫЙ ТИП, браузер откажется выполнять'
+            : ' — ок';
+          lines.push(path + ': ' + res.status + ' · ' + type + verdict);
+        })
+        .catch(function (err) {
+          lines.push(path + ': запрос не прошёл (' + (err && err.message) + ')');
+        })
+        .then(finish);
+    });
+  }
+
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t !== window && t.tagName) {
+      var tag = t.tagName.toUpperCase();
+      // A missing texture is survivable; a missing script or stylesheet is not.
+      if (tag === 'SCRIPT' || tag === 'LINK') diagnose();
+      return;
+    }
+    show('Игра не запустилась',
+      'Что-то сломалось при загрузке, поэтому кнопки не работают. Обычно помогает обновить страницу.',
+      [String(e.message || 'неизвестная ошибка')]);
+  }, true);
+
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    show('Игра не запустилась', 'Что-то сломалось при загрузке, поэтому кнопки не работают.',
+      [String(r && r.message ? r.message : r)]);
+  });
+
+  window.addEventListener('load', function () {
+    window.setTimeout(function () {
+      if (!window.__gameforusReady) diagnose();
+    }, 4000);
+  });
+})();
+</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

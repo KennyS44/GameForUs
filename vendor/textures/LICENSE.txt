@@ -1,0 +1,13 @@
+Textures in this folder come from Poly Haven (https://polyhaven.com) and are
+released under CC0 1.0 Universal (public domain dedication). They may be used
+for any purpose, commercial or not, with no attribution required.
+
+  https://creativecommons.org/publicdomain/zero/1.0/
+
+Attribution is given here anyway, because the people who made them deserve it.
+
+  concrete_diff.jpg, concrete_nor.jpg   from "concrete_wall_008"
+  drywall_diff.jpg                      from "plastered_wall"
+  floor_diff.jpg, floor_nor.jpg         from "wood_floor"
+
+All downsampled to 1K JPG to keep the page light.

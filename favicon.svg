@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="GameForUs">
+  <rect width="32" height="32" rx="6" fill="#0a0b0e"/>
+  <!-- doorway, lit from within -->
+  <path d="M11 8h10v18h-10z" fill="#1c1f26"/>
+  <path d="M13 10h6v14h-6z" fill="#d1823f" opacity="0.9"/>
+  <circle cx="17.6" cy="17" r="0.9" fill="#0a0b0e"/>
+  <!-- crosshair -->
+  <g stroke="#e8e6e1" stroke-width="1.6" stroke-linecap="round">
+    <path d="M16 3v3M16 26v3M3 16h3M26 16h3"/>
+  </g>
+</svg>
