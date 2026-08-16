@@ -32,7 +32,8 @@ function createPlayer(id, team, spawn, name) {
   const w = WEAPONS.mp5;
   return {
     id, team, name,
-    pos: { x: spawn.x, y: 0, z: spawn.z },
+    // Spawns carry their own height, so a defender can start upstairs.
+    pos: { x: spawn.x, y: spawn.y ?? 0, z: spawn.z },
     vel: { x: 0, y: 0, z: 0 },
     look: { yaw: spawn.yaw ?? 0, pitch: 0 },
     recoil: { yaw: 0, pitch: 0 },
@@ -304,7 +305,7 @@ function damageDoor(world, state, doorId, amount, by) {
     ds.speed = DOOR.kickSpeed;
     emit(state, { type: 'doorBreak', doorId, by: by?.id });
     const d = world.doors.find((x) => x.id === doorId);
-    if (d) makeNoise(state, { x: d.pos.x, y: 1, z: d.pos.z }, DOOR.loudnessKick, 'doorBreak', by?.id);
+    if (d) makeNoise(state, { x: d.pos.x, y: (d.pos.y ?? 0) + 1, z: d.pos.z }, DOOR.loudnessKick, 'doorBreak', by?.id);
   }
 }
 
@@ -357,7 +358,7 @@ function pushDoor(world, state, p, target, speed, loudness) {
   }
   ds.target = target;
   ds.speed = speed;
-  makeNoise(state, { x: found.door.pos.x, y: 1, z: found.door.pos.z }, loudness, 'door', p.id);
+  makeNoise(state, { x: found.door.pos.x, y: (found.door.pos.y ?? 0) + 1, z: found.door.pos.z }, loudness, 'door', p.id);
   emit(state, { type: 'doorMove', doorId: found.door.id, target });
   return true;
 }
@@ -370,7 +371,7 @@ function kickDoor(world, state, p) {
   const ds = found.state;
 
   emit(state, { type: 'doorKick', doorId: found.door.id, by: p.id });
-  makeNoise(state, { x: found.door.pos.x, y: 1, z: found.door.pos.z }, DOOR.loudnessKick, 'kick', p.id);
+  makeNoise(state, { x: found.door.pos.x, y: (found.door.pos.y ?? 0) + 1, z: found.door.pos.z }, DOOR.loudnessKick, 'kick', p.id);
 
   ds.health = Math.max(0, ds.health - DOOR.kickDamage);
   ds.locked = false;
@@ -702,7 +703,7 @@ export function resetRound(world, state) {
   for (const p of Object.values(state.players)) {
     const spawns = world.map.spawns[p.team];
     const spawn = spawns[counts[p.team]++ % spawns.length];
-    p.pos = { x: spawn.x, y: 0, z: spawn.z };
+    p.pos = { x: spawn.x, y: spawn.y ?? 0, z: spawn.z };
     p.vel = { x: 0, y: 0, z: 0 };
     p.look = { yaw: spawn.yaw ?? 0, pitch: 0 };
     p.recoil = { yaw: 0, pitch: 0 };

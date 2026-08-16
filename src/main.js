@@ -108,7 +108,7 @@ function startGame(session) {
       const iWon = session.me?.team === winner;
       $('round-result').textContent = iWon ? 'Победа' : 'Поражение';
       $('round-detail').textContent =
-        winner === 'attackers' ? 'Штурмовая группа зачистила квартиру.' : 'Оборона удержала квартиру.';
+        winner === 'attackers' ? 'Штурмовая группа зачистила пентхаус.' : 'Оборона удержала пентхаус.';
       $('btn-next').hidden = session.kind === 'client';
       input.releaseLock();
       showScreen('round');
@@ -131,7 +131,7 @@ canvas.addEventListener('click', () => {
 $('btn-solo').addEventListener('click', () => {
   audio.resume();
   showScreen('loading');
-  $('loading-detail').textContent = 'Собираем квартиру…';
+  $('loading-detail').textContent = 'Собираем пентхаус…';
   // One frame of breathing room so the loading screen actually paints.
   requestAnimationFrame(() => {
     const session = createLocalSession({ map: APARTMENT, name: playerName(), bots: 2 });

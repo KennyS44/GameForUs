@@ -110,12 +110,13 @@ check(
 
 // ── Walls block sight, even ones you can shoot through ────────────────────
 {
-  // Living room to kitchen, straight through the drywall spine at x = 1.
-  const inLiving = { x: -2, y: 1.6, z: 1.5 };
-  const inKitchen = { x: 4, y: 1.6, z: 1.5 };
-  check('drywall blocks line of sight', !hasLineOfSight(world, state, inLiving, inKitchen));
-  const a2 = { x: -2, y: 1.6, z: 1.5 };
-  const b2 = { x: -5, y: 1.6, z: 1.5 };
+  // Living room to study, straight through the drywall partition at x = -5.
+  const inLiving = { x: -10, y: 1.6, z: -14 };
+  const inStudy = { x: -2, y: 1.6, z: -14 };
+  check('drywall blocks line of sight', !hasLineOfSight(world, state, inLiving, inStudy));
+  // Both ends inside the living room, nothing in between.
+  const a2 = { x: -10, y: 1.6, z: -14 };
+  const b2 = { x: -12, y: 1.6, z: -10 };
   check('open room does not block line of sight', hasLineOfSight(world, state, a2, b2));
 }
 

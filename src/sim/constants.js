@@ -113,7 +113,9 @@ export const FLASHLIGHT = {
 
 export const ROUND = {
   prepTime: 5,
-  duration: 300,
+  // The penthouse is two storeys and thirty-odd rooms: clearing it carefully,
+  // rather than running it, is a quarter of an hour of work.
+  duration: 900,
 };
 
 // Noise a movement style makes, in metres it can be heard.

@@ -10,13 +10,15 @@ const DOOR_THICKNESS = 0.06;
 
 // Is the panel clear of the walls at this angle? Sampled along the leaf at a
 // few heights — enough for rectangular rooms, and it runs once at load.
-function panelFits(geometry, hinge, theta, width) {
+// `base` is the floor the door stands on, so an upstairs door is tested
+// against the upstairs walls and not the ones below it.
+function panelFits(geometry, hinge, theta, width, base) {
   const cos = Math.cos(theta);
   const sin = Math.sin(theta);
   for (const along of [0.35, 0.6, 0.85, 1.0]) {
     const px = hinge.x + cos * width * along;
     const pz = hinge.z + sin * width * along;
-    for (const py of [0.25, 1.0, 1.9]) {
+    for (const py of [base + 0.25, base + 1.0, base + 1.9]) {
       for (const b of geometry) {
         if (
           px > b.min.x && px < b.max.x &&
@@ -32,12 +34,12 @@ function panelFits(geometry, hinge, theta, width) {
 // How far this particular door can actually swing before it hits something.
 // Doors open wide by default; one that would sweep into a wall stops short
 // rather than clipping through it.
-function swingLimit(map, hinge, base, swingSign, width) {
+function swingLimit(map, hinge, base, swingSign, width, floorY) {
   const STEPS = 20;
   const MIN = Math.PI / 2;
   for (let i = 0; i <= STEPS; i++) {
     const angle = DOOR.openAngle - (DOOR.openAngle - MIN) * (i / STEPS);
-    if (panelFits(map.geometry, hinge, base + swingSign * angle, width)) return angle;
+    if (panelFits(map.geometry, hinge, base + swingSign * angle, width, floorY)) return angle;
   }
   return MIN;
 }
@@ -60,6 +62,10 @@ export function buildWorld(map) {
     const swingSign =
       (d.axis === 'x' ? 1 : -1) * (d.hinge === -1 ? 1 : -1) * (d.swing ?? 1);
 
+    // Which storey the door stands on. Everything about a door is measured
+    // from its own floor, so the upstairs ones behave exactly like these.
+    const floorY = d.y ?? 0;
+
     return {
       id: d.id,
       axis: d.axis,
@@ -70,12 +76,13 @@ export function buildWorld(map) {
       lockedByDefault: !!d.locked,
       hinge,
       base,
+      floorY,
       swingSign,
-      maxAngle: d.maxAngle ?? swingLimit(map, hinge, base, swingSign, d.width),
-      pos: { ...d.pos },
+      maxAngle: d.maxAngle ?? swingLimit(map, hinge, base, swingSign, d.width, floorY),
+      pos: { ...d.pos, y: floorY },
       localBox: {
-        min: { x: 0, y: 0, z: -DOOR_THICKNESS / 2 },
-        max: { x: d.width, y: DOOR_HEIGHT, z: DOOR_THICKNESS / 2 },
+        min: { x: 0, y: floorY, z: -DOOR_THICKNESS / 2 },
+        max: { x: d.width, y: floorY + DOOR_HEIGHT, z: DOOR_THICKNESS / 2 },
       },
     };
   });

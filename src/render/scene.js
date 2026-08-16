@@ -129,7 +129,7 @@ export function buildScene(world) {
   for (const door of world.doors) {
     // Pivot sits on the hinge; the panel extends along +x in pivot space.
     const pivot = new THREE.Group();
-    pivot.position.set(door.hinge.x, 0, door.hinge.z);
+    pivot.position.set(door.hinge.x, door.floorY ?? 0, door.hinge.z);
 
     const geo = new THREE.BoxGeometry(door.width, DOOR_HEIGHT, DOOR_THICKNESS);
     const mesh = new THREE.Mesh(geo, getMat(door.material));
