@@ -2,8 +2,8 @@
 // geometry, and bullet raycasts that respect material penetration.
 // Pure — no engine types cross this boundary.
 
-import { rayBox, boxOverlaps, clamp } from './math.js?v=85572888';
-import { DOOR } from './constants.js?v=85572888';
+import { rayBox, boxOverlaps, clamp } from './math.js?v=bc0527d3';
+import { DOOR } from './constants.js?v=bc0527d3';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -227,17 +227,32 @@ function resolveDoors(world, state, pos, radius, height) {
     if (lp.x <= expandedMinX || lp.x >= expandedMaxX) continue;
     if (lp.z <= expandedMinZ || lp.z >= expandedMaxZ) continue;
 
-    // Inside — push out along whichever local axis is cheapest.
+    // Inside the leaf — push out. The cheapest way out is tried first, but a
+    // push is only taken if it lands somewhere a body actually fits: a door
+    // closing on someone in a doorway used to shove them straight through the
+    // wall behind them, which is how a player ends up in the wrong room.
     const pushX = lp.x - expandedMinX < expandedMaxX - lp.x ? expandedMinX - lp.x : expandedMaxX - lp.x;
     const pushZ = lp.z - expandedMinZ < expandedMaxZ - lp.z ? expandedMinZ - lp.z : expandedMaxZ - lp.z;
 
-    const local = { ...lp };
-    if (Math.abs(pushX) < Math.abs(pushZ)) local.x += pushX;
-    else local.z += pushZ;
+    const tryPush = (dx, dz) => {
+      const p = localToWorld(frame, { x: lp.x + dx, y: lp.y, z: lp.z + dz });
+      const body = playerBox({ x: p.x, y: pos.y, z: p.z }, radius, height);
+      if (world.boxes.some((b) => boxOverlaps(body, b))) return false;
+      pos.x = p.x;
+      pos.z = p.z;
+      return true;
+    };
 
-    const world2 = localToWorld(frame, local);
-    pos.x = world2.x;
-    pos.z = world2.z;
+    const closest = Math.abs(pushX) < Math.abs(pushZ);
+    // The cheapest way out, then the other axis. If a body fits neither way the
+    // panel sweeps through instead: being briefly inside a door beats being
+    // flung into a room you never walked to.
+    // A push is a nudge, never a shove: anything bigger than a stride is the
+    // door trying to relocate you, so it is refused.
+    const MAX_PUSH = 0.4;
+    const escapes = (closest ? [[pushX, 0], [0, pushZ]] : [[0, pushZ], [pushX, 0]])
+      .filter(([dx, dz]) => Math.hypot(dx, dz) <= MAX_PUSH);
+    for (const [dx, dz] of escapes) if (tryPush(dx, dz)) break;
   }
 }
 

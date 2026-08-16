@@ -127,7 +127,8 @@
 <rect x="79.6" y="727.7" width="832" height="7.8" class="wall concrete"/>
 <rect x="907.7" y="107.6" width="7.8" height="624" class="wall concrete"/>
 <rect x="286.3" y="111.5" width="2.6" height="191.1" class="wall glass low"/>
-<rect x="83.5" y="301.3" width="202.8" height="2.6" class="wall glass low"/>
+<rect x="83.5" y="301.3" width="127.4" height="2.6" class="wall glass low"/>
+<rect x="257.7" y="301.3" width="28.6" height="2.6" class="wall glass low"/>
 <rect x="364" y="111.5" width="3.1" height="61.1" class="wall drywall"/>
 
 <rect x="364" y="198.6" width="3.1" height="104" class="wall drywall"/>
@@ -207,7 +208,6 @@
 <rect x="428" y="684.8" width="83.2" height="26" class="blocker furniture"/>
 <rect x="578.8" y="609.4" width="57.2" height="15.6" class="blocker furniture"/>
 <rect x="662" y="461.2" width="52" height="15.6" class="blocker furniture"/>
-<rect x="888.2" y="497.6" width="18.2" height="52" class="blocker furniture"/>
 <rect x="672.4" y="643.2" width="57.2" height="26" class="blocker furniture"/>
 <rect x="875.2" y="653.6" width="31.2" height="52" class="blocker furniture"/>
 <rect x="659.4" y="245.4" width="36.4" height="10.4" class="opening"/>

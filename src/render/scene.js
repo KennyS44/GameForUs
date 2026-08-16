@@ -1,8 +1,8 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=85572888';
-import { doorAngle } from '../sim/world.js?v=85572888';
+import * as THREE from '../../vendor/three.module.js?v=bc0527d3';
+import { doorAngle } from '../sim/world.js?v=bc0527d3';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;

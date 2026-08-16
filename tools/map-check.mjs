@@ -242,6 +242,30 @@ for (const r of APARTMENT.rooms) {
     stranded.map((d) => d.id).join(', '));
 }
 
+console.log('\nStairs stay clear, furniture stands on something:');
+// A flight of stairs is a route. Anything standing on one is something to get
+// stuck on — and a rail across the top of one seals the floor above off
+// entirely, which is exactly what happened.
+for (const s of APARTMENT.stairways ?? []) {
+  const on = world.boxes.filter((b) =>
+    b.tag && b.max.x > s.min.x + 1e-3 && b.min.x < s.max.x - 1e-3 &&
+    b.max.y > s.min.y + 1e-3 && b.min.y < s.max.y - 1e-3 &&
+    b.max.z > s.min.z + 1e-3 && b.min.z < s.max.z - 1e-3);
+  check(`nothing stands on the ${s.id} stairway`, on.length === 0,
+    on.map((b) => `${b.tag} ${JSON.stringify(b.min)}`).join(', '));
+}
+
+// And nothing floats: every piece of furniture has floor directly under it.
+for (const b of world.boxes) {
+  if (b.tag !== 'furniture') continue;
+  const cx = (b.min.x + b.max.x) / 2;
+  const cz = (b.min.z + b.max.z) / 2;
+  const supported = world.boxes.some((o) =>
+    o !== b && cx > o.min.x && cx < o.max.x && cz > o.min.z && cz < o.max.z &&
+    Math.abs(o.max.y - b.min.y) < 0.02);
+  check(`furniture at (${cx.toFixed(1)}, ${cz.toFixed(1)}) rests on a floor`, supported);
+}
+
 console.log('\nSurfaces:');
 // Two surfaces drawn at the same depth fight for every pixel and flicker as
 // you move — "the textures overlap". That happens when two boxes present a
@@ -298,25 +322,45 @@ for (const d of world.doors) {
 
 console.log('\nStairs:');
 // Walk a player up each staircase for real, through the simulation.
-function climb(id, from, yaw, seconds) {
+// Walks a player through a list of waypoints the way a person would: face the
+// next corner, walk until you reach it, turn. Proves the route is passable
+// rather than that some fixed sequence of keypresses happens to work.
+function walk(id, from, waypoints, expectY) {
   const state = createState(world, 99);
   const p = addPlayer(world, state, 'p', 'attackers', 'P');
   state.phase = 'live'; // staging holds the attackers at the door
   state.phaseTime = 60;
   p.pos = { x: from.x, y: from.y, z: from.z };
-  p.look = { yaw, pitch: 0 };
-  // Doors stand open so this measures the stairs, not the door handling.
   for (const d of Object.values(state.doors)) { d.open = 1; d.locked = false; }
+
   let top = p.pos.y;
-  for (let i = 0; i < TICK_RATE * seconds; i++) {
-    stepSim(world, state, { p: { ...createInput(), moveZ: 1, yaw, run: true } });
-    top = Math.max(top, p.pos.y);
+  let stuck = null;
+  for (const wp of waypoints) {
+    let reached = false;
+    for (let i = 0; i < TICK_RATE * 8 && !reached; i++) {
+      // Forward is -Z at yaw 0, so this is the heading to (wp.x, wp.z).
+      const yaw = Math.atan2(-(wp.x - p.pos.x), -(wp.z - p.pos.z));
+      p.look = { yaw, pitch: 0 };
+      stepSim(world, state, { p: { ...createInput(), moveZ: 1, yaw } });
+      top = Math.max(top, p.pos.y);
+      if (Math.hypot(wp.x - p.pos.x, wp.z - p.pos.z) < 0.45) reached = true;
+    }
+    if (!reached && !stuck) stuck = `stopped short of (${wp.x}, ${wp.z}) at (${p.pos.x.toFixed(1)}, ${p.pos.y.toFixed(2)}, ${p.pos.z.toFixed(1)})`;
   }
-  check(`${id}: a player climbs it`, top > (id.includes('lower') ? F2 / 2 - 0.05 : F2 - 0.05),
-    `reached y=${top.toFixed(2)} at (${p.pos.x.toFixed(1)}, ${p.pos.z.toFixed(1)})`);
+  check(`${id}: a player walks the whole way up`, !stuck && p.pos.y > expectY - 0.05,
+    stuck ?? `ended at y=${p.pos.y.toFixed(2)}, highest ${top.toFixed(2)}`);
 }
-climb('court stair, lower flight', { x: -11.6, y: 0, z: -10.4 }, 0, 8);
-climb('east stairs', { x: 14.8, y: 0, z: -6.9 }, Math.PI, 10);
+
+// The court stair is a switchback: north up the west flight, east across the
+// half-landing, south up the east flight, out onto the terrace.
+walk('court stair', { x: -11.6, y: 0, z: -10.4 }, [
+  { x: -11.6, z: -13.8 },
+  { x: -10.0, z: -13.8 },
+  { x: -10.0, z: -10.9 },
+  { x: -10.0, z: -9.5 },
+], F2);
+
+walk('east stairs', { x: 14.8, y: 0, z: -6.9 }, [{ x: 14.8, z: -0.5 }], F2);
 
 // Steps must stay under the step-up height, or they become a wall.
 check('every step is climbable', F2 / 16 < PLAYER.stepHeight, `${(F2 / 16).toFixed(3)} m`);

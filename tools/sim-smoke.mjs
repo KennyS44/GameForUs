@@ -7,11 +7,11 @@
 //   node tools/sim-smoke.mjs
 
 import { APARTMENT } from '../src/maps/apartment.js';
-import { buildWorld, hasLineOfSight } from '../src/sim/world.js';
+import { buildWorld, hasLineOfSight, doorAngle } from '../src/sim/world.js';
 import {
   createState, addPlayer, stepSim, createInput, eyePosition, resetRound,
 } from '../src/sim/sim.js';
-import { TICK_RATE } from '../src/sim/constants.js';
+import { TICK_RATE, PLAYER } from '../src/sim/constants.js';
 
 let failures = 0;
 function check(name, cond, detail = '') {
@@ -527,6 +527,90 @@ check('simulation is deterministic', run(777) === run(777));
 check('different seeds diverge', run(777) !== run(778));
 
 // ── Performance headroom ──────────────────────────────────────────────────
+console.log('\nA door never pushes anyone through a wall:');
+// Stand in each doorway and swing the door onto the player, both ways. The
+// panel may shove you aside; it may never put you inside geometry, and it may
+// never move you further than a person could walk in a tick.
+{
+  const radius = PLAYER.radius;
+  let worstJump = 0;
+  let inside = null;
+  let teleported = null;
+  let farthest = null;
+  for (const door of world.doors) {
+    // Bodies in the doorway itself, and bodies standing in the arc the panel
+    // sweeps through — the classic pinch is being caught behind an opening door.
+    const spots = [];
+    for (const off of [-0.35, -0.15, 0, 0.15, 0.35]) {
+      spots.push({
+        x: door.pos.x + (door.axis === 'x' ? off : 0),
+        z: door.pos.z + (door.axis === 'x' ? 0 : off),
+      });
+    }
+    for (const frac of [0.4, 0.7, 1.0]) {
+      for (let k = 1; k <= 5; k++) {
+        const th = doorAngle(door, (k / 6) * 1.0);
+        spots.push({
+          x: door.hinge.x + Math.cos(th) * door.width * frac,
+          z: door.hinge.z + Math.sin(th) * door.width * frac,
+        });
+      }
+    }
+    for (const way of [1, -1]) for (const spot of spots) {
+      const state = createState(world, 5);
+      const p = addPlayer(world, state, 'p', 'attackers', 'P');
+      state.phase = 'live';
+      const ds = state.doors[door.id];
+      // Middle of the doorway, on the door's own storey.
+      // Spread the test bodies across the doorway: the pinch that matters is
+      // the one against the jamb, not the one in the middle.
+      p.pos = { x: spot.x, y: door.floorY + 0.05, z: spot.z };
+      // The hall-gym doorway has an obstacle standing in it on purpose; you
+      // cannot start a pinch test somewhere a body does not fit anyway.
+      const start = {
+        min: { x: p.pos.x - radius, y: p.pos.y + 0.05, z: p.pos.z - radius },
+        max: { x: p.pos.x + radius, y: p.pos.y + 1.2, z: p.pos.z + radius },
+      };
+      if (world.boxes.some((b) =>
+        start.min.x < b.max.x - 0.02 && start.max.x > b.min.x + 0.02 &&
+        start.min.y < b.max.y - 0.02 && start.max.y > b.min.y + 0.02 &&
+        start.min.z < b.max.z - 0.02 && start.max.z > b.min.z + 0.02)) continue;
+      let last = { x: p.pos.x, z: p.pos.z };
+      for (let i = 0; i <= 40; i++) {
+        ds.open = way > 0 ? i / 40 : 1 - i / 40;
+        ds.locked = false;
+        stepSim(world, state, { p: createInput() });
+        const jump = Math.hypot(p.pos.x - last.x, p.pos.z - last.z);
+        if (jump > worstJump) { worstJump = jump; farthest = `${door.id} moved the player ${jump.toFixed(2)} m in one tick`; }
+        const body = {
+          min: { x: p.pos.x - radius, y: p.pos.y + 0.05, z: p.pos.z - radius },
+          max: { x: p.pos.x + radius, y: p.pos.y + 1.2, z: p.pos.z + radius },
+        };
+        const hit = world.boxes.find((b) =>
+          body.min.x < b.max.x - 0.02 && body.max.x > b.min.x + 0.02 &&
+          body.min.y < b.max.y - 0.02 && body.max.y > b.min.y + 0.02 &&
+          body.min.z < b.max.z - 0.02 && body.max.z > b.min.z + 0.02);
+        // Did the player cross a wall to get here? A push that skips over
+        // geometry is exactly the bug that put someone in the wrong room.
+        for (let s = 1; s <= 20 && !teleported; s++) {
+          const mx = last.x + (p.pos.x - last.x) * (s / 20);
+          const mz = last.z + (p.pos.z - last.z) * (s / 20);
+          const my = p.pos.y + 0.6;
+          const through = world.boxes.find((b) =>
+            mx > b.min.x && mx < b.max.x && my > b.min.y && my < b.max.y && mz > b.min.z && mz < b.max.z);
+          if (through && jump > 0.02) teleported = `${door.id}: the panel pushed the player through ${through.material?.name ?? 'geometry'}`;
+        }
+        if (hit && !inside) inside = `${door.id}: player ended inside ${hit.material?.name ?? 'geometry'} at (${p.pos.x.toFixed(1)}, ${p.pos.z.toFixed(1)})`;
+        last = { x: p.pos.x, z: p.pos.z };
+      }
+    }
+  }
+  console.log(`  (largest push seen: ${worstJump.toFixed(3)} m)`);
+  check('a swinging door never buries anyone in geometry', !inside, inside ?? '');
+  check('a swinging door never pushes anyone through a wall', !teleported, teleported ?? '');
+  check('a swinging door never flings anyone across the map', worstJump < 0.6, farthest ?? '');
+}
+
 resetRound(world, state);
 const t0 = process.hrtime.bigint();
 const N = 3000;

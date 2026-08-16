@@ -159,9 +159,8 @@ const courtStair = [
   ...flight({ x1: -10.7, x2: -9.2, zBottom: -13.4, dir: 1, steps: 8, from: F2 / 2, rise: F2 / 2 }),
   ...slab(-10.7, -11.0, -9.2, -10.5), // top step meets the terrace's south arm
 
-  // The flights are open on their long sides; a low parapet keeps you on them.
-  ...wall(-12.55, -14.2, -12.55, -11.0, M.concrete, { thickness: 0.15, height: RAIL, tag: 'parapet' }),
-  ...wall(-9.05, -14.2, -9.05, -10.5, M.concrete, { thickness: 0.15, height: RAIL, tag: 'parapet' }),
+  // Nothing else stands on the flights. Not a rail, not a plant, nothing: a
+  // staircase is a route, and anything on it is something to get stuck on.
 ];
 
 // ── Ground floor ─────────────────────────────────────────────────────────
@@ -247,7 +246,10 @@ const blockers = [
 const upperWalls = [
   // Terrace: an L over the living court. Glass railings face the void.
   ...wall(-8, -17.85, -8, -10.5, M.glass, { base: F2, thickness: 0.1, height: RAIL, tag: 'railing' }),
-  ...wall(-15.85, -10.5, -8.05, -10.5, M.glass, { base: F2, thickness: 0.1, height: RAIL, tag: 'railing' }),
+  // ...with a gap where the court stair arrives, or the flight would climb
+  // into a pane of glass.
+  ...wall(-15.85, -10.5, -10.95, -10.5, M.glass, { base: F2, thickness: 0.1, height: RAIL, tag: 'railing' }),
+  ...wall(-9.15, -10.5, -8.05, -10.5, M.glass, { base: F2, thickness: 0.1, height: RAIL, tag: 'railing' }),
 
   // Rooms east of the terrace open onto it through glass doors.
   ...wall(-5, -17.85, -5, -7.4, M.drywall, {
@@ -412,7 +414,6 @@ const furniture = ([
 
   // Sauna and office.
   box(6.4, F2, -4.4, 8.4, F2 + 0.45, -3.8, M.wood),
-  box(15.1, F2, -3.0, 15.8, F2 + 0.45, -1.0, M.wood),
   box(6.8, F2, 2.6, 9.0, F2 + 0.78, 3.6, M.wood), // desk
   box(14.6, F2, 3.0, 15.8, F2 + 1.8, 5.0, M.wood), // shelving
 // Tagged so the floor plans can draw it and the checks can tell it from a wall.
@@ -588,6 +589,16 @@ export const APARTMENT = {
   lights,
   holes,
   openings,
+  // The volumes the flights occupy. Kept in the data so map-check can prove
+  // nothing has been put on them.
+  // One entry per flight and landing: the footprint plus the headroom a person
+  // needs over it. Anything found inside is something to trip on.
+  stairways: [
+    { id: 'court lower flight', min: { x: -12.4, y: 0, z: -14.2 }, max: { x: -10.9, y: 3.85, z: -11.0 } },
+    { id: 'court half-landing', min: { x: -12.4, y: F2 / 2, z: -14.2 }, max: { x: -9.2, y: F2 / 2 + 2.2, z: -13.4 } },
+    { id: 'court upper flight', min: { x: -10.9, y: F2 / 2, z: -13.4 }, max: { x: -9.2, y: F2 + 2.2, z: -10.5 } },
+    { id: 'east flight', min: { x: 13.75, y: 0, z: -6.0 }, max: { x: 15.85, y: F2 + 2.2, z: 0 } },
+  ],
   spawns: {
     attackers: [
       { x: -1.6, z: 8.6, yaw: 0 },
