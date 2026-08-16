@@ -13,6 +13,8 @@
   .wall.glass.low { fill: #7fa8bd; }
   .blocker { fill: #d8c9a8; stroke: #9b8a63; stroke-width: 1; }
   .blocker.blocked { fill: #d9b8a0; stroke: #a5744f; }
+  .blocker.rubble { fill: #b9b2a6; stroke: #6f6a61; stroke-width: 1.5; }
+  .blocker.furniture { fill: #e8e0d2; stroke: #b3a892; stroke-width: 1; }
   .hole { fill: none; stroke: #2f6f4f; stroke-width: 2.5; stroke-dasharray: 5 4; }
   .opening { fill: #d7e6dc; stroke: #2f6f4f; stroke-width: 1.5; stroke-dasharray: 4 3; }
   .hole.under { stroke: #7fa39a; stroke-width: 1.5; }
@@ -47,7 +49,7 @@
 </defs>
 <rect class="bg" width="951.2" height="914.2"/>
 <text x="64" y="34" class="title">Пентхаус: первый этаж (y = 0)</text>
-<text x="64" y="54" class="subtitle">Вход снизу по плану: площадка за входной дверью — спавн штурма. Мебели нет.</text>
+<text x="64" y="54" class="subtitle">Вход снизу по плану: площадка за входной дверью — спавн штурма. Бежевым — мебель.</text>
 <text x="64" y="872.2" class="legend">Сетка 2 м. Оси в метрах: +X вправо, +Z вниз. Под названием комнаты — размер и её id в коде.</text>
 <text x="64" y="890.2" class="legend">Оранжевым — двери: сплошная створка закрыта, пунктир — куда открывается, точка — петля. Синие точки — спавн штурма, красные — обороны.</text>
 <text x="64" y="908.2" class="legend">Стены: тёмные — бетон (не простреливается), серые — гипсокартон (простреливается), голубые — стекло (бьётся с двух попаданий).</text>
@@ -99,14 +101,12 @@
 <line x1="64" y1="783.6" x2="927.2" y2="783.6" class="grid"/>
 <text x="54" y="787.6" class="tick" text-anchor="end">8</text>
 <line x1="64" y1="835.6" x2="927.2" y2="835.6" class="grid"/>
-<rect x="79.6" y="111.5" width="286" height="271.7" class="room"/>
-<rect x="365.6" y="111.5" width="156" height="139.1" class="room"/>
-<rect x="521.6" y="111.5" width="169" height="139.1" class="room"/>
-<rect x="690.6" y="111.5" width="221" height="139.1" class="room"/>
+<rect x="79.6" y="111.5" width="286" height="271.7" class="open"/>
+<rect x="365.6" y="111.5" width="325" height="139.1" class="room"/>
+<rect x="690.6" y="111.5" width="221" height="271.7" class="room"/>
 <rect x="365.6" y="250.6" width="156" height="132.6" class="room"/>
 <rect x="521.6" y="250.6" width="169" height="132.6" class="room"/>
-<rect x="690.6" y="250.6" width="221" height="132.6" class="room"/>
-<rect x="142" y="383.2" width="707.2" height="72.8" class="room"/>
+<rect x="79.6" y="383.2" width="769.6" height="72.8" class="room"/>
 <rect x="79.6" y="456" width="338" height="158.6" class="room"/>
 <rect x="417.6" y="456" width="156" height="158.6" class="room"/>
 <rect x="573.6" y="456" width="275.6" height="119.6" class="room"/>
@@ -115,26 +115,30 @@
 <rect x="573.6" y="575.6" width="156" height="152.1" class="room"/>
 <rect x="729.6" y="575.6" width="182" height="152.1" class="room"/>
 <rect x="417.6" y="731.6" width="156" height="91" class="outside"/>
-<rect x="79.6" y="250.6" width="62.4" height="205.4" class="shaft"/>
 <rect x="849.2" y="383.2" width="62.4" height="218.4" class="shaft"/>
-<rect x="83.5" y="409.2" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="401.4" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="393.6" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="385.8" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="378" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="370.2" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="362.4" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="354.6" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="346.8" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="339" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="331.2" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="323.4" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="315.6" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="307.8" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="300" width="54.6" height="7.8" class="tread"/>
-<rect x="83.5" y="292.2" width="54.6" height="7.8" class="tread"/>
-<path d="M 110.8 413.1 L 110.8 296.1" class="up-arrow" marker-end="url(#arrow)"/>
-<text x="110.8" y="348.6" class="up-label" transform="rotate(-90 110.8 348.6)">вверх</text>
+<rect x="173.2" y="281.8" width="39" height="7.8" class="tread"/>
+<rect x="173.2" y="274" width="39" height="7.8" class="tread"/>
+<rect x="173.2" y="266.2" width="39" height="7.8" class="tread"/>
+<rect x="173.2" y="258.4" width="39" height="7.8" class="tread"/>
+<rect x="173.2" y="250.6" width="39" height="7.8" class="tread"/>
+<rect x="173.2" y="242.8" width="39" height="7.8" class="tread"/>
+<rect x="173.2" y="235" width="39" height="7.8" class="tread"/>
+<rect x="173.2" y="227.2" width="39" height="7.8" class="tread"/>
+<path d="M 192.7 285.7 L 192.7 231.1" class="up-arrow" marker-end="url(#arrow)"/>
+<text x="192.7" y="252.39999999999998" class="up-label" transform="rotate(-90 192.7 252.39999999999998)">вверх</text>
+<rect x="173.2" y="206.4" width="83.2" height="20.8" class="tread"/>
+<path d="M 214.8 216.8 L 214.8 216.8" class="up-arrow" marker-end="url(#arrow)"/>
+<text x="214.8" y="210.8" class="up-label" transform="rotate(-90 214.8 210.8)">вверх</text>
+<rect x="217.4" y="227.2" width="39" height="7.8" class="tread"/>
+<rect x="217.4" y="235" width="39" height="7.8" class="tread"/>
+<rect x="217.4" y="242.8" width="39" height="7.8" class="tread"/>
+<rect x="217.4" y="250.6" width="39" height="7.8" class="tread"/>
+<rect x="217.4" y="258.4" width="39" height="7.8" class="tread"/>
+<rect x="217.4" y="266.2" width="39" height="7.8" class="tread"/>
+<rect x="217.4" y="274" width="39" height="7.8" class="tread"/>
+<rect x="217.4" y="281.8" width="39" height="7.8" class="tread"/>
+<path d="M 236.9 231.1 L 236.9 285.7" class="up-arrow" marker-end="url(#arrow)"/>
+<text x="236.9" y="252.39999999999998" class="up-label" transform="rotate(-90 236.9 252.39999999999998)">вверх</text>
 <rect x="853.1" y="419.6" width="54.6" height="7.8" class="tread"/>
 <rect x="853.1" y="427.4" width="54.6" height="7.8" class="tread"/>
 <rect x="853.1" y="435.2" width="54.6" height="7.8" class="tread"/>
@@ -156,46 +160,37 @@
 <rect x="79.6" y="727.7" width="401.7" height="7.8" class="wall concrete"/>
 
 <rect x="509.9" y="727.7" width="401.7" height="7.8" class="wall concrete"/>
-<rect x="79.6" y="103.7" width="832" height="7.8" class="wall concrete"/>
-<rect x="75.7" y="107.6" width="7.8" height="624" class="wall concrete"/>
+<rect x="83.5" y="103.7" width="282.1" height="7.8" class="wall concrete low"/>
+<rect x="365.6" y="103.7" width="546" height="7.8" class="wall concrete"/>
+<rect x="75.7" y="107.6" width="7.8" height="275.6" class="wall concrete low"/>
+<rect x="75.7" y="383.2" width="7.8" height="348.4" class="wall concrete"/>
 <rect x="907.7" y="107.6" width="7.8" height="624" class="wall concrete"/>
 <rect x="417.6" y="819.4" width="156" height="6.5" class="wall concrete"/>
 <rect x="414.4" y="731.6" width="6.5" height="91" class="wall concrete"/>
 <rect x="570.4" y="731.6" width="6.5" height="91" class="wall concrete"/>
-<rect x="138.1" y="250.6" width="7.8" height="179.4" class="wall concrete"/>
+<rect x="167.4" y="206.4" width="3.9" height="83.2" class="wall concrete low"/>
+<rect x="258.4" y="206.4" width="3.9" height="96.2" class="wall concrete low"/>
+<rect x="364" y="111.5" width="3.1" height="61.1" class="wall drywall"/>
 
-<rect x="79.6" y="246.7" width="62.4" height="7.8" class="wall concrete"/>
-<rect x="79.6" y="452.1" width="62.4" height="7.8" class="wall concrete"/>
+<rect x="364" y="198.6" width="3.1" height="104" class="wall drywall"/>
 
-<rect x="845.3" y="409.2" width="7.8" height="192.4" class="wall concrete"/>
-<rect x="849.2" y="379.3" width="62.4" height="7.8" class="wall concrete"/>
-<rect x="849.2" y="597.7" width="62.4" height="7.8" class="wall concrete"/>
-<rect x="142" y="381.6" width="106.6" height="3.1" class="wall drywall"/>
+<rect x="364" y="328.6" width="3.1" height="54.6" class="wall drywall"/>
+<rect x="79.6" y="381.6" width="156" height="3.1" class="wall drywall"/>
 
-<rect x="274.6" y="381.6" width="156" height="3.1" class="wall drywall"/>
+<rect x="287.6" y="381.6" width="143" height="3.1" class="wall drywall"/>
 
 <rect x="456.6" y="381.6" width="130" height="3.1" class="wall drywall"/>
 
 <rect x="612.6" y="381.6" width="143" height="3.1" class="wall drywall"/>
 
 <rect x="781.6" y="381.6" width="67.6" height="3.1" class="wall drywall"/>
-<rect x="142" y="454.4" width="106.6" height="3.1" class="wall drywall"/>
+<rect x="79.6" y="454.4" width="156" height="3.1" class="wall drywall"/>
 
-<rect x="274.6" y="454.4" width="200.2" height="3.1" class="wall drywall"/>
+<rect x="287.6" y="454.4" width="195" height="3.1" class="wall drywall"/>
 
-<rect x="516.4" y="454.4" width="174.2" height="3.1" class="wall drywall"/>
+<rect x="508.6" y="454.4" width="182" height="3.1" class="wall drywall"/>
 
 <rect x="716.6" y="454.4" width="132.6" height="3.1" class="wall drywall"/>
-<rect x="364" y="111.5" width="3.1" height="61.1" class="wall drywall"/>
-
-<rect x="364" y="198.6" width="3.1" height="104" class="wall drywall"/>
-
-<rect x="364" y="328.6" width="3.1" height="54.6" class="wall drywall"/>
-<rect x="520" y="111.5" width="3.1" height="61.1" class="wall drywall"/>
-
-<rect x="520" y="198.6" width="3.1" height="98.8" class="wall drywall"/>
-
-<rect x="520" y="333.8" width="3.1" height="49.4" class="wall drywall"/>
 <rect x="689" y="111.5" width="3.1" height="61.1" class="wall drywall"/>
 
 <rect x="689" y="198.6" width="3.1" height="117" class="wall drywall"/>
@@ -203,22 +198,23 @@
 <rect x="689" y="341.6" width="3.1" height="41.6" class="wall drywall"/>
 <rect x="365.6" y="249" width="65" height="3.1" class="wall drywall"/>
 
-<rect x="456.6" y="249" width="299" height="3.1" class="wall drywall"/>
+<rect x="456.6" y="249" width="234" height="3.1" class="wall drywall"/>
+<rect x="520" y="250.6" width="3.1" height="52" class="wall drywall"/>
 
-<rect x="781.6" y="249" width="130" height="3.1" class="wall drywall"/>
-<rect x="416" y="456" width="3.1" height="54.6" class="wall drywall"/>
+<rect x="520" y="328.6" width="3.1" height="54.6" class="wall drywall"/>
+<rect x="416" y="456" width="3.1" height="195" class="wall drywall"/>
 
-<rect x="416" y="536.6" width="3.1" height="117" class="wall drywall"/>
-
-<rect x="416" y="679.6" width="3.1" height="48.1" class="wall drywall"/>
+<rect x="416" y="682.2" width="3.1" height="45.5" class="wall drywall"/>
 <rect x="572" y="456" width="3.1" height="54.6" class="wall drywall"/>
 
 <rect x="572" y="536.6" width="3.1" height="117" class="wall drywall"/>
 
 <rect x="572" y="679.6" width="3.1" height="48.1" class="wall drywall"/>
-<rect x="79.6" y="613" width="195" height="3.1" class="wall drywall"/>
+<rect x="79.6" y="613" width="39" height="3.1" class="wall drywall"/>
 
-<rect x="300.6" y="613" width="174.2" height="3.1" class="wall drywall"/>
+<rect x="144.6" y="613" width="208" height="3.1" class="wall drywall"/>
+
+<rect x="378.6" y="613" width="96.2" height="3.1" class="wall drywall"/>
 
 <rect x="516.4" y="613" width="57.2" height="3.1" class="wall drywall"/>
 <rect x="573.6" y="574" width="59.8" height="3.1" class="wall drywall"/>
@@ -229,29 +225,77 @@
 <rect x="728" y="575.6" width="3.1" height="78" class="wall drywall"/>
 
 <rect x="728" y="679.6" width="3.1" height="48.1" class="wall drywall"/>
+<rect x="845.3" y="383.2" width="7.8" height="13" class="wall concrete"/>
 
-
-
+<rect x="845.3" y="422.2" width="7.8" height="179.4" class="wall concrete"/>
+<rect x="849.2" y="379.3" width="62.4" height="7.8" class="wall concrete"/>
+<rect x="849.2" y="597.7" width="62.4" height="7.8" class="wall concrete"/>
+<rect x="690.6" y="246.7" width="78" height="7.8" class="blocker barrier"/>
+<text x="729.6" y="268.5" class="note">Ограждение 3 м, высота 1.1 — присел и укрылся</text>
+<rect x="506" y="164.8" width="31.2" height="31.2" class="blocker column"/>
+<text x="521.6" y="210" class="note">Колонна 1.2 × 1.2</text>
+<rect x="526.8" y="383.2" width="23.4" height="46.8" class="blocker rubble"/>
+<text x="538.5" y="444" class="note">Завал: коридор не пройти насквозь</text>
+<rect x="539.8" y="414.4" width="23.4" height="41.6" class="blocker rubble"/>
+<rect x="563.2" y="511.9" width="20.8" height="23.4" class="blocker blocked"/>
+<text x="573.6" y="549.3" class="note">Мешает пройти, но не мешает стрелять</text>
+<rect x="90" y="144" width="31.2" height="78" class="blocker furniture"/>
+<rect x="298" y="331.2" width="41.6" height="20.8" class="blocker furniture"/>
+<rect x="381.2" y="118" width="65" height="20.8" class="blocker furniture"/>
+<rect x="573.6" y="115.4" width="65" height="15.6" class="blocker furniture"/>
+<rect x="641.2" y="118" width="41.6" height="46.8" class="blocker furniture"/>
+<rect x="407.2" y="297.4" width="57.2" height="26" class="blocker furniture"/>
+<rect x="373.4" y="258.4" width="26" height="31.2" class="blocker furniture"/>
+<rect x="532" y="255.8" width="130" height="15.6" class="blocker furniture"/>
+<rect x="667.2" y="255.8" width="18.2" height="26" class="blocker furniture"/>
+<rect x="563.2" y="305.2" width="46.8" height="20.8" class="blocker furniture"/>
+<rect x="708.8" y="118" width="57.2" height="15.6" class="blocker furniture"/>
+<rect x="888.2" y="159.6" width="18.2" height="67.6" class="blocker furniture"/>
+<rect x="807.6" y="300" width="31.2" height="31.2" class="blocker furniture"/>
+<rect x="131.6" y="505.4" width="78" height="18.2" class="blocker furniture"/>
+<rect x="131.6" y="547" width="78" height="18.2" class="blocker furniture"/>
+<rect x="313.6" y="463.8" width="62.4" height="15.6" class="blocker furniture"/>
+<rect x="422.8" y="544.4" width="15.6" height="52" class="blocker furniture"/>
+<rect x="625.6" y="461.2" width="62.4" height="13" class="blocker furniture"/>
+<rect x="729.6" y="508" width="78" height="36.4" class="blocker furniture"/>
+<rect x="604.8" y="531.4" width="36.4" height="15.6" class="blocker furniture"/>
+<rect x="131.6" y="710.8" width="130" height="13" class="blocker furniture"/>
+<rect x="183.6" y="661.4" width="52" height="15.6" class="blocker furniture"/>
+<rect x="550.2" y="695.2" width="18.2" height="26" class="blocker furniture"/>
+<rect x="422.8" y="625" width="15.6" height="26" class="blocker furniture"/>
+<rect x="610" y="583.4" width="52" height="54.6" class="blocker furniture"/>
+<rect x="708.8" y="583.4" width="15.6" height="44.2" class="blocker furniture"/>
+<rect x="888.2" y="614.6" width="18.2" height="78" class="blocker furniture"/>
+<rect x="820.6" y="684.8" width="52" height="33.8" class="blocker furniture"/>
+<rect x="402" y="661.4" width="31.2" height="10.4" class="opening"/>
+<text x="417.6" y="686.6" class="note">Пролом в стене: прихожая ↔ гардеробная</text>
+<rect x="474.8" y="609.4" width="41.6" height="10.4" class="opening"/>
+<text x="495.6" y="634.6" class="note">Открытая арка</text>
+<circle cx="872.6" cy="150.5" r="19.5" class="hole under"/>
+<text x="872.6" y="185" class="note">сюда падают из кладовой сверху</text>
 <path d="M 481.3 726.9 L 509.9 726.9" class="door-shut"/>
 <path d="M 509.9 726.9 A 28.6 28.6 0 0 0 452.7 725.9" class="door-arc"/>
 <path d="M 481.3 726.9 L 452.7 725.9" class="door-open"/>
 <circle cx="481.3" cy="726.9" r="3" class="hinge"/>
 <text x="495.6" y="755.1" class="door-id">front</text>
-<path d="M 146.7 430 L 146.7 456" class="door-shut"/>
-<path d="M 146.7 456 A 26 26 0 0 0 147.6 404" class="door-arc"/>
-<path d="M 146.7 430 L 147.6 404" class="door-open"/>
-<circle cx="146.7" cy="430" r="3" class="hinge"/>
-<text x="122.5" y="447" class="door-id">stair-w-1</text>
-<path d="M 844.5 409.2 L 844.5 383.2" class="door-shut"/>
-<path d="M 844.5 383.2 A 26 26 0 0 0 843.6 435.2" class="door-arc"/>
-<path d="M 844.5 409.2 L 843.6 435.2" class="door-open"/>
-<circle cx="844.5" cy="409.2" r="3" class="hinge"/>
-<text x="868.7" y="400.2" class="door-id">stair-e-1</text>
-<path d="M 248.6 380.9 L 274.6 380.9" class="door-shut"/>
-<path d="M 274.6 380.9 A 26 26 0 0 0 222.6 380" class="door-arc"/>
-<path d="M 248.6 380.9 L 222.6 380" class="door-open"/>
-<circle cx="248.6" cy="380.9" r="3" class="hinge"/>
-<text x="261.6" y="406.7" class="door-id">living-spine</text>
+<path d="M 235.6 380.9 L 261.6 380.9" class="door-shut"/>
+<path d="M 261.6 380.9 A 26 26 0 0 0 209.6 380" class="door-arc"/>
+<path d="M 235.6 380.9 L 209.6 380" class="door-open"/>
+<circle cx="235.6" cy="380.9" r="3" class="hinge"/>
+<text x="261.6" y="406.7" class="door-id">court-spine (двойная)</text>
+<path d="M 287.6 380.9 L 261.6 380.9" class="door-shut"/>
+<path d="M 261.6 380.9 A 26 26 0 0 1 313.6 380" class="door-arc"/>
+<path d="M 287.6 380.9 L 313.6 380" class="door-open"/>
+<circle cx="287.6" cy="380.9" r="3" class="hinge"/>
+<path d="M 235.6 458.3 L 261.6 458.3" class="door-shut"/>
+<path d="M 261.6 458.3 A 26 26 0 0 1 209.6 459.2" class="door-arc"/>
+<path d="M 235.6 458.3 L 209.6 459.2" class="door-open"/>
+<circle cx="235.6" cy="458.3" r="3" class="hinge"/>
+<text x="261.6" y="440.5" class="door-id">cinema-spine (двойная)</text>
+<path d="M 287.6 458.3 L 261.6 458.3" class="door-shut"/>
+<path d="M 261.6 458.3 A 26 26 0 0 0 313.6 459.2" class="door-arc"/>
+<path d="M 287.6 458.3 L 313.6 459.2" class="door-open"/>
+<circle cx="287.6" cy="458.3" r="3" class="hinge"/>
 <path d="M 456.6 380.9 L 430.6 380.9" class="door-shut"/>
 <path d="M 430.6 380.9 A 26 26 0 0 1 482.6 380" class="door-arc"/>
 <path d="M 456.6 380.9 L 482.6 380" class="door-open"/>
@@ -267,31 +311,41 @@
 <path d="M 781.6 380.9 L 807.6 380" class="door-open"/>
 <circle cx="781.6" cy="380.9" r="3" class="hinge"/>
 <text x="768.6" y="406.7" class="door-id">utility-spine</text>
-<path d="M 248.6 458.3 L 274.6 458.3" class="door-shut"/>
-<path d="M 274.6 458.3 A 26 26 0 0 1 222.6 459.2" class="door-arc"/>
-<path d="M 248.6 458.3 L 222.6 459.2" class="door-open"/>
-<circle cx="248.6" cy="458.3" r="3" class="hinge"/>
-<text x="261.6" y="440.5" class="door-id">cinema-spine</text>
 <path d="M 716.6 458.3 L 690.6 458.3" class="door-shut"/>
 <path d="M 690.6 458.3 A 26 26 0 0 0 742.6 459.2" class="door-arc"/>
 <path d="M 716.6 458.3 L 742.6 459.2" class="door-open"/>
 <circle cx="716.6" cy="458.3" r="3" class="hinge"/>
 <text x="703.6" y="440.5" class="door-id">gym-spine</text>
-<path d="M 363.3 302.6 L 363.3 328.6" class="door-shut"/>
-<path d="M 363.3 328.6 A 26 26 0 0 1 362.4 276.6" class="door-arc"/>
-<path d="M 363.3 302.6 L 362.4 276.6" class="door-open"/>
-<circle cx="363.3" cy="302.6" r="3" class="hinge"/>
-<text x="385.1" y="319.6" class="door-id">living-dining</text>
+<path d="M 482.6 458.3 L 508.6 458.3" class="door-shut"/>
+<path d="M 508.6 458.3 A 26 26 0 0 1 456.6 459.2" class="door-arc"/>
+<path d="M 482.6 458.3 L 456.6 459.2" class="door-open"/>
+<circle cx="482.6" cy="458.3" r="3" class="hinge"/>
+<text x="495.6" y="440.5" class="door-id">hall-spine</text>
+<path d="M 523.9 302.6 L 523.9 328.6" class="door-shut"/>
+<path d="M 523.9 328.6 A 26 26 0 0 0 524.8 276.6" class="door-arc"/>
+<path d="M 523.9 302.6 L 524.8 276.6" class="door-open"/>
+<circle cx="523.9" cy="302.6" r="3" class="hinge"/>
+<text x="502.1" y="319.6" class="door-id">dining-kitchen</text>
+<path d="M 575.9 679.6 L 575.9 653.6" class="door-shut"/>
+<path d="M 575.9 653.6 A 26 26 0 0 1 576.8 705.6" class="door-arc"/>
+<path d="M 575.9 679.6 L 576.8 705.6" class="door-open"/>
+<circle cx="575.9" cy="679.6" r="3" class="hinge"/>
+<text x="554.1" y="670.6" class="door-id">foyer-guest</text>
 <path d="M 363.3 198.6 L 363.3 172.6" class="door-shut"/>
 <path d="M 363.3 172.6 A 26 26 0 0 0 362.4 224.6" class="door-arc"/>
 <path d="M 363.3 198.6 L 362.4 224.6" class="door-open"/>
 <circle cx="363.3" cy="198.6" r="3" class="hinge"/>
-<text x="385.1" y="189.6" class="door-id">living-study</text>
-<path d="M 523.9 172.6 L 523.9 198.6" class="door-shut"/>
-<path d="M 523.9 198.6 A 26 26 0 0 0 524.8 146.6" class="door-arc"/>
-<path d="M 523.9 172.6 L 524.8 146.6" class="door-open"/>
-<circle cx="523.9" cy="172.6" r="3" class="hinge"/>
-<text x="502.1" y="189.6" class="door-id">study-guest</text>
+<text x="385.1" y="189.6" class="door-id">court-study</text>
+<path d="M 363.3 302.6 L 363.3 328.6" class="door-shut"/>
+<path d="M 363.3 328.6 A 26 26 0 0 1 362.4 276.6" class="door-arc"/>
+<path d="M 363.3 302.6 L 362.4 276.6" class="door-open"/>
+<circle cx="363.3" cy="302.6" r="3" class="hinge"/>
+<text x="385.1" y="319.6" class="door-id">court-dining</text>
+<path d="M 430.6 248.3 L 456.6 248.3" class="door-shut"/>
+<path d="M 456.6 248.3 A 26 26 0 0 0 404.6 247.4" class="door-arc"/>
+<path d="M 430.6 248.3 L 404.6 247.4" class="door-open"/>
+<circle cx="430.6" cy="248.3" r="3" class="hinge"/>
+<text x="443.6" y="274.1" class="door-id">dining-study</text>
 <path d="M 692.9 341.6 L 692.9 315.6" class="door-shut"/>
 <path d="M 692.9 315.6 A 26 26 0 0 1 693.8 367.6" class="door-arc"/>
 <path d="M 692.9 341.6 L 693.8 367.6" class="door-open"/>
@@ -301,42 +355,23 @@
 <path d="M 692.9 198.6 A 26 26 0 0 0 693.8 146.6" class="door-arc"/>
 <path d="M 692.9 172.6 L 693.8 146.6" class="door-open"/>
 <circle cx="692.9" cy="172.6" r="3" class="hinge"/>
-<text x="671.1" y="189.6" class="door-id">guest-bath</text>
-<path d="M 430.6 248.3 L 456.6 248.3" class="door-shut"/>
-<path d="M 456.6 248.3 A 26 26 0 0 0 404.6 247.4" class="door-arc"/>
-<path d="M 430.6 248.3 L 404.6 247.4" class="door-open"/>
-<circle cx="430.6" cy="248.3" r="3" class="hinge"/>
-<text x="443.6" y="274.1" class="door-id">dining-study</text>
-<path d="M 781.6 248.3 L 755.6 248.3" class="door-shut"/>
-<path d="M 755.6 248.3 A 26 26 0 0 1 807.6 247.4" class="door-arc"/>
-<path d="M 781.6 248.3 L 807.6 247.4" class="door-open"/>
-<circle cx="781.6" cy="248.3" r="3" class="hinge"/>
-<text x="768.6" y="274.1" class="door-id">utility-bath</text>
-<path d="M 415.3 510.6 L 415.3 536.6" class="door-shut"/>
-<path d="M 415.3 536.6 A 26 26 0 0 1 414.4 484.6" class="door-arc"/>
-<path d="M 415.3 510.6 L 414.4 484.6" class="door-open"/>
-<circle cx="415.3" cy="510.6" r="3" class="hinge"/>
-<text x="437.1" y="527.6" class="door-id">cinema-gallery</text>
-<path d="M 415.3 679.6 L 415.3 653.6" class="door-shut"/>
-<path d="M 415.3 653.6 A 26 26 0 0 0 414.4 705.6" class="door-arc"/>
-<path d="M 415.3 679.6 L 414.4 705.6" class="door-open"/>
-<circle cx="415.3" cy="679.6" r="3" class="hinge"/>
-<text x="437.1" y="670.6" class="door-id">cloak-foyer</text>
+<text x="671.1" y="189.6" class="door-id">study-bath</text>
+<path d="M 118.6 616.9 L 144.6 616.9" class="door-shut"/>
+<path d="M 144.6 616.9 A 26 26 0 0 1 92.6 617.8" class="door-arc"/>
+<path d="M 118.6 616.9 L 92.6 617.8" class="door-open"/>
+<circle cx="118.6" cy="616.9" r="3" class="hinge"/>
+<text x="131.6" y="599.1" class="door-id">cinema-cloak-w</text>
+<path d="M 378.6 616.9 L 352.6 616.9" class="door-shut"/>
+<path d="M 352.6 616.9 A 26 26 0 0 0 404.6 617.8" class="door-arc"/>
+<path d="M 378.6 616.9 L 404.6 617.8" class="door-open"/>
+<circle cx="378.6" cy="616.9" r="3" class="hinge"/>
+<text x="365.6" y="599.1" class="door-id">cinema-cloak-e</text>
 <path d="M 575.9 510.6 L 575.9 536.6" class="door-shut"/>
 <path d="M 575.9 536.6 A 26 26 0 0 0 576.8 484.6" class="door-arc"/>
 <path d="M 575.9 510.6 L 576.8 484.6" class="door-open"/>
 <circle cx="575.9" cy="510.6" r="3" class="hinge"/>
-<text x="554.1" y="527.6" class="door-id">gallery-gym</text>
-<path d="M 575.9 679.6 L 575.9 653.6" class="door-shut"/>
-<path d="M 575.9 653.6 A 26 26 0 0 1 576.8 705.6" class="door-arc"/>
-<path d="M 575.9 679.6 L 576.8 705.6" class="door-open"/>
-<circle cx="575.9" cy="679.6" r="3" class="hinge"/>
-<text x="554.1" y="670.6" class="door-id">foyer-guest</text>
-<path d="M 274.6 616.9 L 300.6 616.9" class="door-shut"/>
-<path d="M 300.6 616.9 A 26 26 0 0 1 248.6 617.8" class="door-arc"/>
-<path d="M 274.6 616.9 L 248.6 617.8" class="door-open"/>
-<circle cx="274.6" cy="616.9" r="3" class="hinge"/>
-<text x="287.6" y="599.1" class="door-id">cinema-cloak</text>
+<text x="573.6" y="539.6" class="note">выбита заранее</text>
+<text x="554.1" y="527.6" class="door-id">hall-gym</text>
 <path d="M 807.6 577.9 L 781.6 577.9" class="door-shut"/>
 <path d="M 781.6 577.9 A 26 26 0 0 0 833.6 578.8" class="door-arc"/>
 <path d="M 807.6 577.9 L 833.6 578.8" class="door-open"/>
@@ -347,28 +382,27 @@
 <path d="M 731.9 653.6 L 732.8 627.6" class="door-open"/>
 <circle cx="731.9" cy="653.6" r="3" class="hinge"/>
 <text x="710.1" y="670.6" class="door-id">guest-spa</text>
+<path d="M 844.5 422.2 L 844.5 396.2" class="door-shut"/>
+<path d="M 844.5 396.2 A 26 26 0 0 0 843.6 448.2" class="door-arc"/>
+<path d="M 844.5 422.2 L 843.6 448.2" class="door-open"/>
+<circle cx="844.5" cy="422.2" r="3" class="hinge"/>
+<text x="868.7" y="413.2" class="door-id">stair-e-1</text>
 <circle cx="454" cy="799.2" r="5" class="spawn attackers"/>
 <circle cx="537.2" cy="799.2" r="5" class="spawn attackers"/>
 <circle cx="438.4" cy="762.8" r="5" class="spawn attackers"/>
 <circle cx="552.8" cy="762.8" r="5" class="spawn attackers"/>
-<circle cx="209.6" cy="172.6" r="5" class="spawn defenders"/>
-<circle cx="768.6" cy="341.6" r="5" class="spawn defenders"/>
-<text x="222.6" y="243.4" class="room-name">Гостиная</text>
-<text x="222.6" y="260.4" class="room-size">11 × 10.5 м · living</text>
-<text x="443.6" y="177.1" class="room-name">Кабинет</text>
-<text x="443.6" y="194.1" class="room-size">6 × 5.4 м · study</text>
-<text x="606.1" y="177.1" class="room-name">Гостевая спальня</text>
-<text x="606.1" y="194.1" class="room-size">6.5 × 5.4 м · guest-bed</text>
-<text x="801.1" y="177.1" class="room-name">Санузел</text>
-<text x="801.1" y="194.1" class="room-size">8.5 × 5.4 м · bathroom</text>
+<text x="222.6" y="243.4" class="room-name">Гостиная-двор (без крыши)</text>
+<text x="222.6" y="260.4" class="room-size">11 × 10.5 м · court</text>
+<text x="528.1" y="177.1" class="room-name">Кабинет + гостевая</text>
+<text x="528.1" y="194.1" class="room-size">12.5 × 5.4 м · study</text>
+<text x="801.1" y="243.4" class="room-name">Санузел + подсобная</text>
+<text x="801.1" y="260.4" class="room-size">8.5 × 10.5 м · bathroom</text>
 <text x="443.6" y="312.9" class="room-name">Столовая</text>
 <text x="443.6" y="329.9" class="room-size">6 × 5.1 м · dining</text>
 <text x="606.1" y="312.9" class="room-name">Кухня</text>
 <text x="606.1" y="329.9" class="room-size">6.5 × 5.1 м · kitchen</text>
-<text x="801.1" y="312.9" class="room-name">Подсобная</text>
-<text x="801.1" y="329.9" class="room-size">8.5 × 5.1 м · utility</text>
-<text x="495.6" y="415.6" class="room-name">Коридор</text>
-<text x="495.6" y="432.6" class="room-size">27.2 × 2.8 м · spine-0</text>
+<text x="464.4" y="415.6" class="room-name">Коридор</text>
+<text x="464.4" y="432.6" class="room-size">29.6 × 2.8 м · spine-0</text>
 <text x="248.6" y="531.3" class="room-name">Кинозал</text>
 <text x="248.6" y="548.3" class="room-size">13 × 6.1 м · cinema</text>
 <text x="495.6" y="531.3" class="room-name">Холл</text>
@@ -379,14 +413,12 @@
 <text x="248.6" y="684.2" class="room-size">13 × 4.4 м · cloakroom</text>
 <text x="495.6" y="667.2" class="room-name">Прихожая</text>
 <text x="495.6" y="684.2" class="room-size">6 × 4.4 м · foyer</text>
-<text x="651.6" y="647.7" class="room-name">Гостевая</text>
+<text x="651.6" y="647.7" class="room-name">Гостевая у прихожей</text>
 <text x="651.6" y="664.7" class="room-size">6 × 5.9 м · guest-suite</text>
 <text x="820.6" y="647.7" class="room-name">СПА</text>
 <text x="820.6" y="664.7" class="room-size">7 × 5.9 м · spa</text>
 <text x="495.6" y="773.1" class="room-name">Площадка</text>
 <text x="495.6" y="790.1" class="room-size">6 × 3.5 м · landing</text>
-<text x="110.8" y="268.6" class="shaft-label">Лестница З</text>
-<text x="110.8" y="448" class="room-size">shaft-w</text>
 <text x="880.4" y="401.2" class="shaft-label">Лестница В</text>
 <text x="880.4" y="593.6" class="room-size">shaft-e</text>
 </svg>

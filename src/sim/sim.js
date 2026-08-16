@@ -7,13 +7,13 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-} from './constants.js?v=eac173d2';
+} from './constants.js?v=552b53ed';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=eac173d2';
+} from './math.js?v=552b53ed';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-} from './world.js?v=eac173d2';
+} from './world.js?v=552b53ed';
 
 const GRAVITY = 18;
 
@@ -70,14 +70,14 @@ export function createState(world, seed = 12345) {
   const doors = {};
   for (const d of world.doors) {
     doors[d.id] = {
-      open: 0,
-      target: 0,
+      open: d.startsForced ? 1 : 0,
+      target: d.startsForced ? 1 : 0,
       speed: DOOR.openSpeed,
       health: d.maxHealth,
       // `forced` means the latch is destroyed: the door swings free and can no
       // longer be shut. The panel itself stays on its hinges and still stops
       // bullets — a kicked door is cover you can no longer close.
-      forced: false,
+      forced: !!d.startsForced,
       // Glass does not swing open when it loses: the pane falls out and the
       // doorway is simply gone.
       broken: false,
@@ -308,8 +308,8 @@ function damageDoor(world, state, doorId, amount, by) {
   const at = { x: d ? d.pos.x : 0, y: (d?.pos.y ?? 0) + 1, z: d ? d.pos.z : 0 };
   if (glass) {
     ds.broken = true;
-    ds.open = 0;
-    ds.target = 0;
+    ds.open = d.startsForced ? 1 : 0;
+    ds.target = d.startsForced ? 1 : 0;
     ds.locked = false;
     emit(state, { type: 'doorShatter', doorId, by: by?.id });
     makeNoise(state, at, DOOR.loudnessKick, 'doorShatter', by?.id);
@@ -409,6 +409,8 @@ export function aimDirection(p) {
 }
 
 function stepPlayer(world, state, p, input, dt) {
+  const startedAt = { x: p.pos.x, z: p.pos.z };
+
   // Aim comes from the client (mouse); recoil is added by the simulation.
   p.look.yaw = input.yaw;
   p.look.pitch = clamp(input.pitch, -LOOK.pitchLimit, LOOK.pitchLimit);
@@ -547,8 +549,53 @@ function stepPlayer(world, state, p, input, dt) {
     if (kickDoor(world, state, p)) p.kickCooldown = 0.9;
   }
 
+  // ── Staging phase ──
+  holdInZone(world, state, p, startedAt);
+
   // ── Weapon ──
   stepWeapon(world, state, p, input, dt);
+}
+
+// During the staging minute the two sides are not free to go anywhere: the
+// attackers wait at the door while the defenders take the flat, and the rooms
+// the defenders would have to cross the attackers to reach are closed to them.
+//
+// The rule is enforced by refusing the step rather than by shoving anyone
+// back: a player who tries to cross the line simply does not move, which reads
+// as an invisible wall and cannot wedge someone between two closed rooms the
+// way pushing them out of one and into the next would.
+function holdInZone(world, state, p, wasAt) {
+  const rules = world.map.prep;
+  if (state.phase !== 'prep' || !rules) {
+    p.zoneFrom = null;
+    return;
+  }
+  const rooms = world.map.rooms ?? [];
+  const m = PLAYER.radius + 0.05;
+  const inRoom = (r, pos) =>
+    pos.x > r.min.x - m && pos.x < r.max.x + m && pos.z > r.min.z - m && pos.z < r.max.z + m;
+  const byId = (id) => rooms.find((r) => r.id === id);
+
+  let allowed = true;
+  if (p.team === 'attackers' && rules.attackersHeld?.length) {
+    const zones = rules.attackersHeld.map(byId).filter(Boolean);
+    allowed = zones.some((r) =>
+      p.pos.x > r.min.x + m && p.pos.x < r.max.x - m &&
+      p.pos.z > r.min.z + m && p.pos.z < r.max.z - m);
+  } else if (p.team === 'defenders' && rules.defendersBarred?.length) {
+    allowed = !rules.defendersBarred.map(byId).filter(Boolean).some((r) => inRoom(r, p.pos));
+  }
+
+  if (allowed) {
+    p.zoneFrom = { ...p.pos };
+    return;
+  }
+  // Not allowed here: stay where the last legal step left us.
+  const back = p.zoneFrom ?? wasAt;
+  p.pos.x = back.x;
+  p.pos.z = back.z;
+  p.vel.x = 0;
+  p.vel.z = 0;
 }
 
 function stepWeapon(world, state, p, input, dt) {
@@ -767,11 +814,11 @@ export function resetRound(world, state) {
   }
   for (const d of world.doors) {
     const ds = state.doors[d.id];
-    ds.open = 0;
-    ds.target = 0;
+    ds.open = d.startsForced ? 1 : 0;
+    ds.target = d.startsForced ? 1 : 0;
     ds.speed = DOOR.openSpeed;
     ds.health = d.maxHealth;
-    ds.forced = false;
+    ds.forced = !!d.startsForced;
     ds.broken = false;
     ds.locked = d.lockedByDefault;
   }

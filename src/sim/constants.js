@@ -134,7 +134,10 @@ export const FLASHLIGHT = {
 };
 
 export const ROUND = {
-  prepTime: 5,
+  // A full minute of staging. The attackers are held at the door for it while
+  // the defenders take the flat — that asymmetry is the point of the phase,
+  // and the map says which rooms each side may be in while it lasts.
+  prepTime: 60,
   // The penthouse is two storeys and thirty-odd rooms: clearing it carefully,
   // rather than running it, is a quarter of an hour of work.
   duration: 900,

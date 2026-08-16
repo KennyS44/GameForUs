@@ -119,6 +119,9 @@ for (let i = 0; i < TICK_RATE; i++) stepSim(world, state, idle);
 check('kicked door swings fully open', state.doors.front.open > 0.99, `open=${state.doors.front.open.toFixed(2)}`);
 
 // ── With the door open, the attacker can enter the flat ───────────────────
+// Live, not staging: during staging the attackers are held on the landing.
+state.phase = 'live';
+state.phaseTime = 60;
 for (let i = 0; i < TICK_RATE * 4; i++) {
   stepSim(world, state, { a1: forward, d1: createInput() });
 }
@@ -140,9 +143,9 @@ check(
   const inLiving = { x: -10, y: 1.6, z: -14 };
   const inStudy = { x: -2, y: 1.6, z: -14 };
   check('drywall blocks line of sight', !hasLineOfSight(world, state, inLiving, inStudy));
-  // Both ends inside the living room, nothing in between.
-  const a2 = { x: -10, y: 1.6, z: -14 };
-  const b2 = { x: -12, y: 1.6, z: -10 };
+  // Both ends inside the cinema, nothing in between.
+  const a2 = { x: -9, y: 1.6, z: -1.6 };
+  const b2 = { x: -5, y: 1.6, z: -1.6 };
   check('open room does not block line of sight', hasLineOfSight(world, state, a2, b2));
 }
 
@@ -370,18 +373,59 @@ check(
     `peak=${deg(peak).toFixed(2)}° now=${deg(state.players.a1.recoil.pitch).toFixed(2)}°`);
 }
 
+// ── The staging minute keeps the two sides apart ──────────────────────────
+{
+  resetRound(world, state);
+  const a = state.players.a1;
+  const d = state.players.d1;
+  check('a door that was kicked in before the round starts open',
+    state.doors['hall-gym'].forced && state.doors['hall-gym'].open === 1);
+
+  // An attacker who runs at the flat during staging gets no further than the
+  // landing he spawned on.
+  const forward = { ...createInput(), moveZ: 1, yaw: 0, run: true };
+  for (let i = 0; i < TICK_RATE * 3; i++) {
+    stepSim(world, state, { a1: forward, d1: createInput() });
+  }
+  const landing = APARTMENT.rooms.find((r) => r.id === 'landing');
+  check('attackers are held on the landing while the round is staging',
+    state.phase === 'prep' && a.pos.z > landing.min.z, `z=${a.pos.z.toFixed(2)}`);
+
+  // A defender who tries to take the entrance hall is put back out of it.
+  const foyer = APARTMENT.rooms.find((r) => r.id === 'foyer');
+  d.pos = { x: 0, y: 0, z: 3.5 };
+  for (let i = 0; i < TICK_RATE; i++) {
+    stepSim(world, state, { a1: createInput(), d1: { ...createInput(), yaw: 0 } });
+  }
+  const stillInside = d.pos.x > foyer.min.x && d.pos.x < foyer.max.x &&
+    d.pos.z > foyer.min.z && d.pos.z < foyer.max.z;
+  check('defenders are kept out of the rooms the map closes to them', !stillInside,
+    `(${d.pos.x.toFixed(1)}, ${d.pos.z.toFixed(1)})`);
+
+  // Once the round goes live, nobody is held anywhere: put the attacker inside
+  // the flat and he stays there.
+  state.phase = 'live';
+  state.phaseTime = 60;
+  a.pos = { x: 0, y: 0, z: 3.5 };
+  for (let i = 0; i < TICK_RATE; i++) {
+    stepSim(world, state, { a1: createInput(), d1: createInput() });
+  }
+  check('the hold lifts when the round goes live', a.pos.z < 5,
+    `z=${a.pos.z.toFixed(1)}`);
+}
+
 // ── Glass: you see through it, you do not shoot through it ────────────────
 {
   const F2 = 3.3;
-  const GLASS = 'lounge-terrace'; // the balcony door, upstairs at x = -2, z = -2
+  const GLASS = 'terrace-wardrobe'; // the terrace door, upstairs at x = -5, z = -10
 
-  // Standing in the lounge, facing west at the pane.
+  // Standing in the dressing room, facing west at the pane.
   function atTheGlass() {
     resetRound(world, state);
     state.phase = 'live';
     state.phaseTime = 60;
     const p = state.players.a1;
-    p.pos = { x: -1.0, y: F2, z: -2 };
+    p.pos = { x: -3.6, y: F2, z: -10 };
     p.look = { yaw: Math.PI / 2, pitch: 0 }; // toward -X
     state.players.d1.pos = { x: 8, y: F2, z: -16 }; // out of the way
     return p;
@@ -390,10 +434,10 @@ check(
   // Sight passes through a closed pane...
   {
     atTheGlass();
-    const inLounge = { x: -1.0, y: F2 + 1.6, z: -2 };
-    const onTerrace = { x: -4.0, y: F2 + 1.6, z: -2 };
+    const inside = { x: -3.6, y: F2 + 1.6, z: -10 };
+    const onTerrace = { x: -6.5, y: F2 + 1.6, z: -10 };
     check('you can see through a closed glass door',
-      hasLineOfSight(world, state, inLounge, onTerrace));
+      hasLineOfSight(world, state, inside, onTerrace));
   }
 
   // ...but a bullet does not: it takes the pane down in two.
@@ -417,14 +461,14 @@ check(
   // Gone means gone: the doorway is walkable and nothing stops a bullet.
   {
     const p = state.players.a1;
-    p.pos = { x: -1.0, y: F2, z: -2 };
+    p.pos = { x: -3.6, y: F2, z: -10 };
     for (let i = 0; i < TICK_RATE * 2; i++) {
       stepSim(world, state, {
         a1: { ...createInput(), moveZ: 1, yaw: Math.PI / 2 },
         d1: createInput(),
       });
     }
-    check('you can walk out through the empty frame', p.pos.x < -2.4, `x=${p.pos.x.toFixed(2)}`);
+    check('you can walk out through the empty frame', p.pos.x < -5.4, `x=${p.pos.x.toFixed(2)}`);
   }
 
   // One boot does the same job as two rounds.

@@ -2,8 +2,8 @@
 // geometry, and bullet raycasts that respect material penetration.
 // Pure — no engine types cross this boundary.
 
-import { rayBox, boxOverlaps, clamp } from './math.js?v=eac173d2';
-import { DOOR } from './constants.js?v=eac173d2';
+import { rayBox, boxOverlaps, clamp } from './math.js?v=552b53ed';
+import { DOOR } from './constants.js?v=552b53ed';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -83,6 +83,8 @@ export function buildWorld(map) {
       reinforced: !!d.reinforced,
       maxHealth: d.health ?? 100,
       lockedByDefault: !!d.locked,
+      // Some doors were kicked in before anyone arrived.
+      startsForced: !!d.startsForced,
       hinge,
       base,
       floorY,

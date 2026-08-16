@@ -132,7 +132,7 @@ function doors(floor) {
     out.push(`<path d="M ${n(px(tipShut.x))} ${n(pz(tipShut.z))} A ${n(r)} ${n(r)} 0 0 ${sweep} ${n(px(tipOpen.x))} ${n(pz(tipOpen.z))}" class="door-arc"/>`);
     out.push(`<path d="M ${n(px(d.hinge.x))} ${n(pz(d.hinge.z))} L ${n(px(tipOpen.x))} ${n(pz(tipOpen.z))}" class="door-open"/>`);
     out.push(`<circle cx="${n(px(d.hinge.x))}" cy="${n(pz(d.hinge.z))}" r="3" class="hinge"/>`);
-    const forced = APARTMENT.doors.find((x) => x.id === d.id)?.forced;
+    const forced = d.startsForced;
     if (forced) {
       out.push(`<text x="${n(px(d.pos.x))}" y="${n(pz(d.pos.z)) + 16}" class="note">выбита заранее</text>`);
     }
@@ -195,7 +195,7 @@ function blockers(floor) {
   const out = [];
   for (const b of world.boxes) {
     if (!b.tag || b.axis) continue;
-    if (!['barrier', 'column', 'blocked', 'rubble'].includes(b.tag)) continue;
+    if (!['barrier', 'column', 'blocked', 'rubble', 'furniture'].includes(b.tag)) continue;
     const onThis = floor === 0 ? b.min.y < 2.6 : b.min.y >= F2 - 0.01;
     if (!onThis) continue;
     out.push(`<rect x="${n(px(b.min.x))}" y="${n(pz(b.min.z))}" width="${n((b.max.x - b.min.x) * SCALE)}" height="${n((b.max.z - b.min.z) * SCALE)}" class="blocker ${b.tag}"/>`);
@@ -264,6 +264,7 @@ const STYLE = `
   .blocker { fill: #d8c9a8; stroke: #9b8a63; stroke-width: 1; }
   .blocker.blocked { fill: #d9b8a0; stroke: #a5744f; }
   .blocker.rubble { fill: #b9b2a6; stroke: #6f6a61; stroke-width: 1.5; }
+  .blocker.furniture { fill: #e8e0d2; stroke: #b3a892; stroke-width: 1; }
   .hole { fill: none; stroke: #2f6f4f; stroke-width: 2.5; stroke-dasharray: 5 4; }
   .opening { fill: #d7e6dc; stroke: #2f6f4f; stroke-width: 1.5; stroke-dasharray: 4 3; }
   .hole.under { stroke: #7fa39a; stroke-width: 1.5; }
@@ -323,9 +324,9 @@ ${roomLabels(floor)}
 mkdirSync(join(ROOT, 'docs'), { recursive: true });
 const tag = APARTMENT.draft ? ' — ПРОЕКТ, в игру не внесён' : '';
 const ground = plan(0, `${APARTMENT.name}: первый этаж (y = 0)${tag}`,
-  'Вход снизу по плану: площадка за входной дверью — спавн штурма. Мебели нет.');
+  'Вход снизу по плану: площадка за входной дверью — спавн штурма. Бежевым — мебель.');
 const upper = plan(1, `${APARTMENT.name}: второй этаж (y = ${F2})${tag}`,
-  'Зелёным — то, что открыто небу; штриховкой — проём вниз. Мебели нет.');
+  'Зелёным — то, что открыто небу; штриховкой — проём вниз; бежевым — мебель.');
 writeFileSync(join(ROOT, `docs/${outName}-ground.svg`), ground);
 writeFileSync(join(ROOT, `docs/${outName}-upper.svg`), upper);
 console.log(`docs/${outName}-{ground,upper}.svg — ${n(W)} × ${n(H)} px, ${APARTMENT.rooms.length} rooms, ${world.doors.length} doors`);

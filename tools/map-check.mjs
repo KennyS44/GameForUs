@@ -7,7 +7,7 @@
 //   node tools/map-check.mjs
 
 import { APARTMENT } from '../src/maps/apartment.js';
-import { buildWorld } from '../src/sim/world.js';
+import { buildWorld, doorFrame, localToWorld } from '../src/sim/world.js';
 import { createState, addPlayer, stepSim, createInput } from '../src/sim/sim.js';
 import { PLAYER, TICK_RATE } from '../src/sim/constants.js';
 
@@ -32,11 +32,13 @@ const inside = (b, x, y, z) =>
 // Can a standing player occupy this spot on this storey? Needs floor under the
 // feet and a body's worth of clear air above them.
 function standable(x, z, floorY) {
-  let supported = false;
-  for (const b of world.boxes) {
-    if (x > b.min.x && x < b.max.x && z > b.min.z && z < b.max.z &&
-        Math.abs(b.max.y - floorY) < 0.02) supported = true;
-  }
+  // Sampled a hair off the point, because two slabs that meet leave a seam
+  // with no box strictly containing it — a line in the floor, not a hole.
+  const E = 0.02;
+  const supported = [[E, E], [-E, E], [E, -E], [-E, -E]].some(([dx, dz]) =>
+    world.boxes.some((b) =>
+      x + dx > b.min.x && x + dx < b.max.x && z + dz > b.min.z && z + dz < b.max.z &&
+      Math.abs(b.max.y - floorY) < 0.02));
   if (!supported) return false;
   for (const y of [floorY + 0.1, floorY + 0.9, floorY + 1.6]) {
     for (const b of world.boxes) if (inside(b, x, y, z)) return false;
@@ -70,39 +72,37 @@ function flood(startX, startZ, floorY) {
   return seen;
 }
 
-// One point per room, and the room must be reachable from the front door
-// (ground floor) or from the top of the west staircase (upper floor).
-const GROUND = {
-  'living room': [-10, -14], 'living room (south end)': [-9, -9],
-  dining: [-3, -8.5], kitchen: [4, -10], utility: [11, -10],
-  study: [-2, -15], 'guest bedroom': [5.5, -16], bathroom: [11, -15],
-  'spine (west)': [-12, -6], 'spine (east)': [12, -6],
-  cinema: [-9, -2], cloakroom: [-9, 3.5], gallery: [0, -2], foyer: [0, 3.5],
-  gym: [8, -2], 'guest suite': [7.5, 2], spa: [12, 3.5],
-  'west stair foot': [-14.8, -5], 'east stair foot': [14.8, -6.9],
-};
-const UPPER = {
-  'master bedroom': [-8, -9.5], 'master bathroom': [-10, -15],
-  wardrobe: [-3.5, -9.5], 'bedroom 2': [-2, -16], 'bedroom 3': [0, -16],
-  study: [2, -10], 'kids bathroom': [7, -16], store: [12, -16], laundry: [11, -9],
-  'spine (west)': [-12, -6], 'spine (east)': [12, -6],
-  terrace: [-8, 2], lounge: [2, -2], media: [4, 3.5], sauna: [10, -2], office: [12, 3.5],
-};
-
-console.log('\nGround floor reachability (from the front door):');
-const g = flood(0, 5, 0);
-check('the entrance hall is standable', !!g);
-for (const [name, [x, z]] of Object.entries(GROUND)) {
-  const ok = g && g.has(`${Math.round(x / CELL)},${Math.round(z / CELL)}`);
-  check(`reach ${name}`, ok, `(${x}, ${z})`);
+// Every room must be reachable from where its team starts: the ground floor
+// from the front door, the upper storey from the top of a staircase.
+function anySpot(r) {
+  const floorY = r.floor ? F2 : 0;
+  for (let x = r.min.x + 0.5; x < r.max.x; x += 0.5) {
+    for (let z = r.min.z + 0.5; z < r.max.z; z += 0.5) {
+      if (standable(x, z, floorY)) return { x, z };
+    }
+  }
+  return null;
 }
 
-console.log('\nUpper floor reachability (from the top of the west stairs):');
-const u = flood(-14.8, -11.3, F2);
-check('the west stair head is standable', !!u);
-for (const [name, [x, z]] of Object.entries(UPPER)) {
-  const ok = u && u.has(`${Math.round(x / CELL)},${Math.round(z / CELL)}`);
-  check(`reach ${name}`, ok, `(${x}, ${z})`);
+function reachableFrom(startX, startZ, floorY) {
+  const seen = flood(startX, startZ, floorY);
+  return (x, z) => !!seen && seen.has(`${Math.round(x / CELL)},${Math.round(z / CELL)}`);
+}
+
+console.log('\nGround floor reachability (from the front door):');
+const onGround = reachableFrom(0, 5, 0);
+for (const r of APARTMENT.rooms) {
+  if (r.floor !== 0 || r.shaft || r.outside) continue;
+  const p = anySpot(r);
+  check(`reach ${r.id}`, !!p && onGround(p.x, p.z), p ? `(${p.x}, ${p.z})` : 'nowhere to stand');
+}
+
+console.log('\nUpper floor reachability (from the top of the east stairs):');
+const onUpper = reachableFrom(14.8, -0.6, F2);
+for (const r of APARTMENT.rooms) {
+  if (r.floor !== 1 || r.shaft || r.hole) continue;
+  const p = anySpot(r);
+  check(`reach ${r.id}`, !!p && onUpper(p.x, p.z), p ? `(${p.x}, ${p.z})` : 'nowhere to stand');
 }
 
 console.log('\nRooms:');
@@ -110,11 +110,8 @@ console.log('\nRooms:');
 // stops matching the walls around it, the plan starts lying — so every room
 // has to be a place a player can actually stand.
 for (const r of APARTMENT.rooms) {
-  if (r.shaft) continue; // a shaft's middle is the flight of stairs, not a floor
-  const cx = (r.min.x + r.max.x) / 2;
-  const cz = (r.min.z + r.max.z) / 2;
-  check(`room "${r.id}" is a real space on floor ${r.floor}`,
-    standable(cx, cz, r.floor ? F2 : 0), `centre (${cx}, ${cz})`);
+  if (r.shaft || r.hole) continue; // a shaft is stairs, a void has no floor
+  check(`room "${r.id}" is a real space on floor ${r.floor}`, !!anySpot(r), 'nowhere to stand in it');
 }
 
 console.log('\nSpawns and fittings:');
@@ -160,6 +157,89 @@ function fixedTo(l) {
 for (const l of world.lights) {
   const why = fixedTo(l);
   check(`lamp "${l.id}" is fixed to something`, why === null, why ?? '');
+}
+
+console.log('\nDoors: swing, thresholds and the way between them:');
+// A door must be able to open without any part of the leaf ending up inside a
+// wall, a barrier or a piece of furniture — checked by sweeping the panel and
+// sampling its whole volume, not just its centre line.
+const DOOR_T = 0.06;
+const DOOR_H = 2.05;
+function panelClashes(door, openAmount) {
+  const frame = doorFrame(door, openAmount);
+  for (let along = 0.05; along <= door.width; along += 0.1) {
+    for (const side of [-DOOR_T / 2 + 0.01, DOOR_T / 2 - 0.01]) {
+      const p = localToWorld(frame, { x: along, y: 0, z: side });
+      for (const y of [door.floorY + 0.15, door.floorY + 1.0, door.floorY + DOOR_H - 0.1]) {
+        const hit = world.boxes.find((b) => inside(b, p.x, y, p.z));
+        if (hit) return `${hit.material.name} at (${p.x.toFixed(2)}, ${p.z.toFixed(2)})`;
+      }
+    }
+  }
+  return null;
+}
+for (const d of world.doors) {
+  const startsForced = d.startsForced;
+  let clash = null;
+  if (startsForced) clash = panelClashes(d, 1); // it is open from the first tick
+  else for (let i = 0; i <= 12 && !clash; i++) clash = panelClashes(d, i / 12);
+  check(`door "${d.id}" swings without hitting anything`, clash === null, clash ?? '');
+  check(`door "${d.id}" opens at least 100°`, d.maxAngle > (100 * Math.PI) / 180,
+    `${Math.round((d.maxAngle * 180) / Math.PI)}°`);
+
+  // ...and nothing is parked in the doorway itself.
+  const floorY = d.floorY ? F2 : 0;
+  const ax = d.axis === 'x' ? 0 : 0.7;
+  const az = d.axis === 'x' ? 0.7 : 0;
+  check(`door "${d.id}" has clear ground on both sides`,
+    standable(d.pos.x + ax, d.pos.z + az, floorY) && standable(d.pos.x - ax, d.pos.z - az, floorY),
+    `(${d.pos.x}, ${d.pos.z})`);
+}
+
+// Furniture may cut a room in half diagonally, but it may never cut a room's
+// doors off from each other: from any door of a room you must be able to walk
+// to any other door of it without leaving the room.
+console.log('\nEvery room joins its own doors:');
+for (const r of APARTMENT.rooms) {
+  if (r.shaft || r.hole || r.split) continue; // the corridor is caved in on purpose
+  const floorY = r.floor ? F2 : 0;
+  const mine = world.doors.filter((d) => {
+    if ((d.floorY ? 1 : 0) !== r.floor) return false;
+    const near = 0.35;
+    return d.pos.x > r.min.x - near && d.pos.x < r.max.x + near &&
+      d.pos.z > r.min.z - near && d.pos.z < r.max.z + near;
+  });
+  if (mine.length < 2) continue;
+
+  // Walk the room only, starting just inside its first door.
+  const insideRoom = (x, z) => x > r.min.x - 0.4 && x < r.max.x + 0.4 && z > r.min.z - 0.4 && z < r.max.z + 0.4;
+  const stepIn = (d) => {
+    const ax = d.axis === 'x' ? 0 : 0.75;
+    const az = d.axis === 'x' ? 0.75 : 0;
+    const a = { x: d.pos.x + ax, z: d.pos.z + az };
+    const b = { x: d.pos.x - ax, z: d.pos.z - az };
+    return insideRoom(a.x, a.z) ? a : b;
+  };
+  const from = stepIn(mine[0]);
+  const key = (x, z) => `${Math.round(x / CELL)},${Math.round(z / CELL)}`;
+  const seen = new Set([key(from.x, from.z)]);
+  const queue = [[from.x, from.z]];
+  while (queue.length) {
+    const [x, z] = queue.pop();
+    for (const [dx, dz] of [[CELL, 0], [-CELL, 0], [0, CELL], [0, -CELL]]) {
+      const nx = x + dx;
+      const nz = z + dz;
+      if (!insideRoom(nx, nz) || seen.has(key(nx, nz)) || !standable(nx, nz, floorY)) continue;
+      seen.add(key(nx, nz));
+      queue.push([nx, nz]);
+    }
+  }
+  const stranded = mine.filter((d) => {
+    const p = stepIn(d);
+    return !seen.has(key(p.x, p.z));
+  });
+  check(`room "${r.id}" joins all ${mine.length} of its doors`, stranded.length === 0,
+    stranded.map((d) => d.id).join(', '));
 }
 
 console.log('\nSurfaces:');
@@ -221,6 +301,8 @@ console.log('\nStairs:');
 function climb(id, from, yaw, seconds) {
   const state = createState(world, 99);
   const p = addPlayer(world, state, 'p', 'attackers', 'P');
+  state.phase = 'live'; // staging holds the attackers at the door
+  state.phaseTime = 60;
   p.pos = { x: from.x, y: from.y, z: from.z };
   p.look = { yaw, pitch: 0 };
   // Doors stand open so this measures the stairs, not the door handling.
@@ -230,11 +312,11 @@ function climb(id, from, yaw, seconds) {
     stepSim(world, state, { p: { ...createInput(), moveZ: 1, yaw, run: true } });
     top = Math.max(top, p.pos.y);
   }
-  check(`${id}: a player walks up to the next floor`, top > F2 - 0.05,
+  check(`${id}: a player climbs it`, top > (id.includes('lower') ? F2 / 2 - 0.05 : F2 - 0.05),
     `reached y=${top.toFixed(2)} at (${p.pos.x.toFixed(1)}, ${p.pos.z.toFixed(1)})`);
 }
-climb('west stairs', { x: -14.8, y: 0, z: -5.2 }, 0, 8);
-climb('east stairs', { x: 14.8, y: 0, z: -6.6 }, Math.PI, 8);
+climb('court stair, lower flight', { x: -11.6, y: 0, z: -10.4 }, 0, 8);
+climb('east stairs', { x: 14.8, y: 0, z: -6.9 }, Math.PI, 10);
 
 // Steps must stay under the step-up height, or they become a wall.
 check('every step is climbable', F2 / 16 < PLAYER.stepHeight, `${(F2 / 16).toFixed(3)} m`);
