@@ -151,36 +151,49 @@ for (const l of world.lights) {
 }
 
 console.log('\nSurfaces:');
-// Two surfaces drawn in the same place fight for the pixel and flicker as you
-// move — the classic "the textures overlap" bug. Floors and ceilings are laid
-// as tagged slabs, so no two of them may share space at all...
-const overlap = (a, b, axis) => Math.min(a.max[axis], b.max[axis]) - Math.max(a.min[axis], b.min[axis]);
-const solidOverlap = (a, b) =>
-  overlap(a, b, 'x') > 1e-3 && overlap(a, b, 'y') > 1e-3 && overlap(a, b, 'z') > 1e-3;
+// Two surfaces drawn at the same depth fight for every pixel and flicker as
+// you move — "the textures overlap". That happens when two boxes present a
+// face on the same plane, facing the same way, over the same patch. Buried
+// pairs are harmless, so each candidate is sampled to see whether anything is
+// actually in front of it.
+const AXES = [['x', 'y', 'z'], ['y', 'x', 'z'], ['z', 'x', 'y']];
+const span = (a, b, k) => Math.min(a.max[k], b.max[k]) - Math.max(a.min[k], b.min[k]);
+const within = (b, p) =>
+  p.x > b.min.x + 1e-4 && p.x < b.max.x - 1e-4 &&
+  p.y > b.min.y + 1e-4 && p.y < b.max.y - 1e-4 &&
+  p.z > b.min.z + 1e-4 && p.z < b.max.z - 1e-4;
 
-const slabs = world.boxes.filter((b) => b.layer === 'slab');
-let slabClashes = 0;
-for (let i = 0; i < slabs.length; i++) {
-  for (let j = i + 1; j < slabs.length; j++) {
-    if (!solidOverlap(slabs[i], slabs[j])) continue;
-    slabClashes++;
-    console.log(`       ${JSON.stringify(slabs[i].min)} vs ${JSON.stringify(slabs[j].min)}`);
+const clashes = [];
+for (let i = 0; i < world.boxes.length; i++) {
+  for (let j = i + 1; j < world.boxes.length; j++) {
+    const a = world.boxes[i];
+    const b = world.boxes[j];
+    for (const [k, u, v] of AXES) {
+      if (span(a, b, u) <= 1e-3 || span(a, b, v) <= 1e-3) continue;
+      for (const side of ['min', 'max']) {
+        if (Math.abs(a[side][k] - b[side][k]) > 1e-3) continue;
+        const lo = { u: Math.max(a.min[u], b.min[u]), v: Math.max(a.min[v], b.min[v]) };
+        const hi = { u: Math.min(a.max[u], b.max[u]), v: Math.min(a.max[v], b.max[v]) };
+        let exposed = false;
+        for (const tu of [0.25, 0.75]) {
+          for (const tv of [0.25, 0.75]) {
+            const p = { x: 0, y: 0, z: 0 };
+            p[k] = a[side][k] + (side === 'max' ? 0.02 : -0.02);
+            p[u] = lo.u + (hi.u - lo.u) * tu;
+            p[v] = lo.v + (hi.v - lo.v) * tv;
+            if (!world.boxes.some((o) => o !== a && o !== b && within(o, p))) exposed = true;
+          }
+        }
+        if (!exposed) continue;
+        clashes.push(`${a.material.name} ${JSON.stringify(a.min)} vs ${b.material.name} ` +
+          `${JSON.stringify(b.min)} — both show a face at ${side}.${k}=${a[side][k].toFixed(2)}`);
+      }
+    }
   }
 }
-check(`no two of the ${slabs.length} floor slabs overlap`, slabClashes === 0, `${slabClashes} pair(s)`);
-
-// ...and no two walls may be built along the same line through each other.
-const walls = world.boxes.filter((b) => b.axis);
-let wallClashes = 0;
-for (let i = 0; i < walls.length; i++) {
-  for (let j = i + 1; j < walls.length; j++) {
-    if (walls[i].axis !== walls[j].axis) continue; // a crossing T-joint is fine
-    if (!solidOverlap(walls[i], walls[j])) continue;
-    wallClashes++;
-    console.log(`       ${JSON.stringify(walls[i].min)} vs ${JSON.stringify(walls[j].min)}`);
-  }
-}
-check(`no two of the ${walls.length} wall segments share space`, wallClashes === 0, `${wallClashes} pair(s)`);
+for (const c of clashes) console.log(`       ${c}`);
+check(`no two of the ${world.boxes.length} surfaces are drawn in the same place`,
+  clashes.length === 0, `${clashes.length} pair(s)`);
 
 console.log('\nDoors:');
 // A door thrown fully open should be flat against its wall, touching the

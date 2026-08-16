@@ -141,14 +141,14 @@ const shell = [
   box(-16.2, -0.5, -18.2, 16.2, 0, 9.7, M.floor),
 
   // Ground-floor outer walls (0 → 3.3, flush with the slab above).
-  ...wall(-16, 6, 16, 6, M.concrete, { thickness: 0.3, height: F2, gaps: [{ at: 0, width: 1.1 }] }),
-  ...wall(-16, -18, 16, -18, M.concrete, { thickness: 0.3, height: F2 }),
-  ...wall(-16, -18, -16, 6, M.concrete, { thickness: 0.3, height: F2 }),
-  ...wall(16, -18, 16, 6, M.concrete, { thickness: 0.3, height: F2 }),
+  ...wall(-16, 6, 16, 6, M.concrete, { thickness: 0.3, height: WALL_H, gaps: [{ at: 0, width: 1.1 }] }),
+  ...wall(-16, -18, 16, -18, M.concrete, { thickness: 0.3, height: WALL_H }),
+  ...wall(-16, -18, -16, 6, M.concrete, { thickness: 0.3, height: WALL_H }),
+  ...wall(16, -18, 16, 6, M.concrete, { thickness: 0.3, height: WALL_H }),
 
   // Upper-floor outer walls. Where they border the terrace they drop to a
   // parapet you can shoot over — and be shot over.
-  ...wall(-16, 6, -2, 6, M.concrete, { thickness: 0.3, base: F2, height: 1.1 }),
+  ...wall(-15.85, 6, -2, 6, M.concrete, { thickness: 0.3, base: F2, height: 1.1 }),
   ...wall(-2, 6, 16, 6, M.concrete, { thickness: 0.3, base: F2, height: WALL_H }),
   ...wall(-16, -4.6, -16, 6, M.concrete, { thickness: 0.3, base: F2, height: 1.1 }),
   ...wall(-16, -18, -16, -4.6, M.concrete, { thickness: 0.3, base: F2, height: WALL_H }),
@@ -166,7 +166,7 @@ const shell = [
   ...slab(-16.2, -4.6, -13.6, 6.2),
   ...slab(-13.6, -18.2, 13.6, 6.2), // the whole middle
   ...slab(13.6, -18.2, 16.2, -7.4),
-  ...slab(13.6, 0, 16.2, 6.2),
+  ...slab(13.6, 1, 16.2, 6.2),
 
   // Roof — everything except the terrace, which is open to the sky.
   box(-16.2, ROOF, -18.2, 16.2, ROOF + 0.3, -4.6, M.concrete),
@@ -181,25 +181,27 @@ const stairwells = [
   ...stairs(-15.85, -13.75, -6.1, -1),
   ...slab(-15.85, -12.5, -13.6, -10.9), // top landing, up to the main slab
   ...wall(-13.6, -12.5, -13.6, -4.6, M.concrete, {
-    thickness: 0.3, height: F2, gaps: [{ at: -5.1, width: 1.0 }],
+    thickness: 0.3, height: WALL_H, gaps: [{ at: -5.1, width: 1.0 }],
   }),
   ...wall(-13.6, -12.5, -13.6, -4.6, M.concrete, {
-    thickness: 0.3, base: F2, height: WALL_H, gaps: [{ at: -11.3, width: 1.0 }],
+    thickness: 0.3, base: WALL_H, height: WALL_H + SLAB, doorTop: SLAB + 2.1,
+    gaps: [{ at: -11.3, width: 1.0 }],
   }),
   ...wall(-16, -12.5, -13.6, -12.5, M.concrete, { thickness: 0.3, height: ROOF }),
   ...wall(-16, -4.6, -13.6, -4.6, M.concrete, { thickness: 0.3, height: ROOF }),
 
   // East shaft: x 13.75…15.85, climbing south.
   ...stairs(13.75, 15.85, -6.0, 1),
-  ...slab(13.6, -1.2, 15.85, 0), // top landing, up to the main slab
-  ...wall(13.6, -7.4, 13.6, 0, M.concrete, {
-    thickness: 0.3, height: F2, gaps: [{ at: -6.9, width: 1.0 }],
+  ...slab(13.6, -1.2, 15.85, 1), // top landing, up to the main slab
+  ...wall(13.6, -7.4, 13.6, 1, M.concrete, {
+    thickness: 0.3, height: WALL_H, gaps: [{ at: -6.9, width: 1.0 }],
   }),
-  ...wall(13.6, -7.4, 13.6, 0, M.concrete, {
-    thickness: 0.3, base: F2, height: WALL_H, gaps: [{ at: -0.7, width: 1.0 }],
+  ...wall(13.6, -7.4, 13.6, 1, M.concrete, {
+    thickness: 0.3, base: WALL_H, height: WALL_H + SLAB, doorTop: SLAB + 2.1,
+    gaps: [{ at: -0.7, width: 1.0 }],
   }),
   ...wall(13.6, -7.4, 16, -7.4, M.concrete, { thickness: 0.3, height: ROOF }),
-  ...wall(13.6, 0, 16, 0, M.concrete, { thickness: 0.3, height: ROOF }),
+  ...wall(13.6, 1, 16, 1, M.concrete, { thickness: 0.3, height: ROOF }),
 ];
 
 // ── Ground floor partitions (drywall — shootable through) ──────────────────
@@ -290,12 +292,14 @@ const upperWalls = [
   }),
 
   // South half. The terrace is walled off from the rooms beside it.
-  ...wall(-2, -4.6, -2, 5.85, M.drywall, { base: F2, gaps: [{ at: -2, width: 1.0 }] }),
+  // Starts at the face of the spine wall, not inside it: two wall caps in one
+  // plane under the open sky of the terrace would flicker against each other.
+  ...wall(-2, -4.54, -2, 5.85, M.drywall, { base: F2, gaps: [{ at: -2, width: 1.0 }] }),
   ...wall(6, -4.6, 6, 5.85, M.drywall, {
     base: F2,
     gaps: [{ at: -2, width: 1.0 }, { at: 3.5, width: 1.4 }],
   }),
-  ...wall(-2, 1, 16, 1, M.drywall, {
+  ...wall(-2, 1, 13.6, 1, M.drywall, {
     base: F2,
     gaps: [{ at: 2, width: 1.4 }, { at: 10, width: 1.0 }],
   }),
