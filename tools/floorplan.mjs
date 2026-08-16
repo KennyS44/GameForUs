@@ -12,10 +12,19 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { APARTMENT } from '../src/maps/apartment.js';
 import { buildWorld, doorFrame, localToWorld } from '../src/sim/world.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+// Which map to draw, and what to call the files. Defaults to the live one.
+const arg = (name, fallback) => {
+  const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.slice(name.length + 3) : fallback;
+};
+const mapPath = arg('map', '../src/maps/apartment.js');
+const outName = arg('out', 'plan');
+const module = await import(mapPath.startsWith('.') ? mapPath : `../${mapPath}`);
+const APARTMENT = Object.values(module).find((v) => v && v.geometry && v.rooms);
 const world = buildWorld(APARTMENT);
 
 const F2 = APARTMENT.upperFloorY ?? 3.3;
@@ -66,7 +75,7 @@ function roomShapes(floor) {
     if (r.floor !== floor) continue;
     const w = (r.max.x - r.min.x) * SCALE;
     const h = (r.max.z - r.min.z) * SCALE;
-    const cls = r.shaft ? 'shaft' : r.outside ? 'outside' : 'room';
+    const cls = r.hole ? 'void' : r.shaft ? 'shaft' : r.open ? 'open' : r.outside ? 'outside' : 'room';
     out.push(`<rect x="${n(px(r.min.x))}" y="${n(pz(r.min.z))}" width="${n(w)}" height="${n(h)}" class="${cls}"/>`);
   }
   return out.join('\n');
@@ -100,7 +109,8 @@ function walls(floor) {
       // A lintel is wall above a doorway: on a plan that is a hole, not a wall.
       const lintel = b.min.y > (floor === 0 ? 1.5 : F2 + 1.5);
       if (lintel) return '';
-      return `<rect x="${n(px(b.min.x))}" y="${n(pz(b.min.z))}" width="${n(w)}" height="${n(h)}" class="wall ${b.material.name}"/>`;
+      const low = b.tag === 'parapet' || b.tag === 'railing';
+      return `<rect x="${n(px(b.min.x))}" y="${n(pz(b.min.z))}" width="${n(w)}" height="${n(h)}" class="wall ${b.material.name}${low ? ' low' : ''}"/>`;
     })
     .join('\n');
 }
@@ -122,39 +132,109 @@ function doors(floor) {
     out.push(`<path d="M ${n(px(tipShut.x))} ${n(pz(tipShut.z))} A ${n(r)} ${n(r)} 0 0 ${sweep} ${n(px(tipOpen.x))} ${n(pz(tipOpen.z))}" class="door-arc"/>`);
     out.push(`<path d="M ${n(px(d.hinge.x))} ${n(pz(d.hinge.z))} L ${n(px(tipOpen.x))} ${n(pz(tipOpen.z))}" class="door-open"/>`);
     out.push(`<circle cx="${n(px(d.hinge.x))}" cy="${n(pz(d.hinge.z))}" r="3" class="hinge"/>`);
+    const forced = APARTMENT.doors.find((x) => x.id === d.id)?.forced;
+    if (forced) {
+      out.push(`<text x="${n(px(d.pos.x))}" y="${n(pz(d.pos.z)) + 16}" class="note">выбита заранее</text>`);
+    }
 
     // Sit the label clear of the swing, on the other side of the wall.
     const away = -Math.sign(tipOpen[d.axis === 'x' ? 'z' : 'x'] - d.pos[d.axis === 'x' ? 'z' : 'x']) || 1;
     const lx = px(d.pos.x + (d.axis === 'x' ? 0 : away * 0.75));
     const ly = pz(d.pos.z + (d.axis === 'x' ? away * 0.75 : 0)) + 4;
-    out.push(`<text x="${n(lx)}" y="${n(ly)}" class="door-id">${esc(d.id)}</text>`);
+    const spec = APARTMENT.doors.find((x) => x.id === d.id);
+    if (spec?.pair === 'double') {
+      // Two leaves in one opening get one label, on the left-hand leaf only.
+      if (d.id.endsWith('-L')) {
+        out.push(`<text x="${n(px(d.pos.x + 0.5))}" y="${n(ly)}" class="door-id">${esc(d.id.replace(/-L$/, ''))} (двойная)</text>`);
+      }
+    } else {
+      out.push(`<text x="${n(lx)}" y="${n(ly)}" class="door-id">${esc(d.id)}</text>`);
+    }
   }
   return out.join('\n');
 }
 
 // Stair treads, read back out of the geometry, with an arrow pointing up.
+// Flights are found by their shape rather than by which room they sit in, so
+// an open stair standing in a court is drawn like any other.
 function stairs(floor) {
+  if (floor !== 0) return ''; // both flights start on the ground floor
   const treads = world.boxes.filter((b) =>
-    !b.axis && b.material.name === 'floor' && b.min.y === 0 && b.max.y > 0.1 && b.max.y <= F2 + 0.01);
+    !b.axis && !b.tag && b.material.name === 'floor' && b.min.y === 0 &&
+    b.max.y > 0.1 && b.max.y <= F2 + 0.01 &&
+    (b.max.x - b.min.x) < 3.5 && (b.max.z - b.min.z) < 1.2);
+  if (!treads.length) return '';
+
+  // Group them into flights: treads of one flight share their x range.
+  const groups = new Map();
+  for (const t of treads) {
+    const key = `${n(t.min.x)}:${n(t.max.x)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  }
+
   const out = [];
-  const shafts = APARTMENT.rooms.filter((r) => r.shaft && r.floor === floor);
-  for (const s of shafts) {
-    const mine = treads.filter((t) =>
-      t.min.x >= s.min.x - 0.5 && t.max.x <= s.max.x + 0.5 && t.min.z >= s.min.z - 0.5 && t.max.z <= s.max.z + 0.5);
-    if (!mine.length) continue;
+  for (const mine of groups.values()) {
     for (const t of mine) {
       out.push(`<rect x="${n(px(t.min.x))}" y="${n(pz(t.min.z))}" width="${n((t.max.x - t.min.x) * SCALE)}" height="${n((t.max.z - t.min.z) * SCALE)}" class="tread"/>`);
     }
-    // Which way is up: from the lowest tread to the highest.
     const low = mine.reduce((a, b) => (a.max.y < b.max.y ? a : b));
     const high = mine.reduce((a, b) => (a.max.y > b.max.y ? a : b));
-    const cx = px((s.min.x + s.max.x) / 2);
+    const cx = px((mine[0].min.x + mine[0].max.x) / 2);
     const z1 = pz((low.min.z + low.max.z) / 2);
     const z2 = pz((high.min.z + high.max.z) / 2);
     out.push(`<path d="M ${n(cx)} ${n(z1)} L ${n(cx)} ${n(z2)}" class="up-arrow" marker-end="url(#arrow)"/>`);
     out.push(`<text x="${n(cx)}" y="${n((z1 + z2) / 2) - 6}" class="up-label" transform="rotate(-90 ${n(cx)} ${n((z1 + z2) / 2) - 6})">вверх</text>`);
   }
   return out.join('\n');
+}
+
+// Things that are not walls but change how a room plays: the bar-height
+// barrier, the column, the wardrobe across a doorway.
+function blockers(floor) {
+  const out = [];
+  for (const b of world.boxes) {
+    if (!b.tag || b.axis) continue;
+    if (!['barrier', 'column', 'blocked'].includes(b.tag)) continue;
+    const onThis = floor === 0 ? b.min.y < 2.6 : b.min.y >= F2 - 0.01;
+    if (!onThis) continue;
+    out.push(`<rect x="${n(px(b.min.x))}" y="${n(pz(b.min.z))}" width="${n((b.max.x - b.min.x) * SCALE)}" height="${n((b.max.z - b.min.z) * SCALE)}" class="blocker ${b.tag}"/>`);
+    if (b.note) {
+      out.push(`<text x="${n(px((b.min.x + b.max.x) / 2))}" y="${n(pz(b.max.z)) + 14}" class="note">${esc(b.note)}</text>`);
+    }
+  }
+  return out.join('\n');
+}
+
+// A hole in a floor is drawn on the storey it is cut into, and marked on the
+// one below as the place you land.
+function holes(floor) {
+  const out = [];
+  for (const h of APARTMENT.holes ?? []) {
+    const here = h.floor === floor;
+    const below = h.floor === floor + 1;
+    if (!here && !below) continue;
+    out.push(`<circle cx="${n(px(h.x))}" cy="${n(pz(h.z))}" r="${n(h.r * SCALE)}" class="hole ${here ? 'cut' : 'under'}"/>`);
+    out.push(`<text x="${n(px(h.x))}" y="${n(pz(h.z + h.r)) + 15}" class="note">${esc(here ? h.note : 'сюда падают из кладовой сверху')}</text>`);
+  }
+  return out.join('\n');
+}
+
+// Ways through a wall that are not doors: a punched hole, an open passage.
+function openings(floor) {
+  return (APARTMENT.openings ?? [])
+    .filter((o) => (o.floor ?? 0) === floor)
+    .map((o) => {
+      const horizontal = o.w >= (o.h ?? 0);
+      const half = o.w / 2;
+      const x1 = px(o.x - (horizontal ? half : 0.2));
+      const x2 = px(o.x + (horizontal ? half : 0.2));
+      const z1 = pz(o.z - (horizontal ? 0.2 : half));
+      const z2 = pz(o.z + (horizontal ? 0.2 : half));
+      return `<rect x="${n(Math.min(x1, x2))}" y="${n(Math.min(z1, z2))}" width="${n(Math.abs(x2 - x1))}" height="${n(Math.abs(z2 - z1))}" class="opening"/>
+<text x="${n(px(o.x))}" y="${n(pz(o.z)) + (horizontal ? 20 : 0)}" class="note">${esc(o.note)}</text>`;
+    })
+    .join('\n');
 }
 
 function spawns(floor) {
@@ -177,6 +257,16 @@ const STYLE = `
      door id that lands on a wall or a room name is still readable. */
   text { paint-order: stroke; stroke: #f7f5f1; stroke-width: 3px; stroke-linejoin: round; }
   .room { fill: #ffffff; stroke: #e4e0d8; stroke-width: 1; }
+  .open { fill: #eef4ec; stroke: #cadbc8; stroke-width: 1; }
+  .void { fill: #e2e6ec; stroke: #b6bcc6; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  .wall.low { fill: #a09a90; }
+  .wall.glass.low { fill: #7fa8bd; }
+  .blocker { fill: #d8c9a8; stroke: #9b8a63; stroke-width: 1; }
+  .blocker.blocked { fill: #d9b8a0; stroke: #a5744f; }
+  .hole { fill: none; stroke: #2f6f4f; stroke-width: 2.5; stroke-dasharray: 5 4; }
+  .opening { fill: #d7e6dc; stroke: #2f6f4f; stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .hole.under { stroke: #7fa39a; stroke-width: 1.5; }
+  .note { font: 10px system-ui, sans-serif; fill: #4d6a5c; text-anchor: middle; }
   .shaft { fill: #eceef3; stroke: #c9cdd6; stroke-width: 1; }
   .outside { fill: #f0ece4; stroke: #ddd8ce; stroke-dasharray: 4 3; }
   .wall { fill: #2f3136; }
@@ -219,6 +309,9 @@ ${grid()}
 ${roomShapes(floor)}
 ${stairs(floor)}
 ${walls(floor)}
+${blockers(floor)}
+${openings(floor)}
+${holes(floor)}
 ${doors(floor)}
 ${spawns(floor)}
 ${roomLabels(floor)}
@@ -227,10 +320,11 @@ ${roomLabels(floor)}
 }
 
 mkdirSync(join(ROOT, 'docs'), { recursive: true });
-const ground = plan(0, 'Пентхаус — первый этаж (y = 0)',
+const tag = APARTMENT.draft ? ' — ПРОЕКТ, в игру не внесён' : '';
+const ground = plan(0, `${APARTMENT.name}: первый этаж (y = 0)${tag}`,
   'Вход снизу по плану: площадка за входной дверью — спавн штурма. Мебели нет.');
-const upper = plan(1, `Пентхаус — второй этаж (y = ${F2})`,
-  'Связь между этажами — только две лестницы по краям. Мебели нет.');
-writeFileSync(join(ROOT, 'docs/plan-ground.svg'), ground);
-writeFileSync(join(ROOT, 'docs/plan-upper.svg'), upper);
-console.log(`docs/plan-ground.svg and docs/plan-upper.svg — ${n(W)} × ${n(H)} px, ${APARTMENT.rooms.length} rooms, ${world.doors.length} doors`);
+const upper = plan(1, `${APARTMENT.name}: второй этаж (y = ${F2})${tag}`,
+  'Зелёным — то, что открыто небу; штриховкой — проём вниз. Мебели нет.');
+writeFileSync(join(ROOT, `docs/${outName}-ground.svg`), ground);
+writeFileSync(join(ROOT, `docs/${outName}-upper.svg`), upper);
+console.log(`docs/${outName}-{ground,upper}.svg — ${n(W)} × ${n(H)} px, ${APARTMENT.rooms.length} rooms, ${world.doors.length} doors`);

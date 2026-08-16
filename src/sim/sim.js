@@ -7,13 +7,13 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-} from './constants.js?v=de5ae533';
+} from './constants.js?v=d3e89d2a';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=de5ae533';
+} from './math.js?v=d3e89d2a';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-} from './world.js?v=de5ae533';
+} from './world.js?v=d3e89d2a';
 
 const GRAVITY = 18;
 
