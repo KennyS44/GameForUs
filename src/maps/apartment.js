@@ -305,53 +305,10 @@ const upperWalls = [
   }),
 ];
 
-// ── Furniture — cover you can hide behind, and mostly shoot through ────────
-const props = [
-  // Ground: living room.
-  box(-13.0, 0, -13.6, -12.2, 0.85, -10.6, M.fabric), // sofa
-  box(-11.4, 0, -12.4, -9.0, 0.75, -11.5, M.wood), // coffee table
-  box(-15.4, 0, -17.4, -12.8, 1.9, -17.0, M.wood), // shelving on the north wall
-  box(-7.6, 0, -10.5, -6.8, 1.5, -8.6, M.wood), // sideboard by the spine door
-  // Dining, kitchen, utility.
-  box(-4.2, 0, -11.2, -1.6, 0.78, -9.2, M.wood), // dining table
-  box(1.6, 0, -8.6, 6.8, 0.92, -7.9, M.wood), // kitchen counter
-  box(6.4, 0, -12.2, 7.2, 1.85, -10.4, M.metal), // fridge
-  box(8.4, 0, -12.2, 12.0, 1.6, -11.6, M.metal), // utility racking
-  // Study, guest bedroom, bathroom.
-  box(-4.4, 0, -15.4, -2.0, 0.78, -14.0, M.wood), // desk
-  box(2.2, 0, -17.2, 4.8, 0.55, -14.4, M.fabric), // guest bed
-  box(6.2, 0, -17.4, 7.2, 1.4, -16.0, M.wood), // wardrobe
-  box(8.2, 0, -16.6, 9.4, 0.9, -15.2, M.metal), // washbasin block
-  // Cinema, cloakroom, foyer.
-  box(-13.6, 0, -3.6, -9.6, 0.9, -2.9, M.fabric), // cinema seating
-  box(-6.2, 0, -0.4, -3.6, 1.2, 0.2, M.wood), // media cabinet
-  box(-15.4, 0, 2.2, -14.6, 1.9, 5.2, M.metal), // cloakroom lockers
-  box(-2.6, 0, 4.6, -1.4, 1.2, 5.6, M.wood), // shoe bench by the front door
-  // Gym, guest suite, spa.
-  box(4.6, 0, -3.4, 7.4, 1.3, -2.6, M.metal), // weight rack
-  box(10.0, 0, -3.8, 12.6, 0.6, -1.4, M.fabric), // mats
-  box(4.0, 0, 2.4, 6.6, 0.55, 5.0, M.fabric), // guest bed
-  box(11.0, 0, 1.0, 15.2, 0.9, 2.0, M.metal), // spa bench
-
-  // Upper: master suite.
-  box(-12.6, F2, -11.4, -9.0, F2 + 0.6, -8.6, M.fabric), // master bed
-  box(-8.6, F2, -12.3, -6.6, F2 + 0.9, -11.6, M.wood), // dresser
-  box(-13.0, F2, -16.8, -10.4, F2 + 0.9, -15.8, M.metal), // bathtub block
-  box(-4.8, F2, -12.0, -1.4, F2 + 1.9, -11.4, M.wood), // wardrobe run
-  // Bedrooms and services.
-  box(-5.2, F2, -17.2, -3.0, F2 + 0.55, -14.8, M.fabric), // bed 2
-  box(1.4, F2, -17.2, 3.6, F2 + 0.55, -14.8, M.fabric), // bed 3
-  box(-0.6, F2, -10.4, 2.0, F2 + 0.78, -9.2, M.wood), // study desk
-  box(9.6, F2, -11.4, 12.8, F2 + 1.0, -10.6, M.metal), // laundry machines
-  box(10.0, F2, -17.2, 14.0, F2 + 1.7, -16.6, M.wood), // storage shelving
-  // Terrace, lounge, media, sauna, office.
-  box(-12.0, F2, -1.6, -8.0, F2 + 0.7, 0.4, M.wood), // terrace loungers
-  box(-5.6, F2, 3.2, -3.2, F2 + 0.9, 4.6, M.fabric), // terrace planter
-  box(-1.2, F2, -3.4, 2.2, F2 + 0.95, -2.6, M.wood), // bar counter
-  box(-1.2, F2, 2.8, 2.4, F2 + 0.75, 4.4, M.fabric), // media sofa
-  box(9.0, F2, -3.8, 12.4, F2 + 0.7, -3.0, M.wood), // sauna benches
-  box(8.0, F2, 2.6, 11.2, F2 + 0.78, 3.6, M.wood), // office desk
-];
+// Furniture — none, deliberately. The plan is being designed first: shells,
+// doors and stairs only, so that every sightline you see is the one the walls
+// make. Props come back once the layout is settled.
+const props = [];
 
 // Doors. `axis` is the wall's axis; the panel swings around `hinge`.
 // `swing` is which way it opens (+1 / -1 in the perpendicular axis).
@@ -474,6 +431,58 @@ const lights = [
     intensity: 0.7, mount: 'wall', face: { x: -1, z: 0 } },
 ];
 
+// Rooms, as data rather than as an implication of where the walls happen to be.
+// Nothing in the simulation needs this — walls do all the real work — but the
+// floor plans are drawn from it, and it gives every space a name to argue about
+// while the layout is being designed.
+//
+// `floor` 0 is the ground storey, 1 the upper one. The four rooms that wrap
+// around a stairwell are given as their bounding box; the shaft is listed
+// separately and drawn over them.
+const rooms = [
+  // ── Ground floor ──
+  { id: 'living', name: 'Гостиная', floor: 0, min: { x: -16, z: -17.85 }, max: { x: -5, z: -7.4 } },
+  { id: 'study', name: 'Кабинет', floor: 0, min: { x: -5, z: -17.85 }, max: { x: 1, z: -12.5 } },
+  { id: 'guest-bed', name: 'Гостевая спальня', floor: 0, min: { x: 1, z: -17.85 }, max: { x: 7.5, z: -12.5 } },
+  { id: 'bathroom', name: 'Санузел', floor: 0, min: { x: 7.5, z: -17.85 }, max: { x: 16, z: -12.5 } },
+  { id: 'dining', name: 'Столовая', floor: 0, min: { x: -5, z: -12.5 }, max: { x: 1, z: -7.4 } },
+  { id: 'kitchen', name: 'Кухня', floor: 0, min: { x: 1, z: -12.5 }, max: { x: 7.5, z: -7.4 } },
+  { id: 'utility', name: 'Подсобная', floor: 0, min: { x: 7.5, z: -12.5 }, max: { x: 16, z: -7.4 } },
+  { id: 'spine-0', name: 'Коридор', floor: 0, min: { x: -13.6, z: -7.4 }, max: { x: 13.6, z: -4.6 } },
+  { id: 'cinema', name: 'Кинозал', floor: 0, min: { x: -16, z: -4.6 }, max: { x: -3, z: 1.5 } },
+  { id: 'gallery', name: 'Холл', floor: 0, min: { x: -3, z: -4.6 }, max: { x: 3, z: 1.5 } },
+  { id: 'gym', name: 'Спортзал', floor: 0, min: { x: 3, z: -4.6 }, max: { x: 13.6, z: 0 } },
+  { id: 'cloakroom', name: 'Гардеробная', floor: 0, min: { x: -16, z: 1.5 }, max: { x: -3, z: 5.85 } },
+  { id: 'foyer', name: 'Прихожая', floor: 0, min: { x: -3, z: 1.5 }, max: { x: 3, z: 5.85 } },
+  { id: 'guest-suite', name: 'Гостевая', floor: 0, min: { x: 3, z: 0 }, max: { x: 9, z: 5.85 } },
+  { id: 'spa', name: 'СПА', floor: 0, min: { x: 9, z: 0 }, max: { x: 16, z: 5.85 } },
+  { id: 'landing', name: 'Площадка', floor: 0, outside: true,
+    min: { x: -3, z: 6 }, max: { x: 3, z: 9.5 } },
+
+  // ── Upper floor ──
+  { id: 'master-bath', name: 'Ванная хозяев', floor: 1, min: { x: -16, z: -17.85 }, max: { x: -6, z: -12.5 } },
+  { id: 'bed2', name: 'Спальня 2', floor: 1, min: { x: -6, z: -17.85 }, max: { x: -1, z: -12.5 } },
+  { id: 'bed3', name: 'Спальня 3', floor: 1, min: { x: -1, z: -17.85 }, max: { x: 5, z: -12.5 } },
+  { id: 'kids-bath', name: 'Санузел', floor: 1, min: { x: 5, z: -17.85 }, max: { x: 9, z: -12.5 } },
+  { id: 'store', name: 'Кладовая', floor: 1, min: { x: 9, z: -17.85 }, max: { x: 16, z: -12.5 } },
+  { id: 'master', name: 'Спальня хозяев', floor: 1, min: { x: -16, z: -12.5 }, max: { x: -6, z: -7.4 } },
+  { id: 'wardrobe', name: 'Гардероб', floor: 1, min: { x: -6, z: -12.5 }, max: { x: -1, z: -7.4 } },
+  { id: 'study2', name: 'Кабинет', floor: 1, min: { x: -1, z: -12.5 }, max: { x: 5, z: -7.4 } },
+  { id: 'laundry', name: 'Прачечная', floor: 1, min: { x: 5, z: -12.5 }, max: { x: 16, z: -7.4 } },
+  { id: 'spine-1', name: 'Коридор', floor: 1, min: { x: -13.6, z: -7.4 }, max: { x: 13.6, z: -4.6 } },
+  { id: 'terrace', name: 'Терраса (без крыши)', floor: 1, min: { x: -16, z: -4.6 }, max: { x: -2, z: 5.85 } },
+  { id: 'lounge', name: 'Гостиная', floor: 1, min: { x: -2, z: -4.6 }, max: { x: 6, z: 1 } },
+  { id: 'sauna', name: 'Сауна', floor: 1, min: { x: 6, z: -4.6 }, max: { x: 16, z: 1 } },
+  { id: 'media', name: 'Медиа', floor: 1, min: { x: -2, z: 1 }, max: { x: 6, z: 5.85 } },
+  { id: 'office', name: 'Кабинет 2', floor: 1, min: { x: 6, z: 1 }, max: { x: 16, z: 5.85 } },
+
+  // ── Stairwells: one shaft each, open from the ground floor to the roof ──
+  { id: 'shaft-w', name: 'Лестница З', floor: 0, shaft: true, min: { x: -16, z: -12.5 }, max: { x: -13.6, z: -4.6 } },
+  { id: 'shaft-e', name: 'Лестница В', floor: 0, shaft: true, min: { x: 13.6, z: -7.4 }, max: { x: 16, z: 1 } },
+  { id: 'shaft-w-top', name: 'Лестница З', floor: 1, shaft: true, min: { x: -16, z: -12.5 }, max: { x: -13.6, z: -4.6 } },
+  { id: 'shaft-e-top', name: 'Лестница В', floor: 1, shaft: true, min: { x: 13.6, z: -7.4 }, max: { x: 16, z: 1 } },
+];
+
 export const APARTMENT = {
   id: 'apartment',
   name: 'Пентхаус',
@@ -483,6 +492,7 @@ export const APARTMENT = {
   // the slab and lighting the other.
   upperFloorY: F2,
   geometry: [...shell, ...stairwells, ...groundWalls, ...upperWalls, ...props],
+  rooms,
   doors,
   lights,
   spawns: {

@@ -105,6 +105,18 @@ for (const [name, [x, z]] of Object.entries(UPPER)) {
   check(`reach ${name}`, ok, `(${x}, ${z})`);
 }
 
+console.log('\nRooms:');
+// The room list is what the floor plans are drawn from. If a rectangle in it
+// stops matching the walls around it, the plan starts lying — so every room
+// has to be a place a player can actually stand.
+for (const r of APARTMENT.rooms) {
+  if (r.shaft) continue; // a shaft's middle is the flight of stairs, not a floor
+  const cx = (r.min.x + r.max.x) / 2;
+  const cz = (r.min.z + r.max.z) / 2;
+  check(`room "${r.id}" is a real space on floor ${r.floor}`,
+    standable(cx, cz, r.floor ? F2 : 0), `centre (${cx}, ${cz})`);
+}
+
 console.log('\nSpawns and fittings:');
 for (const team of ['attackers', 'defenders']) {
   APARTMENT.spawns[team].forEach((s, i) => {
