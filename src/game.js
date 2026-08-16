@@ -1,15 +1,15 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=552b53ed';
-import { buildScene, syncDoors, syncLights, makeAvatar } from './render/scene.js?v=552b53ed';
-import { createEffects } from './render/effects.js?v=552b53ed';
-import { createView } from './render/view.js?v=552b53ed';
-import { createHud } from './ui/hud.js?v=552b53ed';
-import { DT, PLAYER } from './sim/constants.js?v=552b53ed';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=552b53ed';
-import { raycastGeometry } from './sim/world.js?v=552b53ed';
-import { distXZ } from './sim/math.js?v=552b53ed';
+import * as THREE from '../vendor/three.module.js?v=85572888';
+import { buildScene, syncDoors, syncLights, makeAvatar } from './render/scene.js?v=85572888';
+import { createEffects } from './render/effects.js?v=85572888';
+import { createView } from './render/view.js?v=85572888';
+import { createHud } from './ui/hud.js?v=85572888';
+import { DT, PLAYER } from './sim/constants.js?v=85572888';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=85572888';
+import { raycastGeometry } from './sim/world.js?v=85572888';
+import { distXZ } from './sim/math.js?v=85572888';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -30,6 +30,27 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd 
   const view = createView(built.scene);
   const effects = createEffects(built.scene);
   const hud = createHud();
+
+  // ── Warm-up ──
+  // Nothing in a WebGL scene is free the first time it is used: a material is
+  // compiled against the exact set of lights present, geometry is uploaded on
+  // its first draw, and a shadow-casting light allocates its map. Left alone,
+  // that bill arrives on the first shot and the first press of the torch —
+  // seconds of freeze, mid-round. So it is paid here, behind the loading
+  // screen, by compiling both passes and drawing one frame with every pooled
+  // effect showing and the torch lit.
+  {
+    renderer.compile(built.scene, view.camera);
+    renderer.compile(view.viewScene, view.viewCamera);
+    const undo = effects.prime();
+    view.primeTorch(true);
+    renderer.clear();
+    renderer.render(built.scene, view.camera);
+    renderer.clearDepth();
+    renderer.render(view.viewScene, view.viewCamera);
+    view.primeTorch(false);
+    undo();
+  }
 
   const avatars = new Map();
   let accumulator = 0;

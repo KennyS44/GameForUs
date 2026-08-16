@@ -1,10 +1,10 @@
 // Keyboard and mouse -> a plain input object for the simulation.
 // Nothing here knows about the game rules; it only reports intent.
 
-import { createInput } from '../sim/sim.js?v=552b53ed';
-import { LOOK } from '../sim/constants.js?v=552b53ed';
-import { clamp } from '../sim/math.js?v=552b53ed';
-import { storageGet, storageSet } from '../util/storage.js?v=552b53ed';
+import { createInput } from '../sim/sim.js?v=85572888';
+import { LOOK } from '../sim/constants.js?v=85572888';
+import { clamp } from '../sim/math.js?v=85572888';
+import { storageGet, storageSet } from '../util/storage.js?v=85572888';
 
 export const DEFAULT_BINDINGS = {
   forward: 'KeyW',

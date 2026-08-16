@@ -1,9 +1,9 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=552b53ed';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV } from '../sim/constants.js?v=552b53ed';
-import { lerp } from '../sim/math.js?v=552b53ed';
+import * as THREE from '../../vendor/three.module.js?v=85572888';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV } from '../sim/constants.js?v=85572888';
+import { lerp } from '../sim/math.js?v=85572888';
 
 export function createView(scene) {
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.02, 120);
@@ -177,8 +177,10 @@ export function createView(scene) {
     }
 
     // Torch follows the camera, offset toward the weapon so shadows look right.
+    // Intensity only, never visibility: a spotlight that appears mid-round
+    // makes Three recompile every material in the scene, and this one casts
+    // shadows, so it would also allocate its shadow map at that moment.
     torch.intensity = player.flashlight ? FLASHLIGHT.intensity : 0;
-    torch.visible = player.flashlight;
     if (player.flashlight) {
       camera.getWorldPosition(torch.position);
       const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -217,6 +219,16 @@ export function createView(scene) {
   return {
     camera, torch, weapon, viewScene, viewCamera,
     update, muzzleWorldPosition, flash, setAspect, smoothed,
+    // Burn the torch for one warm-up frame: that is what allocates its shadow
+    // map and compiles the shaders that use it.
+    primeTorch(on) {
+      torch.intensity = on ? FLASHLIGHT.intensity : 0;
+      if (on) {
+        torch.position.set(0, 1.6, 0);
+        torch.target.position.set(0, 1.6, -5);
+        torch.target.updateMatrixWorld();
+      }
+    },
   };
 }
 

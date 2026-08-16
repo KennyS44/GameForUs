@@ -1,11 +1,15 @@
 // Short-lived visuals: tracers, muzzle flash, impact sparks and bullet holes.
 // Everything is pooled — no allocation during a firefight.
 
-import * as THREE from '../../vendor/three.module.js?v=552b53ed';
+import * as THREE from '../../vendor/three.module.js?v=85572888';
 
 const TRACER_POOL = 24;
 const DECAL_POOL = 96;
-const SPARK_POOL = 32;
+// Impact sparks are lights, and a light that exists costs every pixel a little
+// whether it is lit or not — they stay in the scene so their shaders are never
+// rebuilt mid-round, so the pool is only as big as it has to be. A spark lives
+// 90 ms; at eight hundred rounds a minute three are alive at once.
+const SPARK_POOL = 6;
 
 // Physical light units, same as the room lights.
 const MUZZLE_CANDELA = 120;
@@ -41,15 +45,17 @@ export function createEffects(scene) {
   // ── Impact sparks ──
   const sparks = [];
   for (let i = 0; i < SPARK_POOL; i++) {
+    // Alive from the first frame at zero intensity. A light appearing later
+    // changes the set of lights every material is compiled against, and Three
+    // rebuilds all of those shaders the moment it happens — which is a freeze
+    // of seconds, exactly when the first shot is fired.
     const light = new THREE.PointLight(0xffb060, 0, 2.2, 2);
-    light.visible = false;
     scene.add(light);
     sparks.push({ light, life: 0 });
   }
 
   // ── Muzzle flash (attached to the camera rig by the caller) ──
   const muzzle = new THREE.PointLight(0xffcf8a, 0, 7, 2);
-  muzzle.visible = false;
   scene.add(muzzle);
   let muzzleLife = 0;
 
@@ -98,13 +104,11 @@ export function createEffects(scene) {
     const s = sparks.find((x) => x.life <= 0) ?? sparks[0];
     s.light.position.set(pos.x + normal.x * 0.1, pos.y + normal.y * 0.1, pos.z + normal.z * 0.1);
     s.light.color.setHex(material === 'flesh' ? 0xff3020 : 0xffb060);
-    s.light.visible = true;
     s.life = 0.09;
   }
 
   function flash(pos) {
     muzzle.position.set(pos.x, pos.y, pos.z);
-    muzzle.visible = true;
     muzzleLife = 0.045;
   }
 
@@ -119,12 +123,10 @@ export function createEffects(scene) {
       if (s.life <= 0) continue;
       s.life -= dt;
       s.light.intensity = Math.max(0, (s.life / 0.09) * SPARK_CANDELA);
-      if (s.life <= 0) s.light.visible = false;
     }
     if (muzzleLife > 0) {
       muzzleLife -= dt;
       muzzle.intensity = Math.max(0, (muzzleLife / 0.045) * MUZZLE_CANDELA);
-      if (muzzleLife <= 0) muzzle.visible = false;
     }
   }
 
@@ -135,5 +137,16 @@ export function createEffects(scene) {
     }
   }
 
-  return { spawnTracer, spawnImpact, flash, update, clearDecals };
+  // Show every pooled object for one frame so its geometry and shaders reach
+  // the GPU while the loading screen is still up. Returns the undo.
+  function prime() {
+    for (const t of tracers) t.mesh.visible = true;
+    for (const d of decals) d.visible = true;
+    return () => {
+      for (const t of tracers) if (t.life <= 0) t.mesh.visible = false;
+      for (const d of decals) d.visible = false;
+    };
+  }
+
+  return { spawnTracer, spawnImpact, flash, update, clearDecals, prime };
 }
