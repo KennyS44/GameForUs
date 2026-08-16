@@ -6,7 +6,9 @@
 <title>GameForUs — тактический шутер</title>
 <meta name="description" content="Хардкорный тактический шутер в тёмном двухэтажном пентхаусе: свет, звук и двери решают больше, чем реакция.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="styles.css">
+<!-- Written by tools/stamp-version.mjs; the page checks it against version.txt. -->
+<meta name="gameforus-version" content="60eb463c">
+<link rel="stylesheet" href="styles.css?v=60eb463c">
 </head>
 <body>
 
@@ -165,10 +167,10 @@
   <section class="screen screen-narrow" id="screen-pause" hidden>
     <div class="panel">
       <h2>Пауза</h2>
-      <p class="hint">Раунд продолжается. Вас всё ещё можно убить.</p>
+      <p class="hint" id="pause-hint">Раунд продолжается. Вас всё ещё можно убить.</p>
       <div class="actions">
         <button class="btn btn-primary" id="btn-resume">Вернуться в игру</button>
-        <button class="btn btn-ghost" id="btn-quit">Выйти в меню</button>
+        <button class="btn btn-ghost" id="btn-quit">Выйти из матча</button>
       </div>
     </div>
   </section>
@@ -180,6 +182,7 @@
       <p class="hint" id="round-detail"></p>
       <div class="actions">
         <button class="btn btn-primary" id="btn-next">Следующий раунд</button>
+        <button class="btn btn-ghost" id="btn-quit-round">Выйти из матча</button>
       </div>
     </div>
   </section>
@@ -319,8 +322,37 @@
       if (!window.__gameforusReady) diagnose();
     }, 4000);
   });
+
+  // ── "You are looking at an old build" ──
+  // The host caches every file for ten minutes and will not let us say
+  // otherwise, so a player who returns just after an update can be served the
+  // previous version. version.txt is fetched past the cache: if it disagrees
+  // with the build this page came from, offer a reload rather than silently
+  // running yesterday's game.
+  function offerUpdate() {
+    var meta = document.querySelector('meta[name="gameforus-version"]');
+    var mine = meta && meta.content;
+    if (!mine || mine === 'dev') return;
+    fetch(new URL('version.txt', window.location.href).href, { cache: 'no-store' })
+      .then(function (res) { return res.ok ? res.text() : null; })
+      .then(function (text) {
+        if (!text || text.trim() === mine || shown) return;
+        shown = true;
+        var box = el('div', 'crash-banner update-banner');
+        box.appendChild(el('p', 'crash-title', 'Вышла новая версия'));
+        box.appendChild(el('p', 'crash-text',
+          'Браузер показывает сохранённую копию игры. Обновите страницу, чтобы загрузить свежую.'));
+        var b = el('button', 'crash-reload', 'Обновить страницу');
+        b.type = 'button';
+        b.addEventListener('click', function () { window.location.reload(); });
+        box.appendChild(b);
+        document.body.appendChild(box);
+      })
+      .catch(function () { /* offline is not an error worth shouting about */ });
+  }
+  window.addEventListener('load', function () { window.setTimeout(offerUpdate, 1200); });
 })();
 </script>
-<script type="module" src="src/main.js"></script>
+<script type="module" src="src/main.js?v=60eb463c"></script>
 </body>
 </html>

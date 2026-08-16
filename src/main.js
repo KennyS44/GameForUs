@@ -1,14 +1,14 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js';
-import { createGame } from './game.js';
-import { createAudio } from './audio/audio.js';
-import { createInputSource, saveSettings } from './input/input.js';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js';
+import { APARTMENT } from './maps/apartment.js?v=60eb463c';
+import { createGame } from './game.js?v=60eb463c';
+import { createAudio } from './audio/audio.js?v=60eb463c';
+import { createInputSource, saveSettings } from './input/input.js?v=60eb463c';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=60eb463c';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js';
-import { storageGet, storageSet } from './util/storage.js';
+} from './net/transport.js?v=60eb463c';
+import { storageGet, storageSet } from './util/storage.js?v=60eb463c';
 
 const $ = (id) => document.getElementById(id);
 
@@ -100,8 +100,13 @@ function startGame(session) {
     input,
     onPause: () => {
       // In a live match the world keeps turning while you're in the menu —
-      // stopping the host would freeze everyone else.
-      if (session.kind === 'local') game.pause();
+      // stopping the host would freeze everyone else. Alone against bots
+      // nobody else is waiting, so the round really does stop.
+      const solo = session.kind === 'local';
+      if (solo) game.pause();
+      $('pause-hint').textContent = solo
+        ? 'Раунд остановлен. Escape — вернуться в игру.'
+        : 'Раунд продолжается. Вас всё ещё можно убить.';
       if (screens.round.hidden) showScreen('pause');
     },
     onRoundEnd: (winner) => {
@@ -276,12 +281,14 @@ $('join-code').addEventListener('input', (e) => {
 
 // ── Pause / round / quit ──────────────────────────────────────────────────
 
-$('btn-resume').addEventListener('click', () => {
+function resumeGame() {
   if (!game) return;
   game.resume();
   hideOverlay();
   input.requestLock();
-});
+}
+
+$('btn-resume').addEventListener('click', resumeGame);
 
 $('btn-next').addEventListener('click', () => {
   if (!game) return;
@@ -302,13 +309,16 @@ function quitToMenu() {
 }
 
 $('btn-quit').addEventListener('click', quitToMenu);
+$('btn-quit-round').addEventListener('click', quitToMenu);
 $('btn-leave').addEventListener('click', quitToMenu);
 
+// Escape is the pause key both ways: it drops you out of the match into the
+// pause menu, where "Выйти из матча" ends it, and pressing it again puts you
+// straight back in.
 window.addEventListener('keydown', (e) => {
-  if (e.code !== 'Escape') return;
-  if (game && overlay.hidden) {
-    input.releaseLock(); // triggers onPause
-  }
+  if (e.code !== 'Escape' || !game) return;
+  if (overlay.hidden) input.releaseLock(); // triggers onPause
+  else if (!screens.pause.hidden) resumeGame();
 });
 
 function escapeHtml(s) {
