@@ -97,9 +97,11 @@ export const WEAPONS = {
 };
 
 export const DOOR = {
-  // A door swings almost flat against the wall, not to a tidy right angle, so
-  // an opened doorway is genuinely clear instead of half blocked by its panel.
-  openAngle: (170 * Math.PI) / 180,
+  // A door swings flat against the wall, not to a tidy right angle, so an
+  // opened doorway is genuinely clear instead of half blocked by its panel.
+  // Its hinges sit on the face of the wall, so "flat" really does mean
+  // touching the jamb.
+  openAngle: (178 * Math.PI) / 180,
   openSpeed: 2.2, // radians/sec when pushed open normally
   sneakSpeed: 0.5, // slow, quiet nudge
   kickSpeed: 11.0,
@@ -108,6 +110,8 @@ export const DOOR = {
   // kicks in a doorway is not a decision, it is just a delay.
   kickDamage: 260,
   health: 100,
+  // Glass takes two rounds and falls out of the frame altogether.
+  glassHits: 2,
   loudnessKick: 30,
   loudnessOpen: 6,
   loudnessSneak: 1.5,

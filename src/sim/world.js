@@ -2,8 +2,8 @@
 // geometry, and bullet raycasts that respect material penetration.
 // Pure — no engine types cross this boundary.
 
-import { rayBox, boxOverlaps, clamp } from './math.js?v=5de41a50';
-import { DOOR } from './constants.js?v=5de41a50';
+import { rayBox, boxOverlaps, clamp } from './math.js?v=4947c3af';
+import { DOOR } from './constants.js?v=4947c3af';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -65,6 +65,15 @@ export function buildWorld(map) {
     // Which storey the door stands on. Everything about a door is measured
     // from its own floor, so the upstairs ones behave exactly like these.
     const floorY = d.y ?? 0;
+
+    // Real hinges are screwed to the face of the jamb, not buried in the
+    // middle of the wall. Standing the pivot off by half the wall plus half
+    // the panel is what lets a fully open door lie against the wall and touch
+    // the frame instead of hanging in the doorway.
+    const standoff = (d.frame ?? 0.12) / 2 + DOOR_THICKNESS / 2;
+    const swingWay = d.swing ?? 1;
+    if (d.axis === 'x') hinge.z += swingWay * standoff;
+    else hinge.x += swingWay * standoff;
 
     return {
       id: d.id,
@@ -191,7 +200,7 @@ function resolveAxis(world, pos, radius, height, axis, delta, stepHeight) {
 function resolveDoors(world, state, pos, radius, height) {
   for (const door of world.doors) {
     const ds = state.doors[door.id];
-    if (!ds) continue;
+    if (!ds || ds.broken) continue; // shattered glass is not in the way
 
     const frame = doorFrame(door, ds.open);
     const lp = worldToLocal(frame, pos);
@@ -270,7 +279,7 @@ export function raycastGeometry(world, state, origin, dir, maxDist) {
 
   for (const door of world.doors) {
     const ds = state.doors[door.id];
-    if (!ds) continue;
+    if (!ds || ds.broken) continue;
     const frame = doorFrame(door, ds.open);
     const lo = worldToLocal(frame, origin);
     const ld = dirToLocal(frame, dir);
@@ -298,6 +307,7 @@ export function hasLineOfSight(world, state, from, to) {
   const len = Math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
   if (len < 1e-6) return true;
   const dir = { x: d.x / len, y: d.y / len, z: d.z / len };
+  // Glass is in the way of a bullet, not of your eyes.
   const hits = raycastGeometry(world, state, from, dir, len - 1e-3);
-  return hits.length === 0;
+  return hits.every((h) => h.material.seeThrough);
 }

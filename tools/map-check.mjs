@@ -114,7 +114,49 @@ for (const team of ['attackers', 'defenders']) {
 }
 for (const l of world.lights) {
   const clear = !world.boxes.some((b) => inside(b, l.pos.x, l.pos.y, l.pos.z));
-  check(`lamp "${l.id}" hangs in open air`, clear);
+  check(`lamp "${l.id}" is not buried in the geometry`, clear);
+}
+
+// ...and every lamp is fixed to something. A light floating in mid-air reads
+// as a bug the moment a player looks up at it, which is exactly what happened
+// in the stairwells and on the roofless terrace.
+function fixedTo(l) {
+  const hit = (x, y, z) => world.boxes.some((b) => inside(b, x, y, z));
+  const mount = l.mount ?? 'ceiling';
+  if (mount === 'wall') {
+    const f = l.face;
+    if (!f) return 'no face given';
+    for (let d = 0.1; d <= 0.5; d += 0.05) {
+      if (hit(l.pos.x - f.x * d, l.pos.y, l.pos.z - f.z * d)) return null;
+    }
+    return 'no wall behind it';
+  }
+  if (mount === 'post') {
+    const base = l.base ?? 0;
+    if (l.pos.y - base < 1) return 'post too short to stand on';
+    return world.boxes.some((b) =>
+      l.pos.x > b.min.x && l.pos.x < b.max.x && l.pos.z > b.min.z && l.pos.z < b.max.z &&
+      Math.abs(b.max.y - base) < 0.02) ? null : 'no floor under the post';
+  }
+  const ceiling = l.ceiling ?? l.pos.y + 0.35;
+  if (ceiling - l.pos.y > 1.2) return 'hanging on an absurdly long flex';
+  for (let y = l.pos.y + 0.2; y <= ceiling + 0.25; y += 0.05) {
+    if (hit(l.pos.x, y, l.pos.z)) return null;
+  }
+  return 'nothing overhead to hang from';
+}
+for (const l of world.lights) {
+  const why = fixedTo(l);
+  check(`lamp "${l.id}" is fixed to something`, why === null, why ?? '');
+}
+
+console.log('\nDoors:');
+// A door thrown fully open should be flat against its wall, touching the
+// frame — not stopped a foot short of it in the middle of the doorway.
+for (const d of world.doors) {
+  const gap = Math.abs(Math.sin(Math.PI - d.maxAngle)) * d.width;
+  check(`door "${d.id}" opens flat against the wall`, gap < 0.2,
+    `${Math.round((d.maxAngle * 180) / Math.PI)}°, tip ${gap.toFixed(2)} m off the wall`);
 }
 
 console.log('\nStairs:');

@@ -1,8 +1,8 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=5de41a50';
-import { doorAngle } from '../sim/world.js?v=5de41a50';
+import * as THREE from '../../vendor/three.module.js?v=4947c3af';
+import { doorAngle } from '../sim/world.js?v=4947c3af';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -56,10 +56,12 @@ function materialFor(def) {
     params.roughness = 0.45;
     params.metalness = 0.75;
   } else if (def.name === 'glass') {
-    params.roughness = 0.1;
-    params.metalness = 0.2;
+    // Visible enough that you know there is a pane there — it stops bullets
+    // until it breaks — but clear enough to fight through.
+    params.roughness = 0.08;
+    params.metalness = 0.25;
     params.transparent = true;
-    params.opacity = 0.35;
+    params.opacity = 0.45;
   } else if (def.name === 'fabric') {
     params.roughness = 1.0;
   } else if (def.name === 'concrete') {
@@ -91,6 +93,70 @@ function applyBoxUv(geometry, sx, sy, sz, metresPerTile) {
   }
   uv.needsUpdate = true;
   return geometry;
+}
+
+// A lamp is a thing hanging in a room, not a glow in mid-air: every one is
+// built where it is actually fixed. `mount` says how — hung from the ceiling
+// on a flex, bracketed to a wall, or standing on its own post outdoors.
+const METAL = { color: 0x2a2a2e, roughness: 0.85, metalness: 0.3 };
+
+function makeFixture(l) {
+  const fixture = new THREE.Group();
+  const metal = new THREE.MeshStandardMaterial(METAL);
+  const { x, y, z } = l.pos;
+
+  const bulb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.07, 10, 8),
+    new THREE.MeshBasicMaterial({ color: l.color }),
+  );
+  bulb.position.set(x, y, z);
+
+  // The shade sits over the bulb and is open underneath, so the light falls
+  // downward the way the point light does.
+  const shade = (radius) => {
+    const m = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.3, radius, radius * 0.8, 14, 1, true),
+      new THREE.MeshStandardMaterial({ ...METAL, side: THREE.DoubleSide }),
+    );
+    m.position.set(x, y + radius * 0.32, z);
+    return m;
+  };
+
+  const mount = l.mount ?? 'ceiling';
+
+  if (mount === 'wall') {
+    // Bracketed to the wall it is drawn beside: a back plate, a short arm and
+    // a half shade. `face` points away from the wall, into the room.
+    const face = l.face ?? { x: 0, z: 1 };
+    const yaw = Math.atan2(face.x, face.z);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, 0.04), metal);
+    plate.position.set(x - face.x * 0.22, y + 0.06, z - face.z * 0.22);
+    plate.rotation.y = yaw;
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.22), metal);
+    arm.position.set(x - face.x * 0.11, y + 0.06, z - face.z * 0.11);
+    arm.rotation.y = yaw;
+    fixture.add(plate, arm, shade(0.15));
+  } else if (mount === 'post') {
+    // A lamp post: it stands on the floor it is placed on.
+    const base = l.base ?? 0;
+    const height = Math.max(0.2, y - base - 0.1);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.055, height, 10), metal);
+    pole.position.set(x, base + height / 2, z);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.07, 12), metal);
+    foot.position.set(x, base + 0.035, z);
+    fixture.add(pole, foot, shade(0.19));
+  } else {
+    // Hung from the ceiling: a canopy on the slab and a flex down to the shade.
+    const ceiling = l.ceiling ?? y + 0.35;
+    const drop = Math.max(0.05, ceiling - y - 0.12);
+    const canopy = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 10), metal);
+    canopy.position.set(x, ceiling - 0.015, z);
+    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, drop, 6), metal);
+    cord.position.set(x, ceiling - drop / 2, z);
+    fixture.add(canopy, cord, shade(0.2));
+  }
+
+  return { bulb, fixture };
 }
 
 export function buildScene(world) {
@@ -162,23 +228,12 @@ export function buildScene(world) {
     light.position.set(l.pos.x, l.pos.y, l.pos.z);
     group.add(light);
 
-    // Visible fixture, so there is something to shoot at.
-    const bulb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.09, 10, 8),
-      new THREE.MeshBasicMaterial({ color: l.color }),
-    );
-    bulb.position.copy(light.position);
+    const { bulb, fixture } = makeFixture(l);
     group.add(bulb);
-
-    const shade = new THREE.Mesh(
-      new THREE.ConeGeometry(0.22, 0.16, 12, 1, true),
-      new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.9, side: THREE.DoubleSide }),
-    );
-    shade.position.set(l.pos.x, l.pos.y + 0.12, l.pos.z);
-    group.add(shade);
+    group.add(fixture);
 
     scene.add(group);
-    lightObjects.set(l.id, { light, bulb, shade, def: l });
+    lightObjects.set(l.id, { light, bulb, shade: fixture, def: l });
   }
 
   return { scene, doorMeshes, lightObjects, staticGroup };
@@ -190,6 +245,9 @@ export function syncDoors(view, state) {
   for (const [id, entry] of view.doorMeshes) {
     const ds = state.doors[id];
     if (!ds) continue;
+    // A shattered pane is gone from the simulation, so it goes from the screen.
+    entry.pivot.visible = !ds.broken;
+    if (ds.broken) continue;
     // Our sim rotates (x,z) by +theta; Three.js rotation.y is the opposite sense.
     // A kicked door swings on its hinges like any other — the only thing it
     // loses is the latch, so there is nothing extra to draw.

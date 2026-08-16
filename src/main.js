@@ -1,14 +1,14 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=5de41a50';
-import { createGame } from './game.js?v=5de41a50';
-import { createAudio } from './audio/audio.js?v=5de41a50';
-import { createInputSource, saveSettings } from './input/input.js?v=5de41a50';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=5de41a50';
+import { APARTMENT } from './maps/apartment.js?v=4947c3af';
+import { createGame } from './game.js?v=4947c3af';
+import { createAudio } from './audio/audio.js?v=4947c3af';
+import { createInputSource, saveSettings } from './input/input.js?v=4947c3af';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=4947c3af';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=5de41a50';
-import { storageGet, storageSet } from './util/storage.js?v=5de41a50';
+} from './net/transport.js?v=4947c3af';
+import { storageGet, storageSet } from './util/storage.js?v=4947c3af';
 
 const $ = (id) => document.getElementById(id);
 

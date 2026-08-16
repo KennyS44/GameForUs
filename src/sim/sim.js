@@ -7,13 +7,13 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-} from './constants.js?v=5de41a50';
+} from './constants.js?v=4947c3af';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=5de41a50';
+} from './math.js?v=4947c3af';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-} from './world.js?v=5de41a50';
+} from './world.js?v=4947c3af';
 
 const GRAVITY = 18;
 
@@ -78,6 +78,9 @@ export function createState(world, seed = 12345) {
       // longer be shut. The panel itself stays on its hinges and still stops
       // bullets — a kicked door is cover you can no longer close.
       forced: false,
+      // Glass does not swing open when it loses: the pane falls out and the
+      // doorway is simply gone.
+      broken: false,
       locked: d.lockedByDefault,
     };
   }
@@ -296,17 +299,32 @@ function breakGlass(state, hit) {
 
 function damageDoor(world, state, doorId, amount, by) {
   const ds = state.doors[doorId];
-  if (!ds || ds.forced) return;
-  ds.health -= amount;
-  if (ds.health <= 0) {
-    ds.forced = true;
+  if (!ds || ds.forced || ds.broken) return;
+  const d = world.doors.find((x) => x.id === doorId);
+  const glass = d?.material.name === 'glass';
+
+  // A pane is counted in hits, not in points: two rounds anywhere on it, or
+  // one boot, and it is gone. A solid door is worn down as before.
+  ds.health -= glass ? (amount >= DOOR.kickDamage ? ds.health : 1) : amount;
+  if (ds.health > 0) return;
+
+  const at = { x: d ? d.pos.x : 0, y: (d?.pos.y ?? 0) + 1, z: d ? d.pos.z : 0 };
+  if (glass) {
+    ds.broken = true;
+    ds.open = 0;
+    ds.target = 0;
     ds.locked = false;
-    ds.target = 1;
-    ds.speed = DOOR.kickSpeed;
-    emit(state, { type: 'doorBreak', doorId, by: by?.id });
-    const d = world.doors.find((x) => x.id === doorId);
-    if (d) makeNoise(state, { x: d.pos.x, y: (d.pos.y ?? 0) + 1, z: d.pos.z }, DOOR.loudnessKick, 'doorBreak', by?.id);
+    emit(state, { type: 'doorShatter', doorId, by: by?.id });
+    makeNoise(state, at, DOOR.loudnessKick, 'doorShatter', by?.id);
+    return;
   }
+
+  ds.forced = true;
+  ds.locked = false;
+  ds.target = 1;
+  ds.speed = DOOR.kickSpeed;
+  emit(state, { type: 'doorBreak', doorId, by: by?.id });
+  makeNoise(state, at, DOOR.loudnessKick, 'doorBreak', by?.id);
 }
 
 // Shooting out a bulb: check whether the bullet line passes near a light.
@@ -338,6 +356,7 @@ function doorInReach(world, state, p, range) {
   let best = null;
   for (const door of world.doors) {
     const ds = state.doors[door.id];
+    if (ds.broken) continue; // there is nothing left to push
     const frame = doorFrame(door, ds.open);
     const lo = worldToLocal(frame, eye);
     const ld = dirToLocal(frame, dir);
@@ -373,12 +392,16 @@ function kickDoor(world, state, p) {
   emit(state, { type: 'doorKick', doorId: found.door.id, by: p.id });
   makeNoise(state, { x: found.door.pos.x, y: (found.door.pos.y ?? 0) + 1, z: found.door.pos.z }, DOOR.loudnessKick, 'kick', p.id);
 
-  ds.health = Math.max(0, ds.health - DOOR.kickDamage);
-  ds.locked = false;
-  ds.forced = true;
-  ds.target = 1;
-  ds.speed = DOOR.kickSpeed;
-  emit(state, { type: 'doorBreak', doorId: found.door.id, by: p.id });
+  // A door with nothing left to break just gets shoved the rest of the way.
+  if (ds.forced || ds.broken) {
+    ds.target = 1;
+    ds.speed = DOOR.kickSpeed;
+    return true;
+  }
+
+  // Everything else goes through the same rule a bullet does, so a boot in a
+  // pane of glass takes it out of the frame instead of swinging it open.
+  damageDoor(world, state, found.door.id, DOOR.kickDamage, p);
   return true;
 }
 
@@ -749,6 +772,7 @@ export function resetRound(world, state) {
     ds.speed = DOOR.openSpeed;
     ds.health = d.maxHealth;
     ds.forced = false;
+    ds.broken = false;
     ds.locked = d.lockedByDefault;
   }
   for (const id of Object.keys(state.lights)) state.lights[id].broken = false;

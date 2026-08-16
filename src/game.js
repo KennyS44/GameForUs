@@ -1,15 +1,15 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=5de41a50';
-import { buildScene, syncDoors, syncLights, makeAvatar } from './render/scene.js?v=5de41a50';
-import { createEffects } from './render/effects.js?v=5de41a50';
-import { createView } from './render/view.js?v=5de41a50';
-import { createHud } from './ui/hud.js?v=5de41a50';
-import { DT, PLAYER } from './sim/constants.js?v=5de41a50';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=5de41a50';
-import { raycastGeometry } from './sim/world.js?v=5de41a50';
-import { distXZ } from './sim/math.js?v=5de41a50';
+import * as THREE from '../vendor/three.module.js?v=4947c3af';
+import { buildScene, syncDoors, syncLights, makeAvatar } from './render/scene.js?v=4947c3af';
+import { createEffects } from './render/effects.js?v=4947c3af';
+import { createView } from './render/view.js?v=4947c3af';
+import { createHud } from './ui/hud.js?v=4947c3af';
+import { DT, PLAYER } from './sim/constants.js?v=4947c3af';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=4947c3af';
+import { raycastGeometry } from './sim/world.js?v=4947c3af';
+import { distXZ } from './sim/math.js?v=4947c3af';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -53,6 +53,9 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd 
   window.addEventListener('resize', resize);
 
   // ── Events -> sight and sound ───────────────────────────────────────────
+
+  // Where a door makes its noise: chest height on its own storey.
+  const doorEar = (door) => ({ x: door.pos.x, y: (door.pos.y ?? 0) + 1, z: door.pos.z });
 
   function handleEvents(events) {
     const me = session.me;
@@ -112,12 +115,17 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd 
         case 'doorKick':
         case 'doorBreak': {
           const door = session.world.doors.find((d) => d.id === ev.doorId);
-          if (door) audio.doorSound({ x: door.pos.x, y: 1, z: door.pos.z }, ev.type === 'doorBreak' ? 'break' : 'kick');
+          if (door) audio.doorSound(doorEar(door), ev.type === 'doorBreak' ? 'break' : 'kick');
+          break;
+        }
+        case 'doorShatter': {
+          const door = session.world.doors.find((d) => d.id === ev.doorId);
+          if (door) audio.impact(doorEar(door), 'glass');
           break;
         }
         case 'doorMove': {
           const door = session.world.doors.find((d) => d.id === ev.doorId);
-          if (door) audio.doorSound({ x: door.pos.x, y: 1, z: door.pos.z }, 'creak');
+          if (door) audio.doorSound(doorEar(door), 'creak');
           break;
         }
         case 'lightBreak':

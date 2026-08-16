@@ -5,12 +5,12 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=5de41a50';
+import { buildWorld } from '../sim/world.js?v=4947c3af';
 import {
   createState, addPlayer, removePlayer, stepSim, createInput, resetRound,
-} from '../sim/sim.js?v=5de41a50';
-import { createBotBrain } from '../sim/bot.js?v=5de41a50';
-import { DT } from '../sim/constants.js?v=5de41a50';
+} from '../sim/sim.js?v=4947c3af';
+import { createBotBrain } from '../sim/bot.js?v=4947c3af';
+import { DT } from '../sim/constants.js?v=4947c3af';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 
@@ -121,7 +121,7 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
     }
     const doors = {};
     for (const [id, d] of Object.entries(state.doors)) {
-      doors[id] = { open: d.open, target: d.target, forced: d.forced, locked: d.locked, health: d.health };
+      doors[id] = { open: d.open, target: d.target, forced: d.forced, broken: d.broken, locked: d.locked, health: d.health };
     }
     const lights = {};
     for (const [id, l] of Object.entries(state.lights)) lights[id] = { broken: l.broken };

@@ -341,12 +341,91 @@ check(
     `peak=${deg(peak).toFixed(2)}° now=${deg(state.players.a1.recoil.pitch).toFixed(2)}°`);
 }
 
+// ── Glass: you see through it, you do not shoot through it ────────────────
+{
+  const F2 = 3.3;
+  const GLASS = 'lounge-terrace'; // the balcony door, upstairs at x = -2, z = -2
+
+  // Standing in the lounge, facing west at the pane.
+  function atTheGlass() {
+    resetRound(world, state);
+    state.phase = 'live';
+    state.phaseTime = 60;
+    const p = state.players.a1;
+    p.pos = { x: -1.0, y: F2, z: -2 };
+    p.look = { yaw: Math.PI / 2, pitch: 0 }; // toward -X
+    state.players.d1.pos = { x: 8, y: F2, z: -16 }; // out of the way
+    return p;
+  }
+
+  // Sight passes through a closed pane...
+  {
+    atTheGlass();
+    const inLounge = { x: -1.0, y: F2 + 1.6, z: -2 };
+    const onTerrace = { x: -4.0, y: F2 + 1.6, z: -2 };
+    check('you can see through a closed glass door',
+      hasLineOfSight(world, state, inLounge, onTerrace));
+  }
+
+  // ...but a bullet does not: it takes the pane down in two.
+  {
+    const p = atTheGlass();
+    let shots = 0;
+    let ammo = p.weapon.ammo;
+    for (let i = 0; i < TICK_RATE * 2 && !state.doors[GLASS].broken; i++) {
+      stepSim(world, state, {
+        a1: { ...createInput(), yaw: Math.PI / 2, pitch: 0, fire: true, aim: true },
+        d1: createInput(),
+      });
+      if (p.weapon.ammo < ammo) { ammo = p.weapon.ammo; shots++; }
+    }
+    check('two rounds shatter the glass door', state.doors[GLASS].broken && shots === 2,
+      `shots=${shots}, broken=${state.doors[GLASS].broken}`);
+    check('a shattered pane does not swing open, it is gone',
+      state.doors[GLASS].open === 0 && state.doors[GLASS].forced === false);
+  }
+
+  // Gone means gone: the doorway is walkable and nothing stops a bullet.
+  {
+    const p = state.players.a1;
+    p.pos = { x: -1.0, y: F2, z: -2 };
+    for (let i = 0; i < TICK_RATE * 2; i++) {
+      stepSim(world, state, {
+        a1: { ...createInput(), moveZ: 1, yaw: Math.PI / 2 },
+        d1: createInput(),
+      });
+    }
+    check('you can walk out through the empty frame', p.pos.x < -2.4, `x=${p.pos.x.toFixed(2)}`);
+  }
+
+  // One boot does the same job as two rounds.
+  {
+    atTheGlass();
+    let kicks = 0;
+    for (let i = 0; i < TICK_RATE * 2 && !state.doors[GLASS].broken; i++) {
+      const kick = state.players.a1.kickCooldown <= 0;
+      if (kick) kicks++;
+      stepSim(world, state, {
+        a1: { ...createInput(), yaw: Math.PI / 2, kick },
+        d1: createInput(),
+      });
+    }
+    check('one kick takes the whole pane out', state.doors[GLASS].broken && kicks === 1,
+      `kicks=${kicks}`);
+  }
+
+  // And a new round puts the glass back.
+  resetRound(world, state);
+  check('the pane is back next round', state.doors[GLASS].broken === false);
+}
+
 // ── Doors swing wide, and never into a wall ───────────────────────────────
 {
   const anglesOk = world.doors.every((d) => d.maxAngle >= Math.PI / 2 - 1e-6);
   check('every door opens at least 90°', anglesOk);
-  const wide = world.doors.filter((d) => d.maxAngle > (140 * Math.PI) / 180).length;
-  check('most doors swing wide open', wide >= 5, `${wide} of ${world.doors.length} past 140°`);
+  const wide = world.doors.filter((d) => d.maxAngle > (175 * Math.PI) / 180).length;
+  check('every door lies flat against its wall when open', wide === world.doors.length,
+    `${wide} of ${world.doors.length} past 175°`);
   console.log('       swing limits: ' +
     world.doors.map((d) => `${d.id} ${Math.round((d.maxAngle * 180) / Math.PI)}°`).join(', '));
 }

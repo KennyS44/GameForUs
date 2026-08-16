@@ -42,7 +42,9 @@ export const MATERIALS = {
   floor: { name: 'floor', penetration: 0, color: 0x5b4835, hardness: 1.0 },
   drywall: { name: 'drywall', penetration: 14, color: 0x5a544c, hardness: 0.25 },
   wood: { name: 'wood', penetration: 6, color: 0x4a3826, hardness: 0.5 },
-  glass: { name: 'glass', penetration: 40, color: 0x88a0aa, hardness: 0.05 },
+  // Glass stops a bullet the only way glass can: by breaking. It hides
+  // nothing though — `seeThrough` lets sight straight past it.
+  glass: { name: 'glass', penetration: 0, color: 0x88a0aa, hardness: 0.05, seeThrough: true },
   metal: { name: 'metal', penetration: 1, color: 0x4a4e52, hardness: 0.9 },
   fabric: { name: 'fabric', penetration: 20, color: 0x3d3a42, hardness: 0.2 },
 };
@@ -356,6 +358,7 @@ const doors = [
     pos: { x: 0, z: 6 },
     axis: 'x',
     width: 1.1,
+    frame: 0.3, // set into the outer shell
     hinge: -1, // hinge on the -x side
     swing: -1, // opens inward (north)
     material: M.metal,
@@ -365,10 +368,10 @@ const doors = [
   },
 
   // ── Stairwells ──
-  { id: 'stair-w-1', pos: { x: -13.6, z: -5.1 }, axis: 'z', width: 1.0, hinge: -1, swing: 1, material: M.wood },
-  { id: 'stair-w-2', pos: { x: -13.6, z: -11.3 }, axis: 'z', width: 1.0, hinge: 1, swing: -1, material: M.wood, y: F2 },
-  { id: 'stair-e-1', pos: { x: 13.6, z: -6.9 }, axis: 'z', width: 1.0, hinge: 1, swing: -1, material: M.wood },
-  { id: 'stair-e-2', pos: { x: 13.6, z: -0.7 }, axis: 'z', width: 1.0, hinge: -1, swing: 1, material: M.wood, y: F2 },
+  { id: 'stair-w-1', pos: { x: -13.6, z: -5.1 }, axis: 'z', width: 1.0, frame: 0.3, hinge: -1, swing: 1, material: M.wood },
+  { id: 'stair-w-2', pos: { x: -13.6, z: -11.3 }, axis: 'z', width: 1.0, frame: 0.3, hinge: 1, swing: -1, material: M.wood, y: F2 },
+  { id: 'stair-e-1', pos: { x: 13.6, z: -6.9 }, axis: 'z', width: 1.0, frame: 0.3, hinge: 1, swing: -1, material: M.wood },
+  { id: 'stair-e-2', pos: { x: 13.6, z: -0.7 }, axis: 'z', width: 1.0, frame: 0.3, hinge: -1, swing: 1, material: M.wood, y: F2 },
 
   // ── Ground floor ──
   { id: 'living-spine', pos: { x: -9, z: -7.4 }, axis: 'x', width: 1.0, hinge: -1, swing: -1, material: M.wood },
@@ -397,7 +400,7 @@ const doors = [
   { id: 'wardrobe-spine', pos: { x: -3.5, z: -7.4 }, axis: 'x', width: 1.0, hinge: 1, swing: -1, material: M.wood, y: F2 },
   { id: 'study2-spine', pos: { x: 2, z: -7.4 }, axis: 'x', width: 1.0, hinge: -1, swing: -1, material: M.wood, y: F2 },
   { id: 'laundry-spine', pos: { x: 9, z: -7.4 }, axis: 'x', width: 1.0, hinge: 1, swing: -1, material: M.wood, y: F2 },
-  { id: 'terrace-spine', pos: { x: -8, z: -4.6 }, axis: 'x', width: 1.0, hinge: -1, swing: 1, material: M.glass, y: F2 },
+  { id: 'terrace-spine', pos: { x: -8, z: -4.6 }, axis: 'x', width: 1.0, hinge: -1, swing: 1, material: M.glass, health: 2, y: F2 },
   { id: 'lounge-spine', pos: { x: 2, z: -4.6 }, axis: 'x', width: 1.0, hinge: 1, swing: 1, material: M.wood, y: F2 },
   { id: 'sauna-spine', pos: { x: 10, z: -4.6 }, axis: 'x', width: 1.0, hinge: -1, swing: 1, material: M.wood, y: F2 },
   { id: 'master-wardrobe', pos: { x: -6, z: -10 }, axis: 'z', width: 1.0, hinge: -1, swing: 1, material: M.wood, y: F2 },
@@ -407,13 +410,19 @@ const doors = [
   { id: 'master-bath2', pos: { x: -10, z: -12.5 }, axis: 'x', width: 1.0, hinge: -1, swing: -1, material: M.wood, y: F2 },
   { id: 'study2-bed3', pos: { x: 2, z: -12.5 }, axis: 'x', width: 1.0, hinge: 1, swing: -1, material: M.wood, y: F2 },
   { id: 'laundry-store', pos: { x: 11, z: -12.5 }, axis: 'x', width: 1.0, hinge: -1, swing: -1, material: M.wood, y: F2 },
-  { id: 'lounge-terrace', pos: { x: -2, z: -2 }, axis: 'z', width: 1.0, hinge: -1, swing: 1, material: M.glass, y: F2 },
+  { id: 'lounge-terrace', pos: { x: -2, z: -2 }, axis: 'z', width: 1.0, hinge: -1, swing: 1, material: M.glass, health: 2, y: F2 },
   { id: 'lounge-sauna', pos: { x: 6, z: -2 }, axis: 'z', width: 1.0, hinge: 1, swing: 1, material: M.wood, y: F2 },
   { id: 'sauna-office', pos: { x: 10, z: 1 }, axis: 'x', width: 1.0, hinge: -1, swing: 1, material: M.wood, y: F2 },
 ];
 
 // Lamps. Rooms without one stay dark on purpose — the flashlight is the price
 // of seeing in them.
+//
+// `mount` says how each one is fixed: hung from the ceiling by default,
+// bracketed to a wall (`face` points away from that wall), or standing on a
+// post (`base` is the floor it stands on). The stairwells are open all the way
+// to the roof and the terrace has no ceiling at all, so neither of them can
+// hang a lamp from anything — they get brackets and posts instead.
 const L1 = 2.65; // ground-floor ceiling height for fittings
 const L2 = F2 + 2.65;
 const lights = [
@@ -430,9 +439,12 @@ const lights = [
   { id: 'gym', pos: { x: 8, y: L1, z: -2 }, radius: 8, color: 0xfff0d0, intensity: 1.1 },
   { id: 'guest', pos: { x: 6, y: L1, z: 3 }, radius: 7, color: 0xffc890, intensity: 1.0 },
   { id: 'landing', pos: { x: 0, y: L1, z: 8 }, radius: 7, color: 0x9fb4c8, intensity: 0.8 },
-  // Stairwells — the only light in either shaft.
-  { id: 'stair-w', pos: { x: -14.8, y: L1, z: -8 }, radius: 7, color: 0xd8e8ff, intensity: 0.9 },
-  { id: 'stair-e', pos: { x: 14.8, y: L1, z: -3.5 }, radius: 7, color: 0xd8e8ff, intensity: 0.9 },
+  // Stairwells — the only light in either shaft, bracketed to the outer wall
+  // above the flight.
+  { id: 'stair-w', pos: { x: -15.5, y: 2.4, z: -8 }, radius: 8, color: 0xd8e8ff, intensity: 1.0,
+    mount: 'wall', face: { x: 1, z: 0 } },
+  { id: 'stair-e', pos: { x: 15.5, y: 2.4, z: -3.5 }, radius: 8, color: 0xd8e8ff, intensity: 1.0,
+    mount: 'wall', face: { x: -1, z: 0 } },
   // Upper floor.
   { id: 'master', pos: { x: -10, y: L2, z: -10 }, radius: 9, color: 0xffc890, intensity: 1.2 },
   { id: 'spine2-w', pos: { x: -6, y: L2, z: -6 }, radius: 8, color: 0xffd9a8, intensity: 1.0 },
@@ -442,8 +454,16 @@ const lights = [
   { id: 'lounge', pos: { x: 2, y: L2, z: -2 }, radius: 8, color: 0xffd9a8, intensity: 1.2 },
   { id: 'media', pos: { x: 2, y: L2, z: 3.5 }, radius: 7, color: 0xffc890, intensity: 0.9 },
   { id: 'sauna', pos: { x: 10, y: L2, z: -2 }, radius: 8, color: 0xfff0d0, intensity: 1.0 },
-  // Terrace: a cold outdoor fitting under the open sky.
-  { id: 'terrace', pos: { x: -8, y: L2, z: 1 }, radius: 9, color: 0x9fb4c8, intensity: 0.7 },
+  // Terrace: no roof to hang anything from. Two lamp posts stand at the far
+  // corners by the parapet, and two brackets light the doors back inside.
+  { id: 'terrace-post-w', pos: { x: -14.8, y: F2 + 2.2, z: 4.8 }, radius: 9, color: 0x9fb4c8,
+    intensity: 0.8, mount: 'post', base: F2 },
+  { id: 'terrace-post-e', pos: { x: -3.2, y: F2 + 2.2, z: 4.8 }, radius: 9, color: 0x9fb4c8,
+    intensity: 0.8, mount: 'post', base: F2 },
+  { id: 'terrace-door-n', pos: { x: -8, y: F2 + 2.3, z: -4.3 }, radius: 6, color: 0xd8e8ff,
+    intensity: 0.7, mount: 'wall', face: { x: 0, z: 1 } },
+  { id: 'terrace-door-e', pos: { x: -2.3, y: F2 + 2.3, z: -2 }, radius: 6, color: 0xd8e8ff,
+    intensity: 0.7, mount: 'wall', face: { x: -1, z: 0 } },
 ];
 
 export const APARTMENT = {
