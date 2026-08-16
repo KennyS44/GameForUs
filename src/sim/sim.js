@@ -7,13 +7,13 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-} from './constants.js?v=8c211286';
+} from './constants.js?v=7b6e6ece';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=8c211286';
+} from './math.js?v=7b6e6ece';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-} from './world.js?v=8c211286';
+} from './world.js?v=7b6e6ece';
 
 const GRAVITY = 18;
 
@@ -250,6 +250,8 @@ function fireBullet(world, state, shooter, origin, dir) {
       pos: at,
       normal: firstGeo.normal,
       material: firstGeo.material.name,
+      // A hole in a door has to travel with the door, so say which one.
+      doorId: firstGeo.kind === 'door' ? firstGeo.doorId : undefined,
     });
 
     // Can the round punch through?
@@ -260,7 +262,6 @@ function fireBullet(world, state, shooter, origin, dir) {
       return; // stopped
     }
     if (firstGeo.kind === 'door') damageDoor(world, state, firstGeo.doorId, 8, shooter);
-    if (mat.name === 'glass') breakGlass(state, firstGeo);
 
     penetrationLeft -= thicknessCm;
     damageScale *= Math.max(0.25, 1 - (thicknessCm * DAMAGE.penetrationLossPerCm) / 100);
@@ -291,10 +292,6 @@ function applyDamage(state, shooter, target, zone, scale) {
     shooter.kills++;
     emit(state, { type: 'death', id: target.id, by: shooter.id, zone });
   }
-}
-
-function breakGlass(state, hit) {
-  emit(state, { type: 'glass', pos: hit.pos });
 }
 
 function damageDoor(world, state, doorId, amount, by) {

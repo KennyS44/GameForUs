@@ -2,8 +2,8 @@
 // geometry, and bullet raycasts that respect material penetration.
 // Pure — no engine types cross this boundary.
 
-import { rayBox, boxOverlaps, clamp } from './math.js?v=8c211286';
-import { DOOR } from './constants.js?v=8c211286';
+import { rayBox, boxOverlaps, clamp } from './math.js?v=7b6e6ece';
+import { DOOR } from './constants.js?v=7b6e6ece';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -143,6 +143,14 @@ export function dirToLocal(frame, d) {
     x: d.x * frame.cos + d.z * frame.sin,
     y: d.y,
     z: -d.x * frame.sin + d.z * frame.cos,
+  };
+}
+
+export function dirToWorld(frame, d) {
+  return {
+    x: d.x * frame.cos - d.z * frame.sin,
+    y: d.y,
+    z: d.x * frame.sin + d.z * frame.cos,
   };
 }
 
@@ -290,7 +298,10 @@ export function raycastGeometry(world, state, origin, dir, maxDist) {
     hits.push({
       t: enter,
       exit: Math.min(r.tFar, maxDist),
-      normal: r.normal,
+      // The panel was traced in its own rotated frame, so its normal comes
+      // back rotated too. Everything downstream — bullet holes above all —
+      // wants it the way the world sees it.
+      normal: dirToWorld(frame, r.normal),
       material: door.material,
       kind: 'door',
       doorId: door.id,

@@ -1,7 +1,7 @@
 // Short-lived visuals: tracers, muzzle flash, impact sparks and bullet holes.
 // Everything is pooled — no allocation during a firefight.
 
-import * as THREE from '../../vendor/three.module.js?v=8c211286';
+import * as THREE from '../../vendor/three.module.js?v=7b6e6ece';
 
 const TRACER_POOL = 24;
 const DECAL_POOL = 96;
@@ -71,9 +71,16 @@ export function createEffects(scene) {
     slot.life = 0.055;
   }
 
-  function spawnImpact(pos, normal, material) {
+  // `attachTo` is the thing that was hit, when that thing can move — a door.
+  // A hole punched in a door belongs to the door: parented to its pivot it
+  // swings with the panel, and it goes with the panel when the glass is
+  // shattered out of the frame. Left in the world it would hang in mid-air in
+  // the doorway, which is exactly what it used to do.
+  function spawnImpact(pos, normal, material, attachTo = null) {
     if (material !== 'flesh') {
       const d = decals[decalIndex++ % DECAL_POOL];
+      // Free it from whatever it was stuck to last time round the pool.
+      if (d.parent !== scene) scene.attach(d);
       d.position.set(
         pos.x + normal.x * 0.006,
         pos.y + normal.y * 0.006,
@@ -84,6 +91,8 @@ export function createEffects(scene) {
         pos.y + normal.y,
         pos.z + normal.z,
       );
+      // `attach` keeps it exactly where it is and hands it to the new parent.
+      if (attachTo) attachTo.attach(d);
       d.visible = true;
     }
     const s = sparks.find((x) => x.life <= 0) ?? sparks[0];
@@ -120,7 +129,10 @@ export function createEffects(scene) {
   }
 
   function clearDecals() {
-    for (const d of decals) d.visible = false;
+    for (const d of decals) {
+      if (d.parent !== scene) scene.attach(d);
+      d.visible = false;
+    }
   }
 
   return { spawnTracer, spawnImpact, flash, update, clearDecals };
