@@ -10,6 +10,8 @@
 //   - some strict NATs need a TURN relay, which this free setup doesn't have.
 // Both go away when the simulation moves to a real server.
 
+import { createBusHost, joinBus } from './localbus.js?v=9414b459';
+
 // PeerJS ships as a classic browser bundle, so it is loaded on demand rather
 // than imported. Solo play never downloads it.
 let peerLibPromise = null;
@@ -45,23 +47,34 @@ export function normaliseCode(raw) {
 const peerId = (code) => `${PREFIX}-${code}`;
 
 // STUN alone only works when at least one side's router allows a direct
-// connection. Behind a symmetric NAT — common on mobile networks and corporate
-// Wi-Fi — the two browsers can see each other's addresses and still fail to
-// talk. A TURN server relays the traffic in that case, at the cost of an extra
-// hop. These are free public relays: better than a failed match, but a real
+// connection. Two players on one network are the awkward case rather than the
+// easy one: their public addresses are identical, so the pair that would have
+// to work is the local one — and browsers hide local addresses behind mDNS
+// `.local` names that another browser often cannot resolve. Then the only way
+// through is a TURN relay.
+//
+// The first entry is PeerJS's own free relay, which ships with the library and
+// is the one that has always actually answered; the list used to replace it
+// wholesale with a relay that has since been retired, leaving no fallback at
+// all. Free relays are better than a failed match, not a guarantee — a real
 // dedicated server is what removes the problem for good.
 const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun.cloudflare.com:3478' },
+  {
+    urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'],
+    username: 'peerjs',
+    credential: 'peerjsp',
+  },
   {
     urls: [
-      'turn:openrelay.metered.ca:80',
-      'turn:openrelay.metered.ca:443',
-      'turn:openrelay.metered.ca:443?transport=tcp', // last resort через 443/TCP
+      'turn:staticauth.openrelay.metered.ca:80',
+      'turn:staticauth.openrelay.metered.ca:443',
+      'turn:staticauth.openrelay.metered.ca:443?transport=tcp', // last resort over 443/TCP
     ],
     username: 'openrelayproject',
     credential: 'openrelayproject',
   },
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 
 const PEER_OPTIONS = {
@@ -96,6 +109,16 @@ export function createHostTransport({ code, onStatus }) {
     onStatus?.(msg, kind);
     h.status.forEach((fn) => fn(msg, kind));
   };
+
+  // Windows of this same browser reach the room without touching the network
+  // at all. They arrive through the same join/leave/message handlers as anyone
+  // else, so nothing downstream knows the difference.
+  const bus = createBusHost({ code, onStatus: status });
+  if (bus) {
+    bus.handlers.join.push((id, meta) => h.join.forEach((fn) => fn(id, meta)));
+    bus.handlers.leave.push((id) => h.leave.forEach((fn) => fn(id)));
+    bus.handlers.message.push((id, msg) => h.message.forEach((fn) => fn(id, msg)));
+  }
 
   const ready = loadPeerLib().then((Peer) => new Promise((resolve, reject) => {
     peer = new Peer(peerId(code), PEER_OPTIONS);
@@ -143,15 +166,19 @@ export function createHostTransport({ code, onStatus }) {
     code,
     ready,
     get peerCount() {
-      return conns.size;
+      return conns.size + (bus?.peerCount ?? 0);
     },
-    peerIds: () => [...conns.keys()],
+    peerIds: () => [...conns.keys(), ...(bus?.peerIds() ?? [])],
     onPeerJoin: (fn) => h.join.push(fn),
     onPeerLeave: (fn) => h.leave.push(fn),
     onMessage: (fn) => h.message.push(fn),
     onStatus: (fn) => h.status.push(fn),
     onError: (fn) => h.error.push(fn),
     sendTo(id, msg) {
+      if (bus?.has(id)) {
+        bus.sendTo(id, msg);
+        return;
+      }
       const c = conns.get(id);
       if (c?.open) {
         try {
@@ -162,6 +189,7 @@ export function createHostTransport({ code, onStatus }) {
       }
     },
     broadcast(msg) {
+      bus?.broadcast(msg);
       for (const c of conns.values()) {
         if (!c.open) continue;
         try {
@@ -173,6 +201,7 @@ export function createHostTransport({ code, onStatus }) {
     },
     close() {
       closed = true;
+      bus?.close();
       for (const c of conns.values()) c.close();
       conns.clear();
       peer?.destroy();
@@ -187,13 +216,16 @@ export function createClientTransport({ code, name, onStatus }) {
   let peer = null;
   let conn = null;
   let closed = false;
+  let relayFound = false;
 
   const status = (msg, kind = 'info') => {
     onStatus?.(msg, kind);
     h.status.forEach((fn) => fn(msg, kind));
   };
 
-  const ready = loadPeerLib().then((Peer) => new Promise((resolve, reject) => {
+  // If the host is another window of this browser, the answer comes back in
+  // milliseconds and the network is never involved.
+  const overTheNetwork = () => loadPeerLib().then((Peer) => new Promise((resolve, reject) => {
     peer = new Peer(PEER_OPTIONS);
     // A wrong or closed room fails fast and separately, with "комната не
     // найдена". Reaching this timeout therefore means the host *was* found and
@@ -201,15 +233,22 @@ export function createClientTransport({ code, name, onStatus }) {
     // network problem, not a typo. Saying "check the code" here would send the
     // player looking in the wrong place.
     const timeout = setTimeout(() => {
-      if (!conn?.open) {
-        status(
-          'Хост найден, но прямое соединение не установилось — мешает сеть ' +
-          'или роутер. Попробуйте другую сеть (например, мобильный интернет) ' +
-          'или пусть комнату создаст второй игрок.',
-          'error',
-        );
-        reject(new Error('ice-timeout'));
-      }
+      if (conn?.open) return;
+      // Two ways to fail, and they need different advice. No relay candidate
+      // at all means every free TURN server was unreachable, so there was
+      // never a fallback to try; with one gathered, the relay was there and
+      // the pair still would not form.
+      status(
+        relayFound
+          ? 'Хост найден, но канал так и не открылся. Помогает другая сеть ' +
+            '(например, мобильный интернет) или поменяться ролями.'
+          : 'Хост найден, но пробиться к нему не вышло: ретранслятор недоступен, ' +
+            'а напрямую мешает сеть или роутер. Если оба игрока за одним ' +
+            'роутером, надёжнее всего открыть второе окно того же браузера — ' +
+            'они соединяются напрямую, без сети.',
+        'error',
+      );
+      reject(new Error('ice-timeout'));
     }, JOIN_TIMEOUT_MS);
 
     peer.on('open', (myId) => {
@@ -225,6 +264,11 @@ export function createClientTransport({ code, name, onStatus }) {
           if (!closed && !conn?.open) setTimeout(watchIce, 250);
           return;
         }
+        // Remember whether a relay was ever on the table, so the failure can
+        // say which of the two problems it was.
+        pc.addEventListener('icecandidate', (e) => {
+          if (e.candidate && / typ relay /.test(e.candidate.candidate)) relayFound = true;
+        });
         pc.addEventListener('iceconnectionstatechange', () => {
           if (pc.iceConnectionState !== 'failed' || conn.open || closed) return;
           clearTimeout(timeout);
@@ -274,12 +318,26 @@ export function createClientTransport({ code, name, onStatus }) {
     });
   }));
 
+  // The bus answers or it does not; either way the network path is only tried
+  // once, and the caller sees one promise.
+  let route = null;
+  const ready = joinBus({ code, name }).then((local) => {
+    if (closed) return null;
+    if (local) {
+      route = local;
+      status('Подключено ко второму окну этого браузера.', 'ok');
+      local.onMessage((id, msg) => h.message.forEach((fn) => fn(id, msg)));
+      return local.ready;
+    }
+    return overTheNetwork();
+  });
+
   return {
     kind: 'client',
     code,
     ready,
     get myId() {
-      return peer?.id;
+      return route?.myId ?? peer?.id;
     },
     onPeerJoin: (fn) => h.join.push(fn),
     onPeerLeave: (fn) => h.leave.push(fn),
@@ -287,6 +345,10 @@ export function createClientTransport({ code, name, onStatus }) {
     onStatus: (fn) => h.status.push(fn),
     onError: (fn) => h.error.push(fn),
     send(msg) {
+      if (route) {
+        route.send(msg);
+        return;
+      }
       if (conn?.open) {
         try {
           conn.send(msg);
@@ -303,6 +365,7 @@ export function createClientTransport({ code, name, onStatus }) {
     },
     close() {
       closed = true;
+      route?.close();
       conn?.close();
       peer?.destroy();
     },
