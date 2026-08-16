@@ -1,8 +1,8 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=dd0e4e06';
-import { doorAngle } from '../sim/world.js?v=dd0e4e06';
+import * as THREE from '../../vendor/three.module.js?v=8c211286';
+import { doorAngle } from '../sim/world.js?v=8c211286';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -222,6 +222,7 @@ export function buildScene(world) {
   // the map stores a relative brightness and this scales it into that range.
   const BULB_CANDELA = 15;
   const lightObjects = new Map();
+  const upperFloorY = world.map.upperFloorY ?? Infinity;
   for (const l of world.lights) {
     const group = new THREE.Group();
     const light = new THREE.PointLight(l.color, l.intensity * BULB_CANDELA, l.radius, 2);
@@ -233,7 +234,16 @@ export function buildScene(world) {
     group.add(fixture);
 
     scene.add(group);
-    lightObjects.set(l.id, { light, bulb, shade: fixture, def: l });
+    lightObjects.set(l.id, {
+      light,
+      bulb,
+      shade: fixture,
+      def: l,
+      // Full brightness, remembered so it can be dimmed and restored.
+      power: light.intensity,
+      // A shaft lamp lights both floors because its shaft joins them.
+      storey: l.storey ?? (l.pos.y < upperFloorY ? 'ground' : 'upper'),
+    });
   }
 
   return { scene, doorMeshes, lightObjects, staticGroup };
@@ -255,10 +265,22 @@ export function syncDoors(view, state) {
   }
 }
 
-export function syncLights(view, state) {
+// `viewerY` is the floor the player is standing on.
+//
+// Nothing in this scene casts a shadow — a couple of dozen shadow-casting
+// point lights would cost more than everything else in the frame put together
+// — so a lamp downstairs shines straight up through the slab and keeps a room
+// lit whose own bulb you have just shot out. A lamp therefore only lights the
+// storey it belongs to. Climbing the stairs crosses the two over rather than
+// snapping, because the stairwell really is open to both.
+export function syncLights(view, state, viewerY = 0) {
+  const upper = Math.max(0, Math.min(1, (viewerY - 0.8) / 1.7));
   for (const [id, entry] of view.lightObjects) {
     const broken = state.lights[id]?.broken;
-    entry.light.visible = !broken;
+    const share = entry.storey === 'both' ? 1 : entry.storey === 'upper' ? upper : 1 - upper;
+    // Dimmed rather than hidden: switching a light off changes how many the
+    // shader is compiled for, and rebuilding shaders mid-round stutters.
+    entry.light.intensity = broken ? 0 : entry.power * share;
     entry.bulb.visible = !broken;
     if (broken) entry.bulb.material.color.setHex(0x1a1a1a);
   }

@@ -446,9 +446,9 @@ const lights = [
   // rakes along the risers instead of only landing on the treads, which is the
   // difference between a lit staircase and a ladder of black stripes.
   { id: 'stair-w', pos: { x: -14.8, y: ROOF - 0.3, z: -5.5 }, radius: 18, color: 0xd8e8ff,
-    intensity: 7.0, ceiling: ROOF },
+    intensity: 7.0, ceiling: ROOF, storey: 'both' },
   { id: 'stair-e', pos: { x: 14.8, y: ROOF - 0.3, z: -6.5 }, radius: 18, color: 0xd8e8ff,
-    intensity: 7.0, ceiling: ROOF },
+    intensity: 7.0, ceiling: ROOF, storey: 'both' },
   // Upper floor.
   { id: 'master', pos: { x: -10, y: L2, z: -10 }, radius: 9, color: 0xffc890, intensity: 1.2 },
   { id: 'spine2-w', pos: { x: -6, y: L2, z: -6 }, radius: 8, color: 0xffd9a8, intensity: 1.0 },
@@ -474,6 +474,10 @@ export const APARTMENT = {
   id: 'apartment',
   name: 'Пентхаус',
   bounds: { min: { x: -16.2, y: 0, z: -18.2 }, max: { x: 16.2, y: ROOF + 0.3, z: 9.7 } },
+  // Where the upper storey begins. Nothing in this engine casts shadows, so
+  // the renderer uses this to keep a lamp on one floor from shining through
+  // the slab and lighting the other.
+  upperFloorY: F2,
   geometry: [...shell, ...stairwells, ...groundWalls, ...upperWalls, ...props],
   doors,
   lights,
