@@ -1,9 +1,9 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=7b6e6ece';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV } from '../sim/constants.js?v=7b6e6ece';
-import { lerp } from '../sim/math.js?v=7b6e6ece';
+import * as THREE from '../../vendor/three.module.js?v=b14bea4c';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV } from '../sim/constants.js?v=b14bea4c';
+import { lerp } from '../sim/math.js?v=b14bea4c';
 
 export function createView(scene) {
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.02, 120);
@@ -62,10 +62,13 @@ export function createView(scene) {
     sway: { x: 0, y: 0 },
     aim: 0,
     recoilKick: 0,
+    recoilRoll: 0,
     crowd: 0,
   };
   let lastYaw = 0;
   let lastRecoilPitch = 0;
+  let lastRecoilYaw = 0;
+  let lastBurstShots = 0;
 
   // How close a wall has to be before the muzzle would be inside it. The
   // viewmodel is drawn over the world, so without this the barrel appears to
@@ -115,10 +118,22 @@ export function createView(scene) {
     // there, and a viewmodel driven by that total would stand the weapon on
     // its end and fill half the screen with it. Driven by the step instead,
     // the gun punches and settles no matter how long you hold the trigger.
+    // Every round gets a punch of its own on top of however far it moved the
+    // sights, so the muzzle still jumps late in a burst, where the pattern has
+    // settled and the sights barely climb any more.
+    const burst = player.burstShots ?? 0;
+    const fired = burst > lastBurstShots;
+    lastBurstShots = burst;
     const kicked = Math.max(0, player.recoil.pitch - lastRecoilPitch);
     lastRecoilPitch = player.recoil.pitch;
-    smoothed.recoilKick = Math.min(0.26, smoothed.recoilKick + kicked * 6);
+    smoothed.recoilKick = Math.min(0.30, smoothed.recoilKick + (fired ? 0.1 : 0) + kicked * 4);
     smoothed.recoilKick = lerp(smoothed.recoilKick, 0, Math.min(1, dt * 14));
+
+    // Sideways kick rolls the weapon a little, so the tremble is not purely
+    // up and down.
+    const kickedYaw = player.recoil.yaw - lastRecoilYaw;
+    lastRecoilYaw = player.recoil.yaw;
+    smoothed.recoilRoll = lerp(smoothed.recoilRoll + kickedYaw * 2.5, 0, Math.min(1, dt * 12));
 
     // Far enough forward that the stock never crowds the near plane — a gun
     // model straddling the eye reads as a grey slab across the screen.
@@ -135,8 +150,8 @@ export function createView(scene) {
     // when carried; aiming straightens it onto the sight line.
     weapon.group.rotation.set(
       lerp(0.05, 0, t) + smoothed.recoilKick * 1.4,
-      lerp(-0.07, 0, t) + smoothed.sway.x * 0.6,
-      lerp(0.06, 0, t),
+      lerp(-0.07, 0, t) + smoothed.sway.x * 0.6 + smoothed.recoilRoll * 0.8,
+      lerp(0.06, 0, t) + smoothed.recoilRoll,
     );
 
     // Up against a wall: pull the weapon in and raise the muzzle, the way you

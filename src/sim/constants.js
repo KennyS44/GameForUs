@@ -64,10 +64,10 @@ export const WEAPONS = {
     reloadTime: 2.4,
     reloadTimeEmpty: 3.1,
     // Recoil is a fixed spray pattern, not a dice roll: the first seven shots
-    // walk the muzzle up a known path with a bend in it, and after that the
-    // climb all but stops and the barrel only breathes side to side — so the
-    // tail of a long burst lands in a tight group instead of walking off the
-    // screen. Learn the path and you can hold it.
+    // walk the muzzle up a known path with a bend in it. Learn the path and
+    // you can hold it. After that the climb slows to a crawl and the barrel
+    // starts wandering and trembling instead — a long burst is still a worse
+    // idea than a short one, but it is a decision rather than a coin toss.
     //
     // Deltas are radians [yaw, pitch] per shot, counted from the moment you
     // opened fire. The magazine has nothing to do with it: fire seven, let go
@@ -81,8 +81,13 @@ export const WEAPONS = {
       [0.001, 0.021],
       [0.004, 0.017],
     ],
-    // Every shot after the path: barely any climb, a slow sideways sway.
-    recoilSettle: { pitch: 0.002, yaw: 0.007, sway: 0.9 },
+    // Every shot after the path. The climb is a fraction of the opening seven,
+    // but it never stops: hold the trigger to the end of the magazine and the
+    // sights keep creeping up and wandering wider. This is recoil, not spread —
+    // the cone of fire below is untouched, so the rounds still go where the
+    // barrel is pointing. `shake` is a small random kick on top, enough that
+    // the muzzle visibly trembles late in a burst without hiding the pattern.
+    recoilSettle: { pitch: 0.006, yaw: 0.016, sway: 0.9, shake: 0.0035 },
     recoilRecovery: 5.2, // how quickly the sights settle back once you stop
     // Trigger released for this long and the pattern starts over.
     burstResetTime: 0.28,

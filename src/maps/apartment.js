@@ -112,8 +112,8 @@ const M = MATERIALS;
 // a ceiling and the storey above still reads as a floor.
 function slab(x1, z1, x2, z2) {
   return [
-    box(x1, WALL_H, z1, x2, F2 - 0.1, z2, M.concrete),
-    box(x1, F2 - 0.1, z1, x2, F2, z2, M.floor),
+    { ...box(x1, WALL_H, z1, x2, F2 - 0.1, z2, M.concrete), layer: 'slab' },
+    { ...box(x1, F2 - 0.1, z1, x2, F2, z2, M.floor), layer: 'slab' },
   ];
 }
 
@@ -159,10 +159,10 @@ const shell = [
   ...wall(-3, 9.5, 3, 9.5, M.concrete, { thickness: 0.25 }),
   ...wall(-3, 6, -3, 9.5, M.concrete, { thickness: 0.25 }),
   ...wall(3, 6, 3, 9.5, M.concrete, { thickness: 0.25 }),
-  box(-3.2, WALL_H, 6, 3.2, F2, 9.7, M.concrete),
+  { ...box(-3.2, WALL_H, 6.2, 3.2, F2, 9.7, M.concrete), layer: 'slab' },
 
   // ── Upper floor slab, with a hole left open over each stairwell ─────────
-  ...slab(-16.2, -18.2, -13.6, -11.9), // west of the west shaft
+  ...slab(-16.2, -18.2, -13.6, -12.5), // north of the west shaft
   ...slab(-16.2, -4.6, -13.6, 6.2),
   ...slab(-13.6, -18.2, 13.6, 6.2), // the whole middle
   ...slab(13.6, -18.2, 16.2, -7.4),
@@ -179,19 +179,19 @@ const shell = [
 const stairwells = [
   // West shaft: x −15.85…−13.75, climbing north.
   ...stairs(-15.85, -13.75, -6.1, -1),
-  ...slab(-15.85, -11.9, -13.45, -10.9), // top landing, running under the door
-  ...wall(-13.6, -11.9, -13.6, -4.6, M.concrete, {
+  ...slab(-15.85, -12.5, -13.6, -10.9), // top landing, up to the main slab
+  ...wall(-13.6, -12.5, -13.6, -4.6, M.concrete, {
     thickness: 0.3, height: F2, gaps: [{ at: -5.1, width: 1.0 }],
   }),
-  ...wall(-13.6, -11.9, -13.6, -4.6, M.concrete, {
+  ...wall(-13.6, -12.5, -13.6, -4.6, M.concrete, {
     thickness: 0.3, base: F2, height: WALL_H, gaps: [{ at: -11.3, width: 1.0 }],
   }),
-  ...wall(-16, -11.9, -13.6, -11.9, M.concrete, { thickness: 0.3, height: ROOF }),
+  ...wall(-16, -12.5, -13.6, -12.5, M.concrete, { thickness: 0.3, height: ROOF }),
   ...wall(-16, -4.6, -13.6, -4.6, M.concrete, { thickness: 0.3, height: ROOF }),
 
   // East shaft: x 13.75…15.85, climbing south.
   ...stairs(13.75, 15.85, -6.0, 1),
-  ...slab(13.45, -1.2, 15.85, 0), // top landing, running under the door
+  ...slab(13.6, -1.2, 15.85, 0), // top landing, up to the main slab
   ...wall(13.6, -7.4, 13.6, 0, M.concrete, {
     thickness: 0.3, height: F2, gaps: [{ at: -6.9, width: 1.0 }],
   }),
@@ -246,7 +246,7 @@ const groundWalls = [
   ...wall(-16, 1.5, 3, 1.5, M.drywall, {
     gaps: [{ at: -8, width: 1.0 }, { at: 0, width: 1.6 }],
   }),
-  ...wall(3, 0, 16, 0, M.drywall, {
+  ...wall(3, 0, 13.6, 0, M.drywall, {
     gaps: [{ at: 6, width: 1.4 }, { at: 11.5, width: 1.0 }],
   }),
   ...wall(9, 0, 9, 5.85, M.drywall, { gaps: [{ at: 3.5, width: 1.0 }] }),
@@ -280,7 +280,7 @@ const upperWalls = [
   ...wall(-1, -17.85, -1, -7.4, M.drywall, { base: F2, gaps: [{ at: -15, width: 1.4 }] }),
   ...wall(5, -17.85, 5, -7.4, M.drywall, { base: F2, gaps: [{ at: -15, width: 1.0 }] }),
   ...wall(9, -17.85, 9, -12.5, M.drywall, { base: F2, gaps: [{ at: -15, width: 1.0 }] }),
-  ...wall(-16, -12.5, 16, -12.5, M.drywall, {
+  ...wall(-13.6, -12.5, 16, -12.5, M.drywall, {
     base: F2,
     gaps: [
       { at: -10, width: 1.0 }, // master → master bath

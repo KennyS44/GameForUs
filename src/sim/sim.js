@@ -7,13 +7,13 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-} from './constants.js?v=7b6e6ece';
+} from './constants.js?v=b14bea4c';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=7b6e6ece';
+} from './math.js?v=b14bea4c';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-} from './world.js?v=7b6e6ece';
+} from './world.js?v=b14bea4c';
 
 const GRAVITY = 18;
 
@@ -624,10 +624,12 @@ function stepWeapon(world, state, p, input, dt) {
   if (shot < climb.length) {
     [stepYaw, stepPitch] = climb[shot];
   } else {
-    // Past the path: the muzzle has nowhere left to climb and only sways.
+    // Past the path: a slower climb, a wider sway, and a tremble on top.
     const settle = def.recoilSettle;
-    stepPitch = settle.pitch;
-    stepYaw = Math.sin((shot - climb.length) * settle.sway) * settle.yaw;
+    const shake = settle.shake ?? 0;
+    stepPitch = settle.pitch + (nextRandom(state) - 0.5) * shake;
+    stepYaw = Math.sin((shot - climb.length) * settle.sway) * settle.yaw
+      + (nextRandom(state) - 0.5) * 2 * shake;
   }
 
   // Just enough life that two sprays are never pixel-identical, not enough to

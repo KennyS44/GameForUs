@@ -289,11 +289,14 @@ check(
   const tailPitch = tail.map((s) => s.pitch);
   const tailSpan = Math.max(...tailPitch) - Math.min(...tailPitch);
   const tailYaw = Math.max(...tail.map((s) => Math.abs(s.yaw)));
-  check('the tail of the burst stops climbing', tailSpan < climb / 4,
+  // The tail is not dead — the muzzle keeps creeping up and wandering — but
+  // the opening seven are still where most of the climb happens.
+  check('the tail keeps climbing, slowly', tailSpan > 1.5 && tailSpan < climb * 0.6,
     `${tailSpan.toFixed(2)}° across shots 8-26 vs ${climb.toFixed(2)}° of climb`);
-  check('the tail stays near the top of the path', Math.min(...tailPitch) > climb * 0.8,
+  check('the tail stays above the top of the path', Math.min(...tailPitch) > climb * 0.8,
     `lowest ${Math.min(...tailPitch).toFixed(2)}°`);
-  check('the tail only sways sideways', tailYaw < 1.5, `${tailYaw.toFixed(2)}°`);
+  check('the tail wanders sideways without running away', tailYaw > 0.8 && tailYaw < 3.5,
+    `${tailYaw.toFixed(2)}°`);
 
   // The pattern is the pattern: two sprays follow the same path.
   const again = sprayPath(7);
