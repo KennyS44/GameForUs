@@ -13,6 +13,7 @@
   .wall.glass.low { fill: #7fa8bd; }
   .blocker { fill: #d8c9a8; stroke: #9b8a63; stroke-width: 1; }
   .blocker.blocked { fill: #d9b8a0; stroke: #a5744f; }
+  .blocker.rubble { fill: #b9b2a6; stroke: #6f6a61; stroke-width: 1.5; }
   .hole { fill: none; stroke: #2f6f4f; stroke-width: 2.5; stroke-dasharray: 5 4; }
   .opening { fill: #d7e6dc; stroke: #2f6f4f; stroke-width: 1.5; stroke-dasharray: 4 3; }
   .hole.under { stroke: #7fa39a; stroke-width: 1.5; }
@@ -184,9 +185,9 @@
 <rect x="781.6" y="381.6" width="67.6" height="3.1" class="wall drywall"/>
 <rect x="79.6" y="454.4" width="156" height="3.1" class="wall drywall"/>
 
-<rect x="287.6" y="454.4" width="187.2" height="3.1" class="wall drywall"/>
+<rect x="287.6" y="454.4" width="195" height="3.1" class="wall drywall"/>
 
-<rect x="516.4" y="454.4" width="174.2" height="3.1" class="wall drywall"/>
+<rect x="508.6" y="454.4" width="182" height="3.1" class="wall drywall"/>
 
 <rect x="716.6" y="454.4" width="132.6" height="3.1" class="wall drywall"/>
 <rect x="689" y="111.5" width="3.1" height="61.1" class="wall drywall"/>
@@ -197,12 +198,17 @@
 <rect x="365.6" y="249" width="65" height="3.1" class="wall drywall"/>
 
 <rect x="456.6" y="249" width="234" height="3.1" class="wall drywall"/>
-<rect x="416" y="456" width="3.1" height="271.7" class="wall drywall"/>
+<rect x="520" y="250.6" width="3.1" height="52" class="wall drywall"/>
+
+<rect x="520" y="328.6" width="3.1" height="54.6" class="wall drywall"/>
+<rect x="416" y="456" width="3.1" height="195" class="wall drywall"/>
+
+<rect x="416" y="682.2" width="3.1" height="45.5" class="wall drywall"/>
 <rect x="572" y="456" width="3.1" height="54.6" class="wall drywall"/>
 
-<rect x="572" y="536.6" width="3.1" height="114.4" class="wall drywall"/>
+<rect x="572" y="536.6" width="3.1" height="117" class="wall drywall"/>
 
-<rect x="572" y="682.2" width="3.1" height="45.5" class="wall drywall"/>
+<rect x="572" y="679.6" width="3.1" height="48.1" class="wall drywall"/>
 <rect x="79.6" y="613" width="13" height="3.1" class="wall drywall"/>
 
 <rect x="118.6" y="613" width="260" height="3.1" class="wall drywall"/>
@@ -224,16 +230,17 @@
 <rect x="849.2" y="597.7" width="62.4" height="7.8" class="wall concrete"/>
 <rect x="690.6" y="246.7" width="78" height="7.8" class="blocker barrier"/>
 <text x="729.6" y="268.5" class="note">Ограждение 3 м, высота 1.1 — присел и укрылся</text>
-<rect x="513.8" y="172.6" width="15.6" height="15.6" class="blocker column"/>
-<text x="521.6" y="202.2" class="note">Колонна 0.6 × 0.6</text>
-<rect x="563.2" y="505.4" width="20.8" height="36.4" class="blocker blocked"/>
-<text x="573.6" y="555.8" class="note">Шкаф поперёк выбитой двери — простреливается, не проходится</text>
-<rect x="558" y="661.4" width="31.2" height="10.4" class="opening"/>
-<text x="573.6" y="686.6" class="note">Пролом в стене вместо двери</text>
+<rect x="506" y="164.8" width="31.2" height="31.2" class="blocker column"/>
+<text x="521.6" y="210" class="note">Колонна 1.2 × 1.2</text>
+<rect x="526.8" y="383.2" width="23.4" height="46.8" class="blocker rubble"/>
+<text x="538.5" y="444" class="note">Завал: коридор не пройти насквозь</text>
+<rect x="539.8" y="414.4" width="23.4" height="41.6" class="blocker rubble"/>
+<rect x="563.2" y="511.9" width="20.8" height="23.4" class="blocker blocked"/>
+<text x="573.6" y="549.3" class="note">Мешает пройти, но не мешает стрелять</text>
+<rect x="402" y="661.4" width="31.2" height="10.4" class="opening"/>
+<text x="417.6" y="686.6" class="note">Пролом в стене: прихожая ↔ гардеробная</text>
 <rect x="474.8" y="609.4" width="41.6" height="10.4" class="opening"/>
 <text x="495.6" y="634.6" class="note">Открытая арка</text>
-<rect x="474.8" y="450.8" width="41.6" height="10.4" class="opening"/>
-<text x="495.6" y="476" class="note">Открытая арка</text>
 <circle cx="872.6" cy="150.5" r="19.5" class="hole under"/>
 <text x="872.6" y="185" class="note">сюда падают из кладовой сверху</text>
 <path d="M 481.3 726.9 L 509.9 726.9" class="door-shut"/>
@@ -279,6 +286,21 @@
 <path d="M 716.6 458.3 L 742.6 459.2" class="door-open"/>
 <circle cx="716.6" cy="458.3" r="3" class="hinge"/>
 <text x="703.6" y="440.5" class="door-id">gym-spine</text>
+<path d="M 482.6 458.3 L 508.6 458.3" class="door-shut"/>
+<path d="M 508.6 458.3 A 26 26 0 0 1 456.6 459.2" class="door-arc"/>
+<path d="M 482.6 458.3 L 456.6 459.2" class="door-open"/>
+<circle cx="482.6" cy="458.3" r="3" class="hinge"/>
+<text x="495.6" y="440.5" class="door-id">hall-spine</text>
+<path d="M 523.9 302.6 L 523.9 328.6" class="door-shut"/>
+<path d="M 523.9 328.6 A 26 26 0 0 0 524.8 276.6" class="door-arc"/>
+<path d="M 523.9 302.6 L 524.8 276.6" class="door-open"/>
+<circle cx="523.9" cy="302.6" r="3" class="hinge"/>
+<text x="502.1" y="319.6" class="door-id">dining-kitchen</text>
+<path d="M 575.9 679.6 L 575.9 653.6" class="door-shut"/>
+<path d="M 575.9 653.6 A 26 26 0 0 1 576.8 705.6" class="door-arc"/>
+<path d="M 575.9 679.6 L 576.8 705.6" class="door-open"/>
+<circle cx="575.9" cy="679.6" r="3" class="hinge"/>
+<text x="554.1" y="670.6" class="door-id">foyer-guest</text>
 <path d="M 363.3 198.6 L 363.3 172.6" class="door-shut"/>
 <path d="M 363.3 172.6 A 26 26 0 0 0 362.4 224.6" class="door-arc"/>
 <path d="M 363.3 198.6 L 362.4 224.6" class="door-open"/>

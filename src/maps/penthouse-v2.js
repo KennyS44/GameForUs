@@ -18,8 +18,8 @@
 //   · cinema ↔ hall and hall ↔ cloakroom are walled up, and two new doors join
 //     the cinema to the cloakroom at both ends of its south wall;
 //   · the way into the hall from the guest room is a hole in the wall;
-//   · hall ↔ gym starts kicked in and blocked by a wardrobe you can shoot
-//     through but not walk past;
+//   · hall ↔ gym starts kicked in with something small in the way: no
+//     walking through, but nothing in the way of a shot;
 //   · bathroom and utility become one room split by a bar-height barrier;
 //   · study and guest bedroom become one room with a column where the wall was;
 //   · upstairs: defenders spawn in bedroom 3, the bathroom opens into the
@@ -184,7 +184,7 @@ const groundWalls = [
   ...wall(-16, -4.6, 13.6, -4.6, M.drywall, {
     gaps: [
       { at: -9, width: 2.0 }, // double door, corridor ↔ cinema
-      { at: 0, width: 1.6 }, // open archway into the hall
+      { at: 0, width: 1.0 }, // door into the hall
       { at: 8, width: 1.0 },
     ],
   }),
@@ -195,14 +195,17 @@ const groundWalls = [
     gaps: [{ at: -9.5, width: 1.0 }, { at: -15, width: 1.0 }],
   }),
   ...wall(-5, -12.5, 7.5, -12.5, M.drywall, { gaps: [{ at: -2, width: 1.0 }] }),
+  // Dining and kitchen keep their old wall and door.
+  ...wall(1, -12.5, 1, -7.4, M.drywall, { gaps: [{ at: -10, width: 1.0 }] }),
 
   // South half. Cinema ↔ hall is walled up; the cloakroom is reached from the
   // cinema at both ends of its south wall.
-  ...wall(-3, -4.6, -3, 5.85, M.drywall, {}),
+  // Entrance hall ↔ cloakroom: a hole punched through, no door in it.
+  ...wall(-3, -4.6, -3, 5.85, M.drywall, { gaps: [{ at: 3.5, width: 1.2 }] }),
   ...wall(3, -4.6, 3, 5.85, M.drywall, {
     gaps: [
-      { at: -2, width: 1.0 }, // hall ↔ gym: kicked in, blocked by a wardrobe
-      { at: 3.5, width: 1.2 }, // hole punched in the wall, no door
+      { at: -2, width: 1.0 }, // hall ↔ gym: kicked in, and something in the way
+      { at: 3.5, width: 1.0 }, // ordinary door to the guest room
     ],
   }),
   ...wall(-16, 1.5, 3, 1.5, M.drywall, {
@@ -222,13 +225,22 @@ const blockers = [
   // you are gone, stand and you are seen.
   { ...box(7.5, 0, -12.65, 10.5, RAIL, -12.35, M.concrete), tag: 'barrier',
     note: 'Ограждение 3 м, высота 1.1 — присел и укрылся' },
+
   // The column left behind when the study and the guest bedroom became one.
-  { ...box(0.7, 0, -15.5, 1.3, WALL_H, -14.9, M.concrete), tag: 'column',
-    note: 'Колонна 0.6 × 0.6' },
-  // A wardrobe shoved across the kicked-in gym door: rounds go through, people
-  // do not.
-  { ...box(2.6, 0, -2.7, 3.4, 2.0, -1.3, M.wood), tag: 'blocked',
-    note: 'Шкаф поперёк выбитой двери — простреливается, не проходится' },
+  { ...box(0.4, 0, -15.8, 1.6, WALL_H, -14.6, M.concrete), tag: 'column',
+    note: 'Колонна 1.2 × 1.2' },
+
+  // The corridor is caved in between the hall door and the kitchen door, so
+  // nobody walks its full length in a straight line: the way past is through
+  // the rooms on either side.
+  { ...box(1.2, 0, -7.4, 2.1, WALL_H, -5.6, M.concrete), tag: 'rubble',
+    note: 'Завал: коридор не пройти насквозь' },
+  { ...box(1.7, 0, -6.2, 2.6, WALL_H, -4.6, M.concrete), tag: 'rubble' },
+
+  // Something small shoved into the kicked-in gym doorway: it stops you
+  // walking through, and you can shoot over it and past it freely.
+  { ...box(2.6, 0, -2.45, 3.4, 0.95, -1.55, M.wood), tag: 'blocked',
+    note: 'Мешает пройти, но не мешает стрелять' },
 ];
 
 // ── Upper floor ──────────────────────────────────────────────────────────
@@ -313,6 +325,9 @@ const doors = [
   { id: 'kitchen-spine', pos: { x: 4, z: -7.4 }, axis: 'x', width: 1.0, hinge: -1, swing: -1, material: M.wood },
   { id: 'utility-spine', pos: { x: 10.5, z: -7.4 }, axis: 'x', width: 1.0, hinge: 1, swing: -1, material: M.wood },
   { id: 'gym-spine', pos: { x: 8, z: -4.6 }, axis: 'x', width: 1.0, hinge: 1, swing: 1, material: M.wood },
+  { id: 'hall-spine', pos: { x: 0, z: -4.6 }, axis: 'x', width: 1.0, hinge: -1, swing: 1, material: M.wood },
+  { id: 'dining-kitchen', pos: { x: 1, z: -10 }, axis: 'z', width: 1.0, hinge: -1, swing: 1, material: M.wood },
+  { id: 'foyer-guest', pos: { x: 3, z: 3.5 }, axis: 'z', width: 1.0, hinge: 1, swing: 1, material: M.wood },
 
   { id: 'court-study', pos: { x: -5, z: -15 }, axis: 'z', width: 1.0, hinge: 1, swing: -1, material: M.wood },
   { id: 'court-dining', pos: { x: -5, z: -10 }, axis: 'z', width: 1.0, hinge: -1, swing: -1, material: M.wood },
@@ -359,10 +374,9 @@ const holes = [
 
 // Ways through that are not doors, called out on the plan.
 const openings = [
-  { id: 'foyer-breach', floor: 0, x: 3, z: 3.5, w: 1.2, note: 'Пролом в стене вместо двери' },
+  { id: 'foyer-breach', floor: 0, x: -3, z: 3.5, w: 1.2, note: 'Пролом в стене: прихожая ↔ гардеробная' },
   { id: 'bath-laundry', floor: 1, x: 7, z: -12.5, w: 1.4, note: 'Открытый проход, без двери' },
   { id: 'hall-arch', floor: 0, x: 0, z: 1.5, w: 1.6, note: 'Открытая арка' },
-  { id: 'hall-spine-arch', floor: 0, x: 0, z: -4.6, w: 1.6, note: 'Открытая арка' },
 ];
 
 const L1 = 2.65;

@@ -195,7 +195,7 @@ function blockers(floor) {
   const out = [];
   for (const b of world.boxes) {
     if (!b.tag || b.axis) continue;
-    if (!['barrier', 'column', 'blocked'].includes(b.tag)) continue;
+    if (!['barrier', 'column', 'blocked', 'rubble'].includes(b.tag)) continue;
     const onThis = floor === 0 ? b.min.y < 2.6 : b.min.y >= F2 - 0.01;
     if (!onThis) continue;
     out.push(`<rect x="${n(px(b.min.x))}" y="${n(pz(b.min.z))}" width="${n((b.max.x - b.min.x) * SCALE)}" height="${n((b.max.z - b.min.z) * SCALE)}" class="blocker ${b.tag}"/>`);
@@ -263,6 +263,7 @@ const STYLE = `
   .wall.glass.low { fill: #7fa8bd; }
   .blocker { fill: #d8c9a8; stroke: #9b8a63; stroke-width: 1; }
   .blocker.blocked { fill: #d9b8a0; stroke: #a5744f; }
+  .blocker.rubble { fill: #b9b2a6; stroke: #6f6a61; stroke-width: 1.5; }
   .hole { fill: none; stroke: #2f6f4f; stroke-width: 2.5; stroke-dasharray: 5 4; }
   .opening { fill: #d7e6dc; stroke: #2f6f4f; stroke-width: 1.5; stroke-dasharray: 4 3; }
   .hole.under { stroke: #7fa39a; stroke-width: 1.5; }
