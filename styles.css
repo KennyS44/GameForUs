@@ -478,7 +478,10 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
   letter-spacing: 0.12em;
   color: var(--text-dim);
   text-shadow: 0 1px 3px #000;
+  transition: color 0.18s var(--ease);
 }
+/* Quiet step is a mode you switch on, so it says so in the weapon's colour. */
+.stance.quiet { color: var(--accent); }
 
 .ammo {
   display: flex;

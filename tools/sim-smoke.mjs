@@ -62,6 +62,32 @@ check('player rests on the floor', Math.abs(attacker.pos.y) < 0.01, `y=${attacke
   check('cannot jump while crouched', peak < 0.01, `peak=${peak.toFixed(3)}`);
 }
 
+// ── The quiet step is a mode the player carries ───────────────────────────
+{
+  // The HUD reads this off the player to show "ТИХО", and the door uses it to
+  // decide whether F eases the handle or turns it, so it has to survive the
+  // trip through the simulation rather than living only in the keyboard.
+  resetRound(world, state);
+  const p = state.players.a1;
+  const walk = { ...createInput(), moveZ: 1, yaw: 0 };
+  const quiet = { ...walk, sneak: true };
+
+  const travelled = (input) => {
+    p.pos = { x: 0, y: 0, z: 8.6 };
+    p.vel = { x: 0, y: 0, z: 0 };
+    const from = p.pos.z;
+    for (let i = 0; i < TICK_RATE; i++) stepSim(world, state, { a1: input, d1: createInput() });
+    return from - p.pos.z;
+  };
+
+  const quietRun = travelled(quiet);
+  check('the quiet step is recorded on the player', p.sneaking === true);
+  const walkRun = travelled(walk);
+  check('walking clears it again', p.sneaking === false);
+  check('the quiet step really is slower', quietRun < walkRun * 0.6,
+    `${quietRun.toFixed(2)} m vs ${walkRun.toFixed(2)} m in a second`);
+}
+
 // ── Walking into a wall does not pass through it ──────────────────────────
 const start = { ...attacker.pos };
 // moveZ = +1 is "forward"; at yaw 0 that walks toward -Z, into the flat.

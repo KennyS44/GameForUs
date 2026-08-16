@@ -1,15 +1,15 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=b14bea4c';
-import { buildScene, syncDoors, syncLights, makeAvatar } from './render/scene.js?v=b14bea4c';
-import { createEffects } from './render/effects.js?v=b14bea4c';
-import { createView } from './render/view.js?v=b14bea4c';
-import { createHud } from './ui/hud.js?v=b14bea4c';
-import { DT, PLAYER } from './sim/constants.js?v=b14bea4c';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=b14bea4c';
-import { raycastGeometry } from './sim/world.js?v=b14bea4c';
-import { distXZ } from './sim/math.js?v=b14bea4c';
+import * as THREE from '../vendor/three.module.js?v=37903322';
+import { buildScene, syncDoors, syncLights, makeAvatar } from './render/scene.js?v=37903322';
+import { createEffects } from './render/effects.js?v=37903322';
+import { createView } from './render/view.js?v=37903322';
+import { createHud } from './ui/hud.js?v=37903322';
+import { DT, PLAYER } from './sim/constants.js?v=37903322';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=37903322';
+import { raycastGeometry } from './sim/world.js?v=37903322';
+import { distXZ } from './sim/math.js?v=37903322';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -195,9 +195,11 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd 
       return;
     }
     const closing = target.target > 0.5;
-    hud.setPrompt(
-      `<kbd>F</kbd> ${closing ? 'закрыть' : 'открыть'} · <kbd>Tab+F</kbd> тихо · <kbd>V</kbd> ногой`,
-    );
+    const verb = closing ? 'закрыть' : 'открыть';
+    // The quiet step is a mode, so the door follows whatever mode you are in.
+    hud.setPrompt(me.sneaking
+      ? `<kbd>F</kbd> ${verb} тихо · <kbd>V</kbd> ногой`
+      : `<kbd>F</kbd> ${verb} · <kbd>Tab</kbd> тихий шаг · <kbd>V</kbd> ногой`);
   }
 
   // ── Main loop ───────────────────────────────────────────────────────────

@@ -7,13 +7,13 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-} from './constants.js?v=b14bea4c';
+} from './constants.js?v=37903322';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=b14bea4c';
+} from './math.js?v=37903322';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-} from './world.js?v=b14bea4c';
+} from './world.js?v=37903322';
 
 const GRAVITY = 18;
 
@@ -440,6 +440,7 @@ function stepPlayer(world, state, p, input, dt) {
   p.aimAmount = approach(p.aimAmount, wantAim, dt / weapon.aimTime);
 
   // ── Movement ──
+  p.sneaking = !!input.sneak;
   let speed;
   if (input.crouch) speed = PLAYER.speedCrouch;
   else if (input.sneak) speed = PLAYER.speedSneak;

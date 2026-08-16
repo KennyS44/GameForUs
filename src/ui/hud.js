@@ -1,6 +1,6 @@
 // HUD: reads simulation state, writes DOM. Never the other way round.
 
-import { WEAPONS, PLAYER } from '../sim/constants.js?v=b14bea4c';
+import { WEAPONS, PLAYER } from '../sim/constants.js?v=37903322';
 
 const $ = (id) => document.getElementById(id);
 
@@ -57,7 +57,11 @@ export function createHud() {
       el.vignette.style.opacity = hp <= 35 ? String(0.35 * (1 - hp / 35)) : '0';
     }
 
-    el.stance.textContent = me.crouching ? 'ПРИСЕВ' : me.aimAmount > 0.5 ? 'ПРИЦЕЛ' : 'СТОЯ';
+    el.stance.textContent = me.crouching ? 'ПРИСЕВ'
+      : me.sneaking ? 'ТИХО'
+        : me.aimAmount > 0.5 ? 'ПРИЦЕЛ' : 'СТОЯ';
+    // The quiet step is a mode now, so it has to be visible at a glance.
+    el.stance.classList.toggle('quiet', !!me.sneaking && !me.crouching);
 
     // ── Ammo ──
     const w = me.weapon;

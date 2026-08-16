@@ -1,10 +1,10 @@
 // Keyboard and mouse -> a plain input object for the simulation.
 // Nothing here knows about the game rules; it only reports intent.
 
-import { createInput } from '../sim/sim.js?v=b14bea4c';
-import { LOOK } from '../sim/constants.js?v=b14bea4c';
-import { clamp } from '../sim/math.js?v=b14bea4c';
-import { storageGet, storageSet } from '../util/storage.js?v=b14bea4c';
+import { createInput } from '../sim/sim.js?v=37903322';
+import { LOOK } from '../sim/constants.js?v=37903322';
+import { clamp } from '../sim/math.js?v=37903322';
+import { storageGet, storageSet } from '../util/storage.js?v=37903322';
 
 export const DEFAULT_BINDINGS = {
   forward: 'KeyW',
@@ -48,6 +48,9 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
   let mouseDown = 0; // bitmask
   // Edge-triggered actions: consumed once by the next input frame.
   const pending = { use: false, kick: false, flashlight: false, reload: false, jump: false };
+  // Sneaking is a mode you switch on, not a key you hold down: creeping across
+  // a flat takes long enough that holding a key the whole way is just a chore.
+  let sneaking = false;
   let locked = false;
   const listeners = { lockChange: [] };
 
@@ -71,6 +74,10 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
     if (e.code === bindings.flashlight) pending.flashlight = true;
     if (e.code === bindings.reload) pending.reload = true;
     if (e.code === bindings.jump) pending.jump = true;
+    if (e.code === bindings.sneak) sneaking = !sneaking;
+    // Breaking into a run is a decision to be loud: it drops the mode there
+    // and then, rather than fighting it while you move.
+    if (e.code === bindings.sprint) sneaking = false;
   }
   function onKeyUp(e) {
     swallowBrowserShortcut(e);
@@ -95,6 +102,10 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
   function onBlur() {
     keys.clear();
     mouseDown = 0;
+  }
+
+  function setSneaking(v) {
+    sneaking = !!v;
   }
   function onLockChange() {
     locked = document.pointerLockElement === canvas;
@@ -144,6 +155,11 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
       return { ...look };
     },
 
+    get sneaking() {
+      return sneaking;
+    },
+    setSneaking,
+
     // Build one simulation input frame and clear edge-triggered actions.
     sample() {
       const i = createInput();
@@ -155,7 +171,8 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
       i.moveZ = (keys.has(bindings.forward) ? 1 : 0) - (keys.has(bindings.back) ? 1 : 0);
       i.moveX = (keys.has(bindings.right) ? 1 : 0) - (keys.has(bindings.left) ? 1 : 0);
       i.run = keys.has(bindings.sprint);
-      i.sneak = keys.has(bindings.sneak);
+      if (i.run) sneaking = false; // held down from before the mode went on
+      i.sneak = sneaking;
       i.crouch = keys.has(bindings.crouch);
       i.jump = pending.jump;
       i.lean = (keys.has(bindings.leanRight) ? 1 : 0) - (keys.has(bindings.leanLeft) ? 1 : 0);
