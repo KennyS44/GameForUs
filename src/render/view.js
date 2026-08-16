@@ -1,9 +1,9 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=4947c3af';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV } from '../sim/constants.js?v=4947c3af';
-import { lerp } from '../sim/math.js?v=4947c3af';
+import * as THREE from '../../vendor/three.module.js?v=7bb7f10a';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV } from '../sim/constants.js?v=7bb7f10a';
+import { lerp } from '../sim/math.js?v=7bb7f10a';
 
 export function createView(scene) {
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.02, 120);
@@ -65,6 +65,7 @@ export function createView(scene) {
     crowd: 0,
   };
   let lastYaw = 0;
+  let lastRecoilPitch = 0;
 
   // How close a wall has to be before the muzzle would be inside it. The
   // viewmodel is drawn over the world, so without this the barrel appears to
@@ -107,8 +108,17 @@ export function createView(scene) {
     smoothed.sway.x = lerp(smoothed.sway.x, -dYaw * 1.6, Math.min(1, dt * 10));
     smoothed.sway.y = lerp(smoothed.sway.y, 0, Math.min(1, dt * 10));
 
-    // Recoil kicks the gun back toward the shooter.
-    smoothed.recoilKick = lerp(smoothed.recoilKick, player.recoil.pitch * 6, Math.min(1, dt * 18));
+    // Recoil kicks the gun back toward the shooter — once per round fired.
+    //
+    // This follows the kick of each shot, not the total climb of the sights.
+    // Seven shots into a burst the sights sit eight degrees high and stay
+    // there, and a viewmodel driven by that total would stand the weapon on
+    // its end and fill half the screen with it. Driven by the step instead,
+    // the gun punches and settles no matter how long you hold the trigger.
+    const kicked = Math.max(0, player.recoil.pitch - lastRecoilPitch);
+    lastRecoilPitch = player.recoil.pitch;
+    smoothed.recoilKick = Math.min(0.26, smoothed.recoilKick + kicked * 6);
+    smoothed.recoilKick = lerp(smoothed.recoilKick, 0, Math.min(1, dt * 14));
 
     // Far enough forward that the stock never crowds the near plane — a gun
     // model straddling the eye reads as a grey slab across the screen.
