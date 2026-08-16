@@ -2,8 +2,8 @@
 // geometry, and bullet raycasts that respect material penetration.
 // Pure — no engine types cross this boundary.
 
-import { rayBox, boxOverlaps, clamp } from './math.js?v=7bb7f10a';
-import { DOOR } from './constants.js?v=7bb7f10a';
+import { rayBox, boxOverlaps, clamp } from './math.js?v=dd0e4e06';
+import { DOOR } from './constants.js?v=dd0e4e06';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;

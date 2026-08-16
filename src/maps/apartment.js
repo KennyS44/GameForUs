@@ -439,12 +439,16 @@ const lights = [
   { id: 'gym', pos: { x: 8, y: L1, z: -2 }, radius: 8, color: 0xfff0d0, intensity: 1.1 },
   { id: 'guest', pos: { x: 6, y: L1, z: 3 }, radius: 7, color: 0xffc890, intensity: 1.0 },
   { id: 'landing', pos: { x: 0, y: L1, z: 8 }, radius: 7, color: 0x9fb4c8, intensity: 0.8 },
-  // Stairwells — the only light in either shaft, bracketed to the outer wall
-  // above the flight.
-  { id: 'stair-w', pos: { x: -15.5, y: 2.4, z: -8 }, radius: 8, color: 0xd8e8ff, intensity: 1.0,
-    mount: 'wall', face: { x: 1, z: 0 } },
-  { id: 'stair-e', pos: { x: 15.5, y: 2.4, z: -3.5 }, radius: 8, color: 0xd8e8ff, intensity: 1.0,
-    mount: 'wall', face: { x: -1, z: 0 } },
+  // Stairwells. Each shaft is open the full six metres to the roof, so its one
+  // lamp hangs at the very top and is strong enough to reach the bottom step —
+  // a stairwell lit only at one end is a stairwell nobody can read. It sits
+  // over the foot of the flight rather than its middle: from there the light
+  // rakes along the risers instead of only landing on the treads, which is the
+  // difference between a lit staircase and a ladder of black stripes.
+  { id: 'stair-w', pos: { x: -14.8, y: ROOF - 0.3, z: -5.5 }, radius: 18, color: 0xd8e8ff,
+    intensity: 7.0, ceiling: ROOF },
+  { id: 'stair-e', pos: { x: 14.8, y: ROOF - 0.3, z: -6.5 }, radius: 18, color: 0xd8e8ff,
+    intensity: 7.0, ceiling: ROOF },
   // Upper floor.
   { id: 'master', pos: { x: -10, y: L2, z: -10 }, radius: 9, color: 0xffc890, intensity: 1.2 },
   { id: 'spine2-w', pos: { x: -6, y: L2, z: -6 }, radius: 8, color: 0xffd9a8, intensity: 1.0 },
