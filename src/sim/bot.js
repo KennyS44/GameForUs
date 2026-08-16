@@ -4,9 +4,9 @@
 // The bot plays the way the map wants to be played: it holds an angle, reacts
 // to sound, and pushes only when it has a reason to.
 
-import { createInput, eyePosition, aimDirection } from './sim.js?v=60eb463c';
-import { hasLineOfSight } from './world.js?v=60eb463c';
-import { distXZ, clamp } from './math.js?v=60eb463c';
+import { createInput, eyePosition, aimDirection } from './sim.js?v=5de41a50';
+import { hasLineOfSight } from './world.js?v=5de41a50';
+import { distXZ, clamp } from './math.js?v=5de41a50';
 
 // Indoors nobody picks a figure out of the gloom across the whole map.
 const MAX_SIGHT = 24;

@@ -7,13 +7,13 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-} from './constants.js?v=60eb463c';
+} from './constants.js?v=5de41a50';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=60eb463c';
+} from './math.js?v=5de41a50';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-} from './world.js?v=60eb463c';
+} from './world.js?v=5de41a50';
 
 const GRAVITY = 18;
 
@@ -394,7 +394,11 @@ function stepPlayer(world, state, p, input, dt) {
   p.look.pitch = clamp(input.pitch, -LOOK.pitchLimit, LOOK.pitchLimit);
 
   const weapon = WEAPONS[p.weapon.id];
-  const recoverRate = weapon.recoilRecovery * dt;
+  // While the trigger is down the pattern owns the sights. Letting recovery
+  // pull against it between shots would smear the path into mush and there
+  // would be nothing to learn; the sights start falling once you stop firing.
+  const settling = clamp(((p.sinceShot ?? 9) - 0.06) / 0.12, 0, 1);
+  const recoverRate = weapon.recoilRecovery * dt * settling;
   p.recoil.pitch = approach(p.recoil.pitch, 0, Math.abs(p.recoil.pitch) * recoverRate + 0.0004);
   p.recoil.yaw = approach(p.recoil.yaw, 0, Math.abs(p.recoil.yaw) * recoverRate + 0.0002);
 
@@ -585,16 +589,32 @@ function stepWeapon(world, state, p, input, dt) {
   fireBullet(world, state, p, eye, dir);
   checkLightHits(world, state, eye, dir, p);
 
-  // Recoil kicks the aim up and wanders sideways, and the longer you hold the
-  // trigger the harder it climbs. Aiming down the sights and crouching brace
-  // the weapon, so a controlled burst stays on target where a spray will not.
+  // Recoil walks the weapon's spray pattern. The count is per burst, not per
+  // magazine: what matters is how long you have been holding the trigger.
+  // Aiming down the sights and crouching brace the weapon, tightening the
+  // whole path without changing its shape.
   p.burstShots = (p.burstShots ?? 0) + 1;
-  const ramp = Math.min(1 + (p.burstShots - 1) * def.recoilRamp, def.recoilRampMax);
+  const shot = p.burstShots - 1;
   let brace = 1 - p.aimAmount * 0.25;
   if (p.crouching) brace *= 0.85;
 
-  p.recoil.pitch += def.recoilVertical * ramp * brace * (0.85 + nextRandom(state) * 0.3);
-  p.recoil.yaw += (nextRandom(state) - 0.5) * 2 * def.recoilHorizontal * ramp * brace;
+  const climb = def.recoilClimb;
+  let stepYaw;
+  let stepPitch;
+  if (shot < climb.length) {
+    [stepYaw, stepPitch] = climb[shot];
+  } else {
+    // Past the path: the muzzle has nowhere left to climb and only sways.
+    const settle = def.recoilSettle;
+    stepPitch = settle.pitch;
+    stepYaw = Math.sin((shot - climb.length) * settle.sway) * settle.yaw;
+  }
+
+  // Just enough life that two sprays are never pixel-identical, not enough to
+  // hide the pattern from someone who has learned it.
+  p.recoil.pitch += stepPitch * brace * (0.92 + nextRandom(state) * 0.16);
+  p.recoil.yaw += stepYaw * brace * (0.92 + nextRandom(state) * 0.16)
+    + (nextRandom(state) - 0.5) * 0.0016;
 
   emit(state, { type: 'shot', by: p.id, pos: eye, dir, weapon: w.id });
   makeNoise(state, p.pos, def.loudness, 'shot', p.id);
@@ -707,6 +727,10 @@ export function resetRound(world, state) {
     p.vel = { x: 0, y: 0, z: 0 };
     p.look = { yaw: spawn.yaw ?? 0, pitch: 0 };
     p.recoil = { yaw: 0, pitch: 0 };
+    // A new round starts a new spray: without this the first shot of the round
+    // would carry on from wherever the last burst of the previous one ended.
+    p.burstShots = 0;
+    p.sinceShot = 99;
     p.health = PLAYER.maxHealth;
     p.alive = true;
     p.stance = 1;

@@ -245,41 +245,100 @@ check(
   check('the player did not get lifted onto the wall', Math.abs(p.pos.y) < 0.01, `y=${p.pos.y.toFixed(2)}`);
 }
 
-// ── Recoil climbs, and climbs harder the longer you hold the trigger ──────
+// ── Recoil walks a fixed pattern, then settles into a cluster ─────────────
 {
-  resetRound(world, state);
-  state.phase = 'live';
-  state.phaseTime = 60;
-  const p = state.players.a1;
-  p.pos = { x: 0, y: 0, z: 8 };
-  p.look = { yaw: 0, pitch: 0 };
+  const deg = (r) => (r * 180) / Math.PI;
 
-  const fire = { ...createInput(), yaw: 0, pitch: 0, fire: true };
-  stepSim(world, state, { a1: fire, d1: createInput() });
-  const afterFirst = p.recoil.pitch;
-  check('a single shot kicks the sights up', afterFirst > 0.01, `pitch=${afterFirst.toFixed(4)}`);
-
-  let prevStep = afterFirst;
-  let lastStep = afterFirst;
-  for (let i = 0; i < 40; i++) {
-    const before = p.recoil.pitch;
-    const ammo = p.weapon.ammo;
-    stepSim(world, state, { a1: fire, d1: createInput() });
-    if (p.weapon.ammo < ammo) {
-      prevStep = lastStep;
-      lastStep = p.recoil.pitch - before;
+  // Hold the trigger down and record where the sights sit after every shot.
+  function sprayPath(shots) {
+    resetRound(world, state);
+    state.phase = 'live';
+    state.phaseTime = 60;
+    const p = state.players.a1;
+    p.pos = { x: 0, y: 0, z: 8 };
+    p.look = { yaw: 0, pitch: 0 };
+    const fire = { ...createInput(), yaw: 0, pitch: 0, fire: true };
+    const path = [];
+    let ammo = p.weapon.ammo;
+    for (let i = 0; i < TICK_RATE * 4 && path.length < shots; i++) {
+      stepSim(world, state, { a1: fire, d1: createInput() });
+      if (p.weapon.ammo < ammo) {
+        ammo = p.weapon.ammo;
+        path.push({ pitch: deg(p.recoil.pitch), yaw: deg(p.recoil.yaw) });
+      }
     }
+    return path;
   }
-  check('sustained fire kicks harder than the first shot', lastStep > afterFirst,
-    `first=${afterFirst.toFixed(4)} late=${lastStep.toFixed(4)}`);
 
-  // Let go and the climb settles back down.
-  const peak = p.recoil.pitch;
+  const path = sprayPath(26);
+  check('the spray gets all 26 shots off', path.length === 26, `${path.length} shots`);
+  check('a single shot kicks the sights up', path[0].pitch > 0.3, `${path[0].pitch.toFixed(2)}°`);
+
+  // The first seven walk the muzzle up a path worth learning.
+  const climb = path[6].pitch;
+  check('the first seven shots climb a long way', climb > 6, `${climb.toFixed(2)}°`);
+  const rising = path.slice(0, 7).every((s, i, all) => i === 0 || s.pitch > all[i - 1].pitch);
+  check('the climb never doubles back on itself', rising,
+    path.slice(0, 7).map((s) => s.pitch.toFixed(1)).join(' → '));
+  // ...and it bends sideways rather than rising in a dead straight line.
+  const bend = Math.min(...path.slice(0, 7).map((s) => s.yaw));
+  check('the climb bends to one side', bend < -0.5, `${bend.toFixed(2)}°`);
+
+  // After that the muzzle has nowhere left to go: the tail is a cluster.
+  const tail = path.slice(7);
+  const tailPitch = tail.map((s) => s.pitch);
+  const tailSpan = Math.max(...tailPitch) - Math.min(...tailPitch);
+  const tailYaw = Math.max(...tail.map((s) => Math.abs(s.yaw)));
+  check('the tail of the burst stops climbing', tailSpan < climb / 4,
+    `${tailSpan.toFixed(2)}° across shots 8-26 vs ${climb.toFixed(2)}° of climb`);
+  check('the tail stays near the top of the path', Math.min(...tailPitch) > climb * 0.8,
+    `lowest ${Math.min(...tailPitch).toFixed(2)}°`);
+  check('the tail only sways sideways', tailYaw < 1.5, `${tailYaw.toFixed(2)}°`);
+
+  // The pattern is the pattern: two sprays follow the same path.
+  const again = sprayPath(7);
+  const drift = Math.max(...again.map((s, i) => Math.abs(s.pitch - path[i].pitch)));
+  check('the same pattern comes back every time', drift < 0.6, `worst shot differs by ${drift.toFixed(2)}°`);
+
+  // The count starts when you open fire, not when you reload: seven shots,
+  // let go, and the next shot kicks like a first shot again.
+  {
+    resetRound(world, state);
+    state.phase = 'live';
+    state.phaseTime = 60;
+    const p = state.players.a1;
+    p.pos = { x: 0, y: 0, z: 8 };
+    p.look = { yaw: 0, pitch: 0 };
+    const fire = { ...createInput(), yaw: 0, pitch: 0, fire: true };
+    let ammo = p.weapon.ammo;
+    let fired = 0;
+    for (let i = 0; i < TICK_RATE * 2 && fired < 7; i++) {
+      stepSim(world, state, { a1: fire, d1: createInput() });
+      if (p.weapon.ammo < ammo) { ammo = p.weapon.ammo; fired++; }
+    }
+    // Trigger off for longer than the reset time, but no reload.
+    for (let i = 0; i < TICK_RATE; i++) {
+      stepSim(world, state, { a1: { ...createInput(), yaw: 0 }, d1: createInput() });
+    }
+    check('half a magazine gone, but the burst counter is clear', p.burstShots === 0,
+      `burstShots=${p.burstShots}, ammo=${p.weapon.ammo}`);
+    const before = p.recoil.pitch;
+    for (let i = 0; i < TICK_RATE && p.weapon.ammo === ammo; i++) {
+      stepSim(world, state, { a1: fire, d1: createInput() });
+    }
+    const firstAgain = deg(p.recoil.pitch - before);
+    check('the eighth round of the magazine kicks like a first shot',
+      Math.abs(firstAgain - path[0].pitch) < 0.4,
+      `${firstAgain.toFixed(2)}° vs ${path[0].pitch.toFixed(2)}°`);
+  }
+
+  // Let go and the sights fall back to where you were aiming.
+  const peak = state.players.a1.recoil.pitch;
   for (let i = 0; i < TICK_RATE * 2; i++) {
     stepSim(world, state, { a1: { ...createInput(), yaw: 0 }, d1: createInput() });
   }
-  check('the sights settle after the burst', p.recoil.pitch < peak * 0.2,
-    `peak=${peak.toFixed(3)} now=${p.recoil.pitch.toFixed(3)}`);
+  check('the sights settle after the burst', state.players.a1.recoil.pitch < peak * 0.2,
+    `peak=${deg(peak).toFixed(2)}° now=${deg(state.players.a1.recoil.pitch).toFixed(2)}°`);
 }
 
 // ── Doors swing wide, and never into a wall ───────────────────────────────

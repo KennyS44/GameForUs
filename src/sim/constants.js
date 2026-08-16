@@ -63,15 +63,28 @@ export const WEAPONS = {
     muzzleVelocity: 400,
     reloadTime: 2.4,
     reloadTimeEmpty: 3.1,
-    // Recoil. The first shot is controllable; a held trigger climbs fast and
-    // starts wandering sideways, so bursts beat spraying.
-    recoilVertical: 0.021, // radians of climb on the first shot
-    recoilHorizontal: 0.0075,
-    recoilRecovery: 5.2, // how quickly the sights settle back
-    // Each further shot in the same burst kicks harder, up to this multiplier.
-    recoilRamp: 0.085,
-    recoilRampMax: 2.4,
-    // Trigger released for this long and the climb resets.
+    // Recoil is a fixed spray pattern, not a dice roll: the first seven shots
+    // walk the muzzle up a known path with a bend in it, and after that the
+    // climb all but stops and the barrel only breathes side to side — so the
+    // tail of a long burst lands in a tight group instead of walking off the
+    // screen. Learn the path and you can hold it.
+    //
+    // Deltas are radians [yaw, pitch] per shot, counted from the moment you
+    // opened fire. The magazine has nothing to do with it: fire seven, let go
+    // for a third of a second, and the next shot starts the path again.
+    recoilClimb: [
+      [0.000, 0.016],
+      [-0.003, 0.024],
+      [-0.005, 0.028],
+      [-0.005, 0.028],
+      [-0.003, 0.025],
+      [0.001, 0.021],
+      [0.004, 0.017],
+    ],
+    // Every shot after the path: barely any climb, a slow sideways sway.
+    recoilSettle: { pitch: 0.002, yaw: 0.007, sway: 0.9 },
+    recoilRecovery: 5.2, // how quickly the sights settle back once you stop
+    // Trigger released for this long and the pattern starts over.
     burstResetTime: 0.28,
     // Cone of fire (radians) added on top of recoil.
     spreadHip: 0.032,
