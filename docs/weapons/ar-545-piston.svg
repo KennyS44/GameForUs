@@ -1,0 +1,212 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="872.3" viewBox="0 0 1180 872.3">
+<style>
+  .bg { fill: #f7f5f1; }
+  .grid { stroke: #e4e0d8; stroke-width: 1; }
+  .grid.coarse { stroke: #d5d0c6; }
+  text { paint-order: stroke; stroke: #f7f5f1; stroke-width: 3px; stroke-linejoin: round; }
+  .metal { fill: #3a3d44; stroke: #22242a; stroke-width: 1; }
+  .polymer { fill: #6f6a61; stroke: #4a463f; stroke-width: 1; }
+  .rubber { fill: #26282d; stroke: #14161a; stroke-width: 1; }
+  .accent { fill: #c8531f; stroke: #943d16; stroke-width: 1; }
+  .glass { fill: #7fa8bd; stroke: #4f7a92; stroke-width: 1; }
+  .cell { fill: #cfcabf; stroke: none; }
+  .cut { fill: #f7f5f1; stroke: none; opacity: 0.85; }
+  .bore { stroke: #c8531f; stroke-width: 1; stroke-dasharray: 12 4 3 4; opacity: 0.8; }
+  .lead { stroke: #8d8880; stroke-width: 1; fill: none; }
+  .witness { stroke: #9aa2ae; stroke-width: 1; fill: none; stroke-dasharray: 4 3; }
+  .call { font: 12px system-ui, sans-serif; fill: #22242a; }
+  .dimline { stroke: #4a5568; stroke-width: 1; }
+  .dimtext { font: 12px ui-monospace, monospace; fill: #4a5568; text-anchor: middle; }
+  .title { font: 600 22px system-ui, sans-serif; fill: #22242a; }
+  .code { font: 600 22px ui-monospace, monospace; fill: #c8531f; }
+  .slot { font: 12px ui-monospace, monospace; fill: #8d8880; }
+  .subtitle { font: 14px system-ui, sans-serif; fill: #4d4a45; }
+  .note { font: 13px system-ui, sans-serif; fill: #3d3f45; }
+  .scalebar { fill: #22242a; }
+  .scaletext { font: 11px ui-monospace, monospace; fill: #6b6660; }
+</style>
+<rect class="bg" width="1180" height="872.3"/>
+<text x="104" y="40" class="slot">Штурмовая 1 / 3</text>
+<text x="104" y="70" class="code">AV-74</text>
+<text x="195" y="70" class="title">Автомат 5,45×39, длинный ход поршня</text>
+<text x="104" y="94" class="subtitle">Тяжёлая пуля, резкий подброс на первых выстрелах. Крышка коробки с планкой во всю длину — современная версия классики.</text>
+<line x1="104" y1="193" x2="104" y2="567.3" class="grid coarse"/>
+<line x1="154" y1="193" x2="154" y2="567.3" class="grid"/>
+<line x1="204.1" y1="193" x2="204.1" y2="567.3" class="grid coarse"/>
+<line x1="254.1" y1="193" x2="254.1" y2="567.3" class="grid"/>
+<line x1="304.2" y1="193" x2="304.2" y2="567.3" class="grid coarse"/>
+<line x1="354.2" y1="193" x2="354.2" y2="567.3" class="grid"/>
+<line x1="404.2" y1="193" x2="404.2" y2="567.3" class="grid coarse"/>
+<line x1="454.3" y1="193" x2="454.3" y2="567.3" class="grid"/>
+<line x1="504.3" y1="193" x2="504.3" y2="567.3" class="grid coarse"/>
+<line x1="554.4" y1="193" x2="554.4" y2="567.3" class="grid"/>
+<line x1="604.4" y1="193" x2="604.4" y2="567.3" class="grid coarse"/>
+<line x1="654.4" y1="193" x2="654.4" y2="567.3" class="grid"/>
+<line x1="704.5" y1="193" x2="704.5" y2="567.3" class="grid coarse"/>
+<line x1="754.5" y1="193" x2="754.5" y2="567.3" class="grid"/>
+<line x1="804.6" y1="193" x2="804.6" y2="567.3" class="grid coarse"/>
+<line x1="854.6" y1="193" x2="854.6" y2="567.3" class="grid"/>
+<line x1="904.6" y1="193" x2="904.6" y2="567.3" class="grid coarse"/>
+<line x1="954.7" y1="193" x2="954.7" y2="567.3" class="grid"/>
+<line x1="1004.7" y1="193" x2="1004.7" y2="567.3" class="grid coarse"/>
+<line x1="1054.7" y1="193" x2="1054.7" y2="567.3" class="grid"/>
+<line x1="1104.8" y1="193" x2="1104.8" y2="567.3" class="grid coarse"/>
+<line x1="74" y1="605.3" x2="1084.8" y2="605.3" class="grid"/>
+<line x1="74" y1="555.3" x2="1084.8" y2="555.3" class="grid"/>
+<line x1="74" y1="505.2" x2="1084.8" y2="505.2" class="grid"/>
+<line x1="74" y1="455.2" x2="1084.8" y2="455.2" class="grid"/>
+<line x1="74" y1="405.2" x2="1084.8" y2="405.2" class="grid"/>
+<line x1="74" y1="355.1" x2="1084.8" y2="355.1" class="grid"/>
+<line x1="74" y1="305.1" x2="1084.8" y2="305.1" class="grid coarse"/>
+<line x1="74" y1="255" x2="1084.8" y2="255" class="grid"/>
+<line x1="74" y1="205" x2="1084.8" y2="205" class="grid"/>
+<line x1="74" y1="155" x2="1084.8" y2="155" class="grid"/>
+<rect x="104" y="289.1" width="68.1" height="32" class="metal"/>
+<rect x="110" y="289.1" width="9.5" height="12" class="cut"/>
+<rect x="128.7" y="289.1" width="9.5" height="12" class="cut"/>
+<rect x="147.4" y="289.1" width="9.5" height="12" class="cut"/>
+<rect x="164" y="296.1" width="240.2" height="18" class="metal"/>
+<rect x="224.1" y="271.1" width="180.1" height="18" class="metal"/>
+<rect x="252.1" y="257" width="48" height="62" class="metal"/>
+<rect x="162" y="271.1" width="244.2" height="68.1" class="polymer"/>
+<rect x="186.1" y="328.1" width="42" height="7" class="cut"/>
+<rect x="254.1" y="328.1" width="42" height="7" class="cut"/>
+<rect x="322.2" y="328.1" width="42" height="7" class="cut"/>
+<rect x="160" y="261" width="550.4" height="10" class="accent"/>
+<rect x="164" y="261" width="4" height="4" class="cut"/>
+<rect x="174.1" y="261" width="4" height="4" class="cut"/>
+<rect x="184.1" y="261" width="4" height="4" class="cut"/>
+<rect x="194.1" y="261" width="4" height="4" class="cut"/>
+<rect x="204.1" y="261" width="4" height="4" class="cut"/>
+<rect x="214.1" y="261" width="4" height="4" class="cut"/>
+<rect x="224.1" y="261" width="4" height="4" class="cut"/>
+<rect x="234.1" y="261" width="4" height="4" class="cut"/>
+<rect x="244.1" y="261" width="4" height="4" class="cut"/>
+<rect x="254.1" y="261" width="4" height="4" class="cut"/>
+<rect x="264.1" y="261" width="4" height="4" class="cut"/>
+<rect x="274.1" y="261" width="4" height="4" class="cut"/>
+<rect x="284.1" y="261" width="4" height="4" class="cut"/>
+<rect x="294.1" y="261" width="4" height="4" class="cut"/>
+<rect x="304.2" y="261" width="4" height="4" class="cut"/>
+<rect x="314.2" y="261" width="4" height="4" class="cut"/>
+<rect x="324.2" y="261" width="4" height="4" class="cut"/>
+<rect x="334.2" y="261" width="4" height="4" class="cut"/>
+<rect x="344.2" y="261" width="4" height="4" class="cut"/>
+<rect x="354.2" y="261" width="4" height="4" class="cut"/>
+<rect x="364.2" y="261" width="4" height="4" class="cut"/>
+<rect x="374.2" y="261" width="4" height="4" class="cut"/>
+<rect x="384.2" y="261" width="4" height="4" class="cut"/>
+<rect x="394.2" y="261" width="4" height="4" class="cut"/>
+<rect x="404.2" y="261" width="4" height="4" class="cut"/>
+<rect x="414.2" y="261" width="4" height="4" class="cut"/>
+<rect x="424.3" y="261" width="4" height="4" class="cut"/>
+<rect x="434.3" y="261" width="4" height="4" class="cut"/>
+<rect x="444.3" y="261" width="4" height="4" class="cut"/>
+<rect x="454.3" y="261" width="4" height="4" class="cut"/>
+<rect x="464.3" y="261" width="4" height="4" class="cut"/>
+<rect x="474.3" y="261" width="4" height="4" class="cut"/>
+<rect x="484.3" y="261" width="4" height="4" class="cut"/>
+<rect x="494.3" y="261" width="4" height="4" class="cut"/>
+<rect x="504.3" y="261" width="4" height="4" class="cut"/>
+<rect x="514.3" y="261" width="4" height="4" class="cut"/>
+<rect x="524.3" y="261" width="4" height="4" class="cut"/>
+<rect x="534.3" y="261" width="4" height="4" class="cut"/>
+<rect x="544.3" y="261" width="4" height="4" class="cut"/>
+<rect x="554.4" y="261" width="4" height="4" class="cut"/>
+<rect x="564.4" y="261" width="4" height="4" class="cut"/>
+<rect x="574.4" y="261" width="4" height="4" class="cut"/>
+<rect x="584.4" y="261" width="4" height="4" class="cut"/>
+<rect x="594.4" y="261" width="4" height="4" class="cut"/>
+<rect x="604.4" y="261" width="4" height="4" class="cut"/>
+<rect x="614.4" y="261" width="4" height="4" class="cut"/>
+<rect x="624.4" y="261" width="4" height="4" class="cut"/>
+<rect x="634.4" y="261" width="4" height="4" class="cut"/>
+<rect x="644.4" y="261" width="4" height="4" class="cut"/>
+<rect x="654.4" y="261" width="4" height="4" class="cut"/>
+<rect x="664.4" y="261" width="4" height="4" class="cut"/>
+<rect x="674.4" y="261" width="4" height="4" class="cut"/>
+<rect x="684.5" y="261" width="4" height="4" class="cut"/>
+<rect x="694.5" y="261" width="4" height="4" class="cut"/>
+<rect x="406.2" y="271.1" width="304.2" height="60" class="metal"/>
+<rect x="444.3" y="331.1" width="186.1" height="44" class="metal"/>
+<polygon points="456.3,375.1 540.3,375.1 496.3,561.3 412.2,561.3" class="polymer"/>
+<polygon points="556.4,375.1 616.4,375.1 616.4,409.2 604.4,421.2 568.4,421.2 556.4,409.2" class="metal"/>
+<polygon points="572.4,375.1 648.4,375.1 680.5,511.2 598.4,511.2" class="polymer"/>
+<rect x="710.5" y="289.1" width="308.2" height="30" class="metal"/>
+<polygon points="750.5,253 1014.7,253 1014.7,349.1 780.5,349.1" class="polymer"/>
+<rect x="1014.7" y="249" width="30" height="106.1" class="rubber"/>
+<rect x="510.3" y="233.1" width="30" height="27.9" class="accent"/>
+<rect x="592.4" y="233.1" width="30" height="27.9" class="accent"/>
+<rect x="496.3" y="199" width="140.1" height="37.2" class="metal"/>
+<rect x="500.3" y="205" width="12" height="25" class="glass"/>
+<rect x="620.4" y="205" width="12" height="25" class="glass"/>
+<rect x="196.1" y="346.1" width="108.1" height="22" class="metal"/>
+<rect x="180.1" y="343.1" width="16" height="28" class="accent"/>
+<rect x="270.1" y="337.1" width="22" height="9" class="accent"/>
+<polygon points="282.1,339.1 328.2,339.1 366.2,431.2 324.2,431.2" class="polymer"/>
+<circle cx="690.5" cy="271.1" r="9" class="accent"/>
+<line x1="64" y1="305.1" x2="1094.8" y2="305.1" class="bore"/>
+<text x="1098.8" y="309.1" class="dimtext" style="text-anchor:start">ось ствола</text>
+<path d="M 138 289.1 L 138 178" class="lead"/>
+<circle cx="138" cy="289.1" r="2" fill="#8d8880"/>
+<path d="M 281.1 261 L 281.1 157" class="lead"/>
+<circle cx="281.1" cy="261" r="2" fill="#8d8880"/>
+<path d="M 314.2 271.1 L 314.2 178" class="lead"/>
+<circle cx="314.2" cy="271.1" r="2" fill="#8d8880"/>
+<path d="M 526.3 261 L 526.3 178" class="lead"/>
+<circle cx="526.3" cy="261" r="2" fill="#8d8880"/>
+<path d="M 566.4 199 L 566.4 157" class="lead"/>
+<circle cx="566.4" cy="199" r="2" fill="#8d8880"/>
+<path d="M 573.6 271.1 L 573.6 136" class="lead"/>
+<circle cx="573.6" cy="271.1" r="2" fill="#8d8880"/>
+<path d="M 690.5 262 L 690.5 178" class="lead"/>
+<circle cx="690.5" cy="262" r="2" fill="#8d8880"/>
+<path d="M 984.7 253 L 984.7 178" class="lead"/>
+<circle cx="984.7" cy="253" r="2" fill="#8d8880"/>
+<path d="M 200.1 368.1 L 200.1 586.3" class="lead"/>
+<circle cx="200.1" cy="368.1" r="2" fill="#8d8880"/>
+<path d="M 284.1 339.1 L 284.1 607.3" class="lead"/>
+<circle cx="284.1" cy="339.1" r="2" fill="#8d8880"/>
+<path d="M 350.2 431.2 L 350.2 628.3" class="lead"/>
+<circle cx="350.2" cy="431.2" r="2" fill="#8d8880"/>
+<path d="M 454.3 561.3 L 454.3 586.3" class="lead"/>
+<circle cx="454.3" cy="561.3" r="2" fill="#8d8880"/>
+<path d="M 481.5 375.1 L 481.5 607.3" class="lead"/>
+<circle cx="481.5" cy="375.1" r="2" fill="#8d8880"/>
+<path d="M 642.4 511.2 L 642.4 586.3" class="lead"/>
+<circle cx="642.4" cy="511.2" r="2" fill="#8d8880"/>
+<text x="138" y="183" class="call" style="text-anchor:start">дульный тормоз</text>
+<text x="281.1" y="162" class="call" style="text-anchor:middle">верхняя планка Пикатинни, шаг 10 мм</text>
+<text x="314.2" y="183" class="call" style="text-anchor:middle">газовая трубка</text>
+<text x="526.3" y="183" class="call" style="text-anchor:middle">посадка на планку</text>
+<text x="566.4" y="162" class="call" style="text-anchor:middle">коллиматор — сменный</text>
+<text x="573.6" y="141" class="call" style="text-anchor:middle">ствольная коробка</text>
+<text x="690.5" y="183" class="call" style="text-anchor:middle">антабка ремня</text>
+<text x="984.7" y="183" class="call" style="text-anchor:middle">приклад телескопический, 5 позиций</text>
+<text x="200.1" y="581.3" class="call" style="text-anchor:middle">тактический фонарь</text>
+<text x="284.1" y="602.3" class="call" style="text-anchor:middle">цевьё, слоты M-LOK</text>
+<text x="350.2" y="623.3" class="call" style="text-anchor:middle">передняя тактическая рукоять</text>
+<text x="454.3" y="581.3" class="call" style="text-anchor:middle">магазин 30 патронов 5,45×39</text>
+<text x="481.5" y="602.3" class="call" style="text-anchor:middle">нижняя коробка, шахта магазина</text>
+<text x="642.4" y="581.3" class="call" style="text-anchor:middle">пистолетная рукоять</text>
+<path d="M 1064.8 561.3 L 1008.8 561.3" class="witness"/>
+<path d="M 1064.8 253 L 1008.8 253" class="witness"/>
+<path d="M 1058.8 561.3 L 1070.8 561.3 M 1064.8 561.3 L 1064.8 253 M 1058.8 253 L 1070.8 253" class="dimline"/>
+<text x="1057.8" y="407.2" class="dimtext" transform="rotate(-90 1057.8 407.2)">высота 308</text>
+<path d="M 64 305.1 L 120 305.1" class="witness"/>
+<path d="M 64 261 L 120 261" class="witness"/>
+<path d="M 58 305.1 L 70 305.1 M 64 305.1 L 64 261 M 58 261 L 70 261" class="dimline"/>
+<text x="57" y="283.1" class="dimtext" transform="rotate(-90 57 283.1)">планка над осью ствола 44</text>
+<path d="M 104 656.3 L 104 668.3 M 104 662.3 L 1044.7 662.3 M 1044.7 656.3 L 1044.7 668.3" class="dimline"/>
+<text x="574.4" y="654.3" class="dimtext">полная длина 940 (складной — 700)</text>
+<path d="M 104 686.3 L 104 698.3 M 104 692.3 L 519.3 692.3 M 519.3 686.3 L 519.3 698.3" class="dimline"/>
+<text x="311.7" y="684.3" class="dimtext">ствол 415</text>
+<rect x="104" y="838.3" width="100.1" height="6" class="scalebar"/>
+<rect x="204.1" y="838.3" width="100.1" height="6" fill="#c8c3b9"/>
+<text x="104" y="860.3" class="scaletext">0</text>
+<text x="316.2" y="860.3" class="scaletext" style="text-anchor:start">200 мм · сетка 50 мм · масштаб 1.001 px/мм</text>
+<text x="104" y="740.3" class="note">— Ширина коробки 42 мм, цевья 56 мм, магазина 26 мм.</text>
+<text x="104" y="761.3" class="note">— Ствол 415 мм, темп 600 в/м, магазин 30.</text>
+<text x="104" y="782.3" class="note">— Газовая трубка идёт над стволом — характерный второй «ствол» в профиле.</text>
+<text x="104" y="803.3" class="note">— Приклад телескопический, складывается вбок: габарит 700 мм.</text>
+</svg>

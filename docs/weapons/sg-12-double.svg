@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="840" viewBox="0 0 1180 840">
+<style>
+  .bg { fill: #f7f5f1; }
+  .grid { stroke: #e4e0d8; stroke-width: 1; }
+  .grid.coarse { stroke: #d5d0c6; }
+  text { paint-order: stroke; stroke: #f7f5f1; stroke-width: 3px; stroke-linejoin: round; }
+  .metal { fill: #3a3d44; stroke: #22242a; stroke-width: 1; }
+  .polymer { fill: #6f6a61; stroke: #4a463f; stroke-width: 1; }
+  .rubber { fill: #26282d; stroke: #14161a; stroke-width: 1; }
+  .accent { fill: #c8531f; stroke: #943d16; stroke-width: 1; }
+  .glass { fill: #7fa8bd; stroke: #4f7a92; stroke-width: 1; }
+  .cell { fill: #cfcabf; stroke: none; }
+  .cut { fill: #f7f5f1; stroke: none; opacity: 0.85; }
+  .bore { stroke: #c8531f; stroke-width: 1; stroke-dasharray: 12 4 3 4; opacity: 0.8; }
+  .lead { stroke: #8d8880; stroke-width: 1; fill: none; }
+  .witness { stroke: #9aa2ae; stroke-width: 1; fill: none; stroke-dasharray: 4 3; }
+  .call { font: 12px system-ui, sans-serif; fill: #22242a; }
+  .dimline { stroke: #4a5568; stroke-width: 1; }
+  .dimtext { font: 12px ui-monospace, monospace; fill: #4a5568; text-anchor: middle; }
+  .title { font: 600 22px system-ui, sans-serif; fill: #22242a; }
+  .code { font: 600 22px ui-monospace, monospace; fill: #c8531f; }
+  .slot { font: 12px ui-monospace, monospace; fill: #8d8880; }
+  .subtitle { font: 14px system-ui, sans-serif; fill: #4d4a45; }
+  .note { font: 13px system-ui, sans-serif; fill: #3d3f45; }
+  .scalebar { fill: #22242a; }
+  .scaletext { font: 11px ui-monospace, monospace; fill: #6b6660; }
+</style>
+<rect class="bg" width="1180" height="840"/>
+<text x="104" y="40" class="slot">Дробовик 1 / 3</text>
+<text x="104" y="70" class="code">SG-12D</text>
+<text x="210" y="70" class="title">Обрез двуствольный, 12 калибр</text>
+<text x="104" y="94" class="subtitle">Два выстрела и всё. Достаётся мгновенно, вышибает дверь с одного попадания, перезарядка долгая и открытая.</text>
+<line x1="104" y1="214" x2="104" y2="556" class="grid coarse"/>
+<line x1="166.5" y1="214" x2="166.5" y2="556" class="grid"/>
+<line x1="229" y1="214" x2="229" y2="556" class="grid coarse"/>
+<line x1="291.5" y1="214" x2="291.5" y2="556" class="grid"/>
+<line x1="354" y1="214" x2="354" y2="556" class="grid coarse"/>
+<line x1="416.5" y1="214" x2="416.5" y2="556" class="grid"/>
+<line x1="479" y1="214" x2="479" y2="556" class="grid coarse"/>
+<line x1="541.5" y1="214" x2="541.5" y2="556" class="grid"/>
+<line x1="604" y1="214" x2="604" y2="556" class="grid coarse"/>
+<line x1="666.5" y1="214" x2="666.5" y2="556" class="grid"/>
+<line x1="66.5" y1="577.5" x2="679" y2="577.5" class="grid"/>
+<line x1="66.5" y1="515" x2="679" y2="515" class="grid"/>
+<line x1="66.5" y1="452.5" x2="679" y2="452.5" class="grid"/>
+<line x1="66.5" y1="390" x2="679" y2="390" class="grid"/>
+<line x1="66.5" y1="327.5" x2="679" y2="327.5" class="grid coarse"/>
+<line x1="66.5" y1="265" x2="679" y2="265" class="grid"/>
+<line x1="66.5" y1="202.5" x2="679" y2="202.5" class="grid"/>
+<rect x="104" y="295" width="375" height="28.8" class="metal"/>
+<rect x="104" y="331.3" width="375" height="28.8" class="metal"/>
+<rect x="104" y="292.5" width="15" height="70" class="rubber"/>
+<polygon points="476.5,372.5 629,372.5 629,282.5 476.5,290" class="metal"/>
+<rect x="254" y="360" width="140" height="35" class="polymer"/>
+<rect x="484" y="270" width="137.5" height="12.5" class="accent"/>
+<rect x="489" y="270" width="5" height="5" class="cut"/>
+<rect x="501.5" y="270" width="5" height="5" class="cut"/>
+<rect x="514" y="270" width="5" height="5" class="cut"/>
+<rect x="526.5" y="270" width="5" height="5" class="cut"/>
+<rect x="539" y="270" width="5" height="5" class="cut"/>
+<rect x="551.5" y="270" width="5" height="5" class="cut"/>
+<rect x="564" y="270" width="5" height="5" class="cut"/>
+<rect x="576.5" y="270" width="5" height="5" class="cut"/>
+<rect x="589" y="270" width="5" height="5" class="cut"/>
+<rect x="601.5" y="270" width="5" height="5" class="cut"/>
+<rect x="509" y="247.5" width="37.5" height="22.5" class="accent"/>
+<rect x="559" y="247.5" width="37.5" height="22.5" class="accent"/>
+<rect x="491.5" y="220" width="122.5" height="30" class="metal"/>
+<rect x="496.5" y="227.5" width="15" height="17.5" class="glass"/>
+<rect x="594" y="227.5" width="15" height="17.5" class="glass"/>
+<polygon points="501.5,372.5 564,372.5 564,410 549,425 516.5,425 501.5,410" class="metal"/>
+<polygon points="521.5,372.5 611.5,372.5 641.5,542.5 556.5,550" class="polymer"/>
+<rect x="184" y="397.5" width="112.5" height="25" class="metal"/>
+<rect x="164" y="393.8" width="20" height="32.5" class="accent"/>
+<rect x="254" y="386.3" width="27.5" height="11.3" class="accent"/>
+<circle cx="616.5" cy="372.5" r="11.3" class="accent"/>
+<line x1="54" y1="327.5" x2="691.5" y2="327.5" class="bore"/>
+<text x="696.5" y="331.5" class="dimtext" style="text-anchor:start">ось ствола</text>
+<path d="M 291.5 295 L 291.5 199" class="lead"/>
+<circle cx="291.5" cy="295" r="2" fill="#8d8880"/>
+<path d="M 514.3 270 L 514.3 178" class="lead"/>
+<circle cx="514.3" cy="270" r="2" fill="#8d8880"/>
+<path d="M 529 270 L 529 199" class="lead"/>
+<circle cx="529" cy="270" r="2" fill="#8d8880"/>
+<path d="M 552.8 220 L 552.8 157" class="lead"/>
+<circle cx="552.8" cy="220" r="2" fill="#8d8880"/>
+<path d="M 554 282.5 L 554 136" class="lead"/>
+<circle cx="554" cy="282.5" r="2" fill="#8d8880"/>
+<path d="M 111.5 362.5 L 111.5 575" class="lead"/>
+<circle cx="111.5" cy="362.5" r="2" fill="#8d8880"/>
+<path d="M 189 422.5 L 189 596" class="lead"/>
+<circle cx="189" cy="422.5" r="2" fill="#8d8880"/>
+<path d="M 324 395 L 324 596" class="lead"/>
+<circle cx="324" cy="395" r="2" fill="#8d8880"/>
+<path d="M 599 550 L 599 575" class="lead"/>
+<circle cx="599" cy="550" r="2" fill="#8d8880"/>
+<path d="M 616.5 383.8 L 616.5 596" class="lead"/>
+<circle cx="616.5" cy="383.8" r="2" fill="#8d8880"/>
+<text x="291.5" y="204" class="call" style="text-anchor:middle">два ствола, спарены вертикально, 300 мм</text>
+<text x="514.3" y="183" class="call" style="text-anchor:middle">короткая планка под микро-прицел</text>
+<text x="529" y="204" class="call" style="text-anchor:middle">посадка на планку</text>
+<text x="552.8" y="162" class="call" style="text-anchor:middle">микро-коллиматор — сменный</text>
+<text x="554" y="141" class="call" style="text-anchor:middle">колодка, переломная</text>
+<text x="111.5" y="570" class="call" style="text-anchor:start">срез стволов — без дульного устройства</text>
+<text x="189" y="591" class="call" style="text-anchor:middle">тактический фонарь</text>
+<text x="324" y="591" class="call" style="text-anchor:middle">цевьё</text>
+<text x="599" y="570" class="call" style="text-anchor:middle">пистолетная рукоять, приклада нет</text>
+<text x="616.5" y="591" class="call" style="text-anchor:middle">антабка ремня</text>
+<path d="M 659 550 L 603 550" class="witness"/>
+<path d="M 659 257.5 L 603 257.5" class="witness"/>
+<path d="M 653 550 L 665 550 M 659 550 L 659 257.5 M 653 257.5 L 665 257.5" class="dimline"/>
+<text x="652" y="403.8" class="dimtext" transform="rotate(-90 652 403.8)">высота 234</text>
+<path d="M 104 624 L 104 636 M 104 630 L 629 630 M 629 624 L 629 636" class="dimline"/>
+<text x="366.5" y="622" class="dimtext">полная длина 420</text>
+<path d="M 104 654 L 104 666 M 104 660 L 479 660 M 479 654 L 479 666" class="dimline"/>
+<text x="291.5" y="652" class="dimtext">стволы 300</text>
+<rect x="104" y="806" width="125" height="6" class="scalebar"/>
+<rect x="229" y="806" width="125" height="6" fill="#c8c3b9"/>
+<text x="104" y="828" class="scaletext">0</text>
+<text x="366" y="828" class="scaletext" style="text-anchor:start">200 мм · сетка 50 мм · масштаб 1.25 px/мм</text>
+<text x="104" y="708" class="note">— Ширина по стволам 46 мм, по колодке 44 мм.</text>
+<text x="104" y="729" class="note">— Стволы 300 мм, спарены вертикально: в профиле видна двойная толщина.</text>
+<text x="104" y="750" class="note">— Прицела штатно нет — на колодке короткая планка под микро-коллиматор.</text>
+<text x="104" y="771" class="note">— Приклада нет: отдача уходит в кисть, стрельба только от бедра или навскидку.</text>
+</svg>
