@@ -615,8 +615,9 @@ export const APARTMENT = {
     ],
   },
   // Rules the layout is drawn around, for the round to enforce later.
+  // How long it lasts is ROUND.prepTime, not a number here; the map only says
+  // who may stand where.
   prep: {
-    seconds: 60,
     attackersHeld: ['landing'],
     defendersBarred: ['foyer', 'gallery', 'guest-suite', 'cloakroom', 'cinema'],
   },

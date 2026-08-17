@@ -5,12 +5,12 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=bc0527d3';
+import { buildWorld } from '../sim/world.js?v=031dc91d';
 import {
-  createState, addPlayer, removePlayer, stepSim, createInput, resetRound,
-} from '../sim/sim.js?v=bc0527d3';
-import { createBotBrain } from '../sim/bot.js?v=bc0527d3';
-import { DT } from '../sim/constants.js?v=bc0527d3';
+  createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout,
+} from '../sim/sim.js?v=031dc91d';
+import { createBotBrain } from '../sim/bot.js?v=031dc91d';
+import { DT } from '../sim/constants.js?v=031dc91d';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 
@@ -47,6 +47,9 @@ export function createLocalSession({ map, name = 'Игрок', bots = 1, seed = 
     },
     drainEvents() {
       return state.events;
+    },
+    chooseWeapon(weaponId) {
+      return setLoadout(state, localId, weaponId);
     },
     nextRound() {
       resetRound(world, state);
@@ -95,6 +98,10 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
         slot.input = msg.i;
         slot.seq = msg.seq;
       }
+    } else if (msg.t === 'loadout') {
+      // The host is the only authority on who is carrying what, so a client's
+      // pick goes through the same check as the host's own.
+      setLoadout(state, peerId, msg.id);
     } else if (msg.t === 'ping') {
       transport.sendTo(peerId, { t: 'pong', c: msg.c, s: performance.now() });
     } else if (msg.t === 'rtt') {
@@ -111,7 +118,7 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
         stance: p.stance, crouching: p.crouching, lean: p.lean,
         health: p.health, alive: p.alive, flashlight: p.flashlight,
         aimAmount: p.aimAmount, grounded: p.grounded,
-        weapon: p.weapon, kills: p.kills, deaths: p.deaths,
+        weapon: p.weapon, loadout: p.loadout, kills: p.kills, deaths: p.deaths,
         // Carried so a client replaying its pending inputs continues the
         // recoil climb and the jump timer from the host's numbers rather than
         // its own guess.
@@ -161,6 +168,9 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
     },
     drainEvents() {
       return state.events;
+    },
+    chooseWeapon(weaponId) {
+      return setLoadout(state, localId, weaponId);
     },
     nextRound() {
       resetRound(world, state);
@@ -338,6 +348,12 @@ export function createClientSession({ map, transport, myId, seed = 1337 }) {
       const out = outEvents.slice();
       outEvents.length = 0;
       return out;
+    },
+    chooseWeapon(weaponId) {
+      transport.send({ t: 'loadout', id: weaponId });
+      // Show it in our own hands straight away; the next snapshot either
+      // confirms it or quietly puts the old gun back.
+      return setLoadout(state, localId, weaponId);
     },
     nextRound() {
       // Only the host may start a round; clients wait for the reset message.

@@ -1,6 +1,6 @@
 // HUD: reads simulation state, writes DOM. Never the other way round.
 
-import { WEAPONS, PLAYER } from '../sim/constants.js?v=bc0527d3';
+import { WEAPONS, PLAYER } from '../sim/constants.js?v=031dc91d';
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,6 +19,7 @@ export function createHud() {
     healthFill: $('health-fill'),
     healthNum: $('health-num'),
     stance: $('stance'),
+    weaponName: $('weapon-name'),
     ammoMag: $('ammo-mag'),
     ammoReserve: $('ammo-reserve'),
     flashlightFlag: $('flashlight-flag'),
@@ -66,6 +67,7 @@ export function createHud() {
     // ── Ammo ──
     const w = me.weapon;
     const def = WEAPONS[w.id];
+    el.weaponName.textContent = def.name;
     el.ammoMag.textContent = w.reloading > 0 ? '- -' : w.ammo;
     el.ammoMag.classList.toggle('low', w.ammo <= def.magSize * 0.25);
     el.ammoReserve.textContent = w.mags;
@@ -86,7 +88,9 @@ export function createHud() {
     const secs = Math.floor(t % 60);
     el.roundTimer.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
     el.roundPhase.textContent =
-      state.phase === 'prep' ? 'Подготовка' : state.phase === 'live' ? 'Раунд' : 'Окончен';
+      state.phase === 'select' ? 'Выбор оружия'
+        : state.phase === 'prep' ? 'Подготовка'
+          : state.phase === 'live' ? 'Раунд' : 'Окончен';
     el.roundInfo.classList.toggle('urgent', state.phase === 'live' && t <= 30);
 
     const alive = { attackers: 0, defenders: 0 };

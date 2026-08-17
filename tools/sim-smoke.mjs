@@ -9,9 +9,12 @@
 import { APARTMENT } from '../src/maps/apartment.js';
 import { buildWorld, hasLineOfSight, doorAngle } from '../src/sim/world.js';
 import {
-  createState, addPlayer, stepSim, createInput, eyePosition, resetRound,
+  createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout,
 } from '../src/sim/sim.js';
-import { TICK_RATE, PLAYER } from '../src/sim/constants.js';
+import {
+  TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES,
+} from '../src/sim/constants.js';
+import { createHostSession } from '../src/net/session.js';
 
 let failures = 0;
 function check(name, cond, detail = '') {
@@ -25,6 +28,18 @@ function check(name, cond, detail = '') {
 
 const world = buildWorld(APARTMENT);
 const state = createState(world, 1234);
+
+// A round now opens at the loadout screen, where nobody may move at all. Every
+// check below that says "staging" means the phase after it — the one where the
+// defenders take the flat — so restart into that. The select phase gets checks
+// of its own at the end of this file.
+function restartRound() {
+  resetRound(world, state);
+  state.phase = 'prep';
+  state.phaseTime = ROUND.prepTime;
+}
+state.phase = 'prep';
+state.phaseTime = ROUND.prepTime;
 const attacker = addPlayer(world, state, 'a1', 'attackers', 'Alpha');
 const defender = addPlayer(world, state, 'd1', 'defenders', 'Bravo');
 
@@ -67,7 +82,7 @@ check('player rests on the floor', Math.abs(attacker.pos.y) < 0.01, `y=${attacke
   // The HUD reads this off the player to show "ТИХО", and the door uses it to
   // decide whether F eases the handle or turns it, so it has to survive the
   // trip through the simulation rather than living only in the keyboard.
-  resetRound(world, state);
+  restartRound();
   const p = state.players.a1;
   const walk = { ...createInput(), moveZ: 1, yaw: 0 };
   const quiet = { ...walk, sneak: true };
@@ -128,7 +143,7 @@ for (let i = 0; i < TICK_RATE * 4; i++) {
 check('attacker gets inside once the door is open', attacker.pos.z < 5.5, `z=${attacker.pos.z.toFixed(2)}`);
 
 // ── A new round puts every door back on its latch ─────────────────────────
-resetRound(world, state);
+restartRound();
 check(
   'kicked door resets for the next round',
   state.doors.front.forced === false &&
@@ -150,7 +165,7 @@ check(
 }
 
 // ── Shooting a bulb kills the light ───────────────────────────────────────
-resetRound(world, state);
+restartRound();
 const shooter = state.players.a1;
 shooter.pos = { x: 0, y: 0, z: 8 };
 const bulb = world.lights.find((l) => l.id === 'landing');
@@ -171,7 +186,7 @@ for (let i = 0; i < TICK_RATE * 2 && !state.lights.landing.broken; i++) {
 check('a bullet breaks the ceiling light', state.lights.landing.broken);
 
 // ── Hardcore lethality: a few torso rounds kill ───────────────────────────
-resetRound(world, state);
+restartRound();
 const a = state.players.a1;
 const d = state.players.d1;
 // The staging phase is deliberately non-lethal, so go live before testing this.
@@ -192,7 +207,7 @@ check('defender dies to a short burst', !d.alive, `shots fired=${shots}, hp=${d.
 check('kill is credited', a.kills === 1, `kills=${a.kills}`);
 
 // ── Nobody can be killed during the staging phase ─────────────────────────
-resetRound(world, state);
+restartRound();
 const pa = state.players.a1;
 const pd = state.players.d1;
 pa.pos = { x: 0, y: 0, z: 8 };
@@ -212,7 +227,7 @@ check(
 
 // ── Leaning moves where you shoot from, not just where the camera is ──────
 {
-  resetRound(world, state);
+  restartRound();
   const p = state.players.a1;
   p.pos = { x: 0, y: 0, z: 8 };
   p.look = { yaw: 0, pitch: 0 };
@@ -260,7 +275,7 @@ check(
 
 // ── Leaning stops at cover instead of passing through it ──────────────────
 {
-  resetRound(world, state);
+  restartRound();
   const p = state.players.a1;
   // Stand just clear of the landing's east wall (inner face at x = 2.875) and
   // lean into it. Unclamped, the eye would reach 2.55 + 0.42 = 2.97.
@@ -280,7 +295,7 @@ check(
 
   // Hold the trigger down and record where the sights sit after every shot.
   function sprayPath(shots) {
-    resetRound(world, state);
+    restartRound();
     state.phase = 'live';
     state.phaseTime = 60;
     const p = state.players.a1;
@@ -335,7 +350,7 @@ check(
   // The count starts when you open fire, not when you reload: seven shots,
   // let go, and the next shot kicks like a first shot again.
   {
-    resetRound(world, state);
+    restartRound();
     state.phase = 'live';
     state.phaseTime = 60;
     const p = state.players.a1;
@@ -375,7 +390,7 @@ check(
 
 // ── The staging minute keeps the two sides apart ──────────────────────────
 {
-  resetRound(world, state);
+  restartRound();
   const a = state.players.a1;
   const d = state.players.d1;
   check('a door that was kicked in before the round starts open',
@@ -421,7 +436,7 @@ check(
 
   // Standing in the dressing room, facing west at the pane.
   function atTheGlass() {
-    resetRound(world, state);
+    restartRound();
     state.phase = 'live';
     state.phaseTime = 60;
     const p = state.players.a1;
@@ -488,7 +503,7 @@ check(
   }
 
   // And a new round puts the glass back.
-  resetRound(world, state);
+  restartRound();
   check('the pane is back next round', state.doors[GLASS].broken === false);
 }
 
@@ -611,7 +626,125 @@ console.log('\nA door never pushes anyone through a wall:');
   check('a swinging door never flings anyone across the map', worstJump < 0.6, farthest ?? '');
 }
 
-resetRound(world, state);
+// ── Choosing a weapon ─────────────────────────────────────────────────────
+//
+// The roster is eight stubs sharing one set of numbers, so nothing here checks
+// balance. What it checks is the frame: that the choice is refused when it
+// should be, that it really lands in the player's hands, and that it survives
+// into the next round.
+{
+  console.log('\nWeapon selection:');
+
+  const ids = Object.keys(WEAPONS);
+  check('the roster has two weapons in each of the four classes',
+    WEAPON_CLASSES.length === 4 &&
+    WEAPON_CLASSES.every((c) => ids.filter((id) => WEAPONS[id].cls === c.id).length === 2),
+    ids.map((id) => `${id}:${WEAPONS[id].cls}`).join(' '));
+  check('no entry carries a manufacturer name or model number',
+    !ids.some((id) => /mp5|ak|m4|glock|colt|hk|scar|vector|remington|barrett|saiga/i.test(id + WEAPONS[id].name)),
+    ids.join(' '));
+
+  resetRound(world, state);
+  check('a round opens at the loadout screen',
+    state.phase === 'select' && Math.abs(state.phaseTime - ROUND.selectTime) < 1e-9,
+    `phase=${state.phase} t=${state.phaseTime}`);
+  check('everyone starts with the default weapon',
+    attacker.weapon.id === DEFAULT_WEAPON && attacker.loadout === DEFAULT_WEAPON,
+    `${attacker.loadout}/${attacker.weapon.id}`);
+
+  // Nobody moves while the screen is up: full-ahead input, half a second of it.
+  const before = { x: attacker.pos.x, z: attacker.pos.z };
+  for (let i = 0; i < 30; i++) {
+    stepSim(world, state, {
+      a1: { ...createInput(), moveZ: -1, run: true, fire: true, jump: true },
+      d1: { ...createInput(), moveX: 1 },
+    });
+  }
+  const drift = Math.hypot(attacker.pos.x - before.x, attacker.pos.z - before.z);
+  check('nobody walks away from the loadout screen', drift < 1e-6, `moved ${drift.toFixed(3)} m`);
+  check('the trigger is dead while choosing',
+    attacker.weapon.ammo === WEAPONS[attacker.weapon.id].magSize, `ammo=${attacker.weapon.ammo}`);
+  stepSim(world, state, { a1: { ...createInput(), yaw: 1.2, pitch: 0.3 } });
+  check('looking around is still allowed', Math.abs(attacker.look.yaw - 1.2) < 1e-6,
+    `yaw=${attacker.look.yaw}`);
+
+  check('an unknown weapon is refused', setLoadout(state, 'a1', 'railgun') === false);
+  check('the refusal left the old weapon alone', attacker.weapon.id === DEFAULT_WEAPON);
+
+  check('a listed weapon is accepted', setLoadout(state, 'a1', 'amr-50') === true);
+  check('the new weapon is in their hands', attacker.weapon.id === 'amr-50', attacker.weapon.id);
+  check('it comes with a full magazine',
+    attacker.weapon.ammo === WEAPONS['amr-50'].magSize &&
+    attacker.weapon.mags === WEAPONS['amr-50'].reserveMags,
+    `${attacker.weapon.ammo}/${attacker.weapon.mags}`);
+
+  // Run the select phase out: it must hand over to staging, not to the round.
+  for (let i = 0; i < Math.ceil(ROUND.selectTime * TICK_RATE) + 2; i++) stepSim(world, state, {});
+  check('the loadout screen gives way to staging',
+    state.phase === 'prep' && state.phaseTime > ROUND.prepTime - 1,
+    `phase=${state.phase} t=${state.phaseTime.toFixed(2)}`);
+  check('a late change of mind is still allowed while staging',
+    setLoadout(state, 'a1', 'sg-12p') === true && attacker.weapon.id === 'sg-12p');
+
+  for (let i = 0; i < Math.ceil(ROUND.prepTime * TICK_RATE) + 2; i++) stepSim(world, state, {});
+  check('staging gives way to the round', state.phase === 'live', `phase=${state.phase}`);
+  check('the attackers wait half a minute, not a whole one',
+    ROUND.prepTime === 30, `prepTime=${ROUND.prepTime}`);
+  check('no swapping weapons once the shooting starts',
+    setLoadout(state, 'a1', 'pp-45') === false && attacker.weapon.id === 'sg-12p',
+    attacker.weapon.id);
+
+  // Half a magazine gone, then a new round: the choice stays, the gun is new.
+  attacker.weapon.ammo = 3;
+  resetRound(world, state);
+  check('the choice survives into the next round',
+    attacker.loadout === 'sg-12p' && attacker.weapon.id === 'sg-12p',
+    `${attacker.loadout}/${attacker.weapon.id}`);
+  check('but the magazine is full again',
+    attacker.weapon.ammo === WEAPONS['sg-12p'].magSize, `ammo=${attacker.weapon.ammo}`);
+}
+
+// ── A client's pick reaches the host ──────────────────────────────────────
+//
+// The host is the only authority on who carries what, so the round trip is
+// worth a check of its own: drive a host session through the same seam the
+// real transport plugs into and watch a guest's choice land.
+{
+  console.log('\nWeapon selection over the wire:');
+  const handlers = {};
+  const sent = [];
+  const transport = {
+    onPeerJoin: (f) => { handlers.join = f; },
+    onPeerLeave: () => {},
+    onMessage: (f) => { handlers.msg = f; },
+    sendTo: (id, m) => sent.push([id, m]),
+    broadcast: (m) => sent.push(['*', m]),
+    close: () => {},
+  };
+
+  const host = createHostSession({ map: APARTMENT, name: 'Host', transport, seed: 7 });
+  handlers.join('guest', { name: 'Guest' });
+  const guest = host.state.players.guest;
+
+  handlers.msg('guest', { t: 'loadout', id: 'sg-12d' });
+  check('a guest\'s pick lands on the host',
+    guest.loadout === 'sg-12d' && guest.weapon.id === 'sg-12d', guest.weapon.id);
+
+  handlers.msg('guest', { t: 'loadout', id: 'railgun' });
+  check('the host refuses a weapon that does not exist', guest.weapon.id === 'sg-12d');
+
+  host.chooseWeapon('amr-50');
+  check('the host can pick for itself', host.me.weapon.id === 'amr-50', host.me.weapon.id);
+
+  sent.length = 0;
+  for (let i = 0; i < 6; i++) host.tick(createInput(), 1 / 60);
+  const snap = sent.map(([, m]) => m).find((m) => m.t === 'snap');
+  check('the snapshot carries who is holding what',
+    snap?.players?.guest?.loadout === 'sg-12d' && snap.players.guest.weapon.id === 'sg-12d',
+    JSON.stringify(snap?.players?.guest?.loadout));
+}
+
+restartRound();
 const t0 = process.hrtime.bigint();
 const N = 3000;
 for (let i = 0; i < N; i++) {

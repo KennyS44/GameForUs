@@ -1,20 +1,20 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=bc0527d3';
-import { buildScene, syncDoors, syncLights, makeAvatar } from './render/scene.js?v=bc0527d3';
-import { createEffects } from './render/effects.js?v=bc0527d3';
-import { createView } from './render/view.js?v=bc0527d3';
-import { createHud } from './ui/hud.js?v=bc0527d3';
-import { DT, PLAYER } from './sim/constants.js?v=bc0527d3';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=bc0527d3';
-import { raycastGeometry } from './sim/world.js?v=bc0527d3';
-import { distXZ } from './sim/math.js?v=bc0527d3';
+import * as THREE from '../vendor/three.module.js?v=031dc91d';
+import { buildScene, syncDoors, syncLights, makeAvatar } from './render/scene.js?v=031dc91d';
+import { createEffects } from './render/effects.js?v=031dc91d';
+import { createView } from './render/view.js?v=031dc91d';
+import { createHud } from './ui/hud.js?v=031dc91d';
+import { DT, PLAYER } from './sim/constants.js?v=031dc91d';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=031dc91d';
+import { raycastGeometry } from './sim/world.js?v=031dc91d';
+import { distXZ } from './sim/math.js?v=031dc91d';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
 
-export function createGame({ canvas, session, audio, input, onPause, onRoundEnd }) {
+export function createGame({ canvas, session, audio, input, onPause, onRoundEnd, onPhase }) {
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: window.devicePixelRatio < 2,
@@ -59,6 +59,9 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd 
   let rafId = 0;
   let scoreboardVisible = false;
   let roundEndFired = false;
+  // The runtime still knows nothing about menus — it only reports that the
+  // round moved on, the same way it reports that the round ended.
+  let lastPhase = session.state.phase;
 
   // Start the player facing their spawn direction.
   const me0 = session.me;
@@ -244,6 +247,12 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd 
       ticks++;
     }
     if (ticks === MAX_CATCHUP_TICKS) accumulator = 0;
+
+    if (session.state.phase !== lastPhase) {
+      const prev = lastPhase;
+      lastPhase = session.state.phase;
+      onPhase?.(lastPhase, prev);
+    }
 
     const me = session.me;
     if (me) {

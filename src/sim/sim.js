@@ -6,14 +6,14 @@
 // around it changes.
 
 import {
-  PLAYER, LOOK, DAMAGE, WEAPONS, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-} from './constants.js?v=bc0527d3';
+  PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
+} from './constants.js?v=031dc91d';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=bc0527d3';
+} from './math.js?v=031dc91d';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-} from './world.js?v=bc0527d3';
+} from './world.js?v=031dc91d';
 
 const GRAVITY = 18;
 
@@ -29,7 +29,7 @@ export function createInput() {
 }
 
 function createPlayer(id, team, spawn, name) {
-  const w = WEAPONS.mp5;
+  const w = WEAPONS[DEFAULT_WEAPON];
   return {
     id, team, name,
     // Spawns carry their own height, so a defender can start upstairs.
@@ -46,8 +46,11 @@ function createPlayer(id, team, spawn, name) {
     alive: true,
     flashlight: false,
     aimAmount: 0,
+    // What they picked at the loadout screen. `weapon` is this round's gun and
+    // is rebuilt every round; `loadout` is the choice and outlives it.
+    loadout: DEFAULT_WEAPON,
     weapon: {
-      id: 'mp5',
+      id: DEFAULT_WEAPON,
       ammo: w.magSize,
       mags: w.reserveMags,
       cooldown: 0,
@@ -90,8 +93,8 @@ export function createState(world, seed = 12345) {
   return {
     tick: 0,
     time: 0,
-    phase: 'prep',
-    phaseTime: ROUND.prepTime,
+    phase: ROUND.selectTime > 0 ? 'select' : 'prep',
+    phaseTime: ROUND.selectTime > 0 ? ROUND.selectTime : ROUND.prepTime,
     players: {},
     doors,
     lights,
@@ -111,6 +114,31 @@ export function addPlayer(world, state, id, team, name) {
 
 export function removePlayer(state, id) {
   delete state.players[id];
+}
+
+// Picking a weapon. The only way one ever changes hands, so the host can trust
+// a client's request by passing it straight through here: an unknown id or a
+// request made after the shooting starts is simply refused.
+export function setLoadout(state, id, weaponId) {
+  const p = state.players[id];
+  const def = WEAPONS[weaponId];
+  if (!p || !def) return false;
+  if (state.phase !== 'select' && state.phase !== 'prep') return false;
+
+  p.loadout = weaponId;
+  p.weapon = {
+    id: weaponId,
+    ammo: def.magSize,
+    mags: def.reserveMags,
+    cooldown: 0,
+    reloading: 0,
+    reloadTotal: 0,
+  };
+  // A swapped weapon is a fresh weapon: the old gun's spray does not carry over.
+  p.burstShots = 0;
+  p.sinceShot = 99;
+  p.recoil = { yaw: 0, pitch: 0 };
+  return true;
 }
 
 // Deterministic randomness: derived from seed + call count, so the host and any
@@ -275,9 +303,9 @@ function addScaled(o, d, s) {
 }
 
 function applyDamage(state, shooter, target, zone, scale) {
-  // Nobody dies during the staging phase. Rounds are one life each, so being
-  // shot before the round has even started is not a fair way to lose it.
-  if (state.phase === 'prep') return;
+  // Nobody dies before the round starts. Rounds are one life each, so being
+  // shot while choosing a weapon or taking position is not a fair way to lose it.
+  if (state.phase === 'select' || state.phase === 'prep') return;
 
   let dmg = DAMAGE[zone] * scale;
   if (zone === 'torso' && target.armour) dmg = Math.max(6, dmg - DAMAGE.armourReduction);
@@ -566,7 +594,8 @@ function stepPlayer(world, state, p, input, dt) {
 // way pushing them out of one and into the next would.
 function holdInZone(world, state, p, wasAt) {
   const rules = world.map.prep;
-  if (state.phase !== 'prep' || !rules) {
+  const staging = state.phase === 'select' || state.phase === 'prep';
+  if (!staging || !rules) {
     p.zoneFrom = null;
     return;
   }
@@ -739,6 +768,12 @@ function stepDoors(world, state, dt) {
 
 function stepRound(state, dt) {
   state.phaseTime -= dt;
+  if (state.phase === 'select' && state.phaseTime <= 0) {
+    state.phase = 'prep';
+    state.phaseTime = ROUND.prepTime;
+    emit(state, { type: 'prepStart' });
+    return;
+  }
   if (state.phase === 'prep' && state.phaseTime <= 0) {
     state.phase = 'live';
     state.phaseTime = ROUND.duration;
@@ -775,10 +810,16 @@ export function stepSim(world, state, inputs, dt = DT) {
   state.tick++;
   state.time += dt;
 
+  // At the loadout screen everyone stands still. Only the head turns: looking
+  // around the room you spawned in costs nobody anything, walking out of it
+  // would. Held here rather than inside stepPlayer so there is one place to
+  // read, and so a client predicting itself freezes on exactly the same tick.
+  const frozen = state.phase === 'select';
+
   for (const p of Object.values(state.players)) {
-    const input = inputs[p.id];
-    if (input) stepPlayer(world, state, p, input, dt);
-    else stepPlayer(world, state, p, createInput(), dt);
+    let input = inputs[p.id] ?? createInput();
+    if (frozen) input = { ...createInput(), yaw: input.yaw, pitch: input.pitch };
+    stepPlayer(world, state, p, input, dt);
   }
 
   stepDoors(world, state, dt);
@@ -806,7 +847,12 @@ export function resetRound(world, state) {
     p.stance = 1;
     p.lean = 0;
     p.flashlight = false;
-    const def = WEAPONS[p.weapon.id];
+    // Rearm from the choice, not from what happened to be in their hands: the
+    // pick survives the round, the gun does not.
+    const weaponId = WEAPONS[p.loadout] ? p.loadout : DEFAULT_WEAPON;
+    const def = WEAPONS[weaponId];
+    p.loadout = weaponId;
+    p.weapon.id = weaponId;
     p.weapon.ammo = def.magSize;
     p.weapon.mags = def.reserveMags;
     p.weapon.reloading = 0;
@@ -823,8 +869,8 @@ export function resetRound(world, state) {
     ds.locked = d.lockedByDefault;
   }
   for (const id of Object.keys(state.lights)) state.lights[id].broken = false;
-  state.phase = 'prep';
-  state.phaseTime = ROUND.prepTime;
+  state.phase = ROUND.selectTime > 0 ? 'select' : 'prep';
+  state.phaseTime = ROUND.selectTime > 0 ? ROUND.selectTime : ROUND.prepTime;
   state.events = [];
 }
 

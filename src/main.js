@@ -1,14 +1,15 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=bc0527d3';
-import { createGame } from './game.js?v=bc0527d3';
-import { createAudio } from './audio/audio.js?v=bc0527d3';
-import { createInputSource, saveSettings } from './input/input.js?v=bc0527d3';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=bc0527d3';
+import { APARTMENT } from './maps/apartment.js?v=031dc91d';
+import { createGame } from './game.js?v=031dc91d';
+import { createAudio } from './audio/audio.js?v=031dc91d';
+import { createInputSource, saveSettings } from './input/input.js?v=031dc91d';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=031dc91d';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=bc0527d3';
-import { storageGet, storageSet } from './util/storage.js?v=bc0527d3';
+} from './net/transport.js?v=031dc91d';
+import { createLoadout } from './ui/loadout.js?v=031dc91d';
+import { storageGet, storageSet } from './util/storage.js?v=031dc91d';
 
 const $ = (id) => document.getElementById(id);
 
@@ -17,6 +18,7 @@ const overlay = $('overlay');
 const screens = {
   main: $('screen-main'),
   lobby: $('screen-lobby'),
+  loadout: $('screen-loadout'),
   pause: $('screen-pause'),
   round: $('screen-round'),
   loading: $('screen-loading'),
@@ -47,6 +49,46 @@ function showScreen(name) {
 function hideOverlay() {
   overlay.hidden = true;
 }
+
+// ── Weapon selection ──────────────────────────────────────────────────────
+//
+// The screen is open while the round is choosing weapons, and it polls the
+// state ten times a second instead of riding the render loop: that is plenty
+// for a countdown, and it keeps the runtime free of menus.
+
+const loadout = createLoadout({
+  onPick: (id) => {
+    game?.session.chooseWeapon?.(id);
+    refreshLoadout();
+  },
+});
+let loadoutPoll = 0;
+
+function refreshLoadout() {
+  if (game) loadout.update(game.session.state, game.session.me);
+}
+
+function openLoadout() {
+  if (!game) return;
+  showScreen('loadout'); // shown first: onPause reads it to know this is not a pause
+  input.releaseLock();
+  refreshLoadout();
+  if (!loadoutPoll) loadoutPoll = setInterval(refreshLoadout, 100);
+}
+
+function stopLoadoutPolling() {
+  clearInterval(loadoutPoll);
+  loadoutPoll = 0;
+}
+
+function closeLoadout() {
+  stopLoadoutPolling();
+  if (screens.loadout.hidden) return;
+  hideOverlay();
+  input.requestLock();
+}
+
+$('btn-loadout-ready').addEventListener('click', closeLoadout);
 
 function setStatus(el, msg, kind = '') {
   el.textContent = msg;
@@ -99,6 +141,9 @@ function startGame(session) {
     audio,
     input,
     onPause: () => {
+      // Choosing a weapon releases the mouse too, and that is not a pause: the
+      // countdown has to keep running or nobody ever reaches the round.
+      if (!screens.loadout.hidden) return;
       // In a live match the world keeps turning while you're in the menu —
       // stopping the host would freeze everyone else. Alone against bots
       // nobody else is waiting, so the round really does stop.
@@ -108,6 +153,10 @@ function startGame(session) {
         ? 'Раунд остановлен. Escape — вернуться в игру.'
         : 'Раунд продолжается. Вас всё ещё можно убить.';
       if (screens.round.hidden) showScreen('pause');
+    },
+    onPhase: (phase) => {
+      if (phase === 'select') openLoadout();
+      else closeLoadout();
     },
     onRoundEnd: (winner) => {
       const iWon = session.me?.team === winner;
@@ -121,8 +170,12 @@ function startGame(session) {
   });
   audio.setVolume(Number(volEl.value) / 100);
   game.start();
-  hideOverlay();
-  input.requestLock();
+  if (session.state.phase === 'select') {
+    openLoadout();
+  } else {
+    hideOverlay();
+    input.requestLock();
+  }
 }
 
 // Pointer lock can only be requested from a user gesture, so clicking the
@@ -295,11 +348,18 @@ $('btn-next').addEventListener('click', () => {
   game.nextRound();
   if (game.session.kind === 'host') transport?.broadcast({ t: 'start' });
   game.resume();
-  hideOverlay();
-  input.requestLock();
+  // A new round starts at the loadout screen, so go straight there rather than
+  // flashing the world for one frame first.
+  if (game.session.state.phase === 'select') {
+    openLoadout();
+  } else {
+    hideOverlay();
+    input.requestLock();
+  }
 });
 
 function quitToMenu() {
+  stopLoadoutPolling();
   game?.stop();
   game = null;
   hostSession = null;
