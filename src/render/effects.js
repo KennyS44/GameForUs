@@ -1,7 +1,7 @@
 // Short-lived visuals: tracers, muzzle flash, impact sparks and bullet holes.
 // Everything is pooled — no allocation during a firefight.
 
-import * as THREE from '../../vendor/three.module.js?v=d55bee09';
+import * as THREE from '../../vendor/three.module.js?v=45193364';
 
 const TRACER_POOL = 24;
 const DECAL_POOL = 96;
