@@ -8,14 +8,14 @@
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
   GADGETS, DEFAULT_GADGET, BLIND,
-} from './constants.js?v=49b50937';
+} from './constants.js?v=47c057f5';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=49b50937';
+} from './math.js?v=47c057f5';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=49b50937';
+} from './world.js?v=47c057f5';
 
 const GRAVITY = 18;
 
@@ -265,6 +265,11 @@ const MAX_RANGE = 60;
 function fireBullet(world, state, shooter, origin, dir) {
   const weapon = WEAPONS[shooter.weapon.id];
   let penetrationLeft = weapon.penetration; // in centimetres of drywall
+  // How many solid surfaces this round is allowed to cross. Centimetres alone
+  // would let the .50 walk the length of the flat through six partitions; a
+  // rifle that goes through one wall is a threat, one that goes through every
+  // wall is a room nobody can hold.
+  let wallsLeft = weapon.maxWalls ?? Infinity;
   let damageScale = 1;
   let start = 0;
 
@@ -320,13 +325,17 @@ function fireBullet(world, state, shooter, origin, dir) {
     // Can the round punch through?
     const thicknessCm = Math.max(1, (firstGeo.exit - firstGeo.t) * 100);
     const mat = firstGeo.material;
-    if (mat.penetration <= 0 || thicknessCm > penetrationLeft) {
+    // Glass is not a wall you punched through, it is a window that broke, so
+    // it never counts against the allowance.
+    const solid = !mat.seeThrough;
+    if (mat.penetration <= 0 || thicknessCm > penetrationLeft || (solid && wallsLeft <= 0)) {
       if (firstGeo.kind === 'door') damageDoor(world, state, firstGeo.doorId, weapon.doorDamage, shooter);
       return; // stopped
     }
     if (firstGeo.kind === 'door') damageDoor(world, state, firstGeo.doorId, weapon.doorDamage, shooter);
 
     penetrationLeft -= thicknessCm;
+    if (solid) wallsLeft--;
     damageScale *= Math.max(0.25, 1 - (thicknessCm * DAMAGE.penetrationLossPerCm) / 100);
     start += firstGeo.exit + 0.02;
     if (start >= MAX_RANGE) return;

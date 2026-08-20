@@ -112,6 +112,14 @@ export const DAMAGE = {
 //
 // Aim times are Siege's class ladder (SMG < rifle < marksman < heavy) rescaled
 // to the quarter-second this game already used, not its absolute values.
+//
+// Reloads are the last balancing weight, and they are set against what the
+// weapon gives rather than against what it looks like: the fifty-round PDW is
+// the slowest of the three carbines to feed precisely because it is the one
+// that rarely has to, the twenty-five-round .45 is the quickest because it
+// runs dry twice as often, and the .50 takes three and a half seconds for one
+// round. Empty is always slower than topping up — an empty gun has to be
+// charged as well as fed.
 
 // Recoil is a fixed spray pattern, not a dice roll: the first seven shots
 // walk the muzzle up a known path with a bend in it. Learn the path and you
@@ -154,6 +162,16 @@ const settle = (peak) => ({
   shake: peak * 0.125,
 });
 
+// How fast the sights fall back once the trigger is released, and how long a
+// release has to last before the pattern starts over. These are the other
+// half of recoil and they were the same number on every weapon in the roster,
+// which is why every weapon felt the same to hold: a nine-millimetre carbine
+// settled exactly as fast as a .50. Now a light gun firing a light round comes
+// back on target almost at once and a heavy one makes you wait — that wait is
+// the price of the damage, and it is what makes rate of fire cost something.
+const RECOVERY = { smg: 7.6, rifle: 5.0, shotgun: 3.2, heavy: 2.3 };
+const RESET = { smg: 0.24, rifle: 0.30, shotgun: 0.40, heavy: 0.55 };
+
 // Defaults every entry shares, so a weapon line says only what makes it itself.
 const gun = (def) => ({
   pellets: 1,
@@ -162,8 +180,8 @@ const gun = (def) => ({
   armourPierce: 1,
   moveScale: 1,
   muzzleVelocity: 400,
-  recoilRecovery: 5.2, // how quickly the sights settle back once you stop
-  burstResetTime: 0.28, // trigger released for this long and the pattern restarts
+  recoilRecovery: RECOVERY[def.cls] ?? 5.2,
+  burstResetTime: RESET[def.cls] ?? 0.28,
   doorDamage: 8, // per projectile, against a door's 100 health
   ...def,
   recoilClimb: climb(def.peak),
@@ -177,9 +195,9 @@ export const WEAPONS = {
     name: 'PP-9', cls: 'smg', blurb: '9×19, роликовое запирание',
     from: 'Rainbow Six Siege — MP5 (27 dmg, 799 rpm, 30+1)',
     damage: 42, rpm: 800, magSize: 30, reserve: 120,
-    reloadTime: 2.2, reloadTimeEmpty: 2.9,
+    reloadTime: 2.1, reloadTimeEmpty: 2.9,
     range: { near: 18, far: 28, floor: 0.6 },
-    peak: 0.019, spreadHip: 0.030, spreadAim: 0.0030, spreadMoving: 0.026,
+    peak: 0.026, spreadHip: 0.030, spreadAim: 0.0030, spreadMoving: 0.026,
     aimTime: 0.24, penetration: 6, loudness: 36,
   }),
   // P90: the class's largest magazine and its lowest damage, 22 at 968 rpm.
@@ -189,9 +207,9 @@ export const WEAPONS = {
     name: 'PDW-57', cls: 'smg', blurb: '5,7×28, буллпап, магазин 50',
     from: 'Rainbow Six Siege — P90 (22 dmg, 968 rpm, 50+1)',
     damage: 34, rpm: 950, magSize: 50, reserve: 100,
-    reloadTime: 2.4, reloadTimeEmpty: 2.9,
+    reloadTime: 2.9, reloadTimeEmpty: 3.7,
     range: { near: 18, far: 28, floor: 0.6 },
-    peak: 0.014, spreadHip: 0.028, spreadAim: 0.0028, spreadMoving: 0.024,
+    peak: 0.02, spreadHip: 0.028, spreadAim: 0.0028, spreadMoving: 0.024,
     aimTime: 0.22, penetration: 9, loudness: 38, armourPierce: 0.35,
   }),
   // Vector: 23 damage at 1200 rpm, the fastest gun in Siege and the shortest
@@ -200,9 +218,9 @@ export const WEAPONS = {
     name: 'PP-45', cls: 'smg', blurb: '.45 ACP, гасящий затвор',
     from: 'Rainbow Six Siege — Vector .45 ACP (23 dmg, 1200 rpm, 25+1)',
     damage: 38, rpm: 1100, magSize: 25, reserve: 125,
-    reloadTime: 2.0, reloadTimeEmpty: 2.8,
+    reloadTime: 1.9, reloadTimeEmpty: 2.6,
     range: { near: 14, far: 24, floor: 0.55 },
-    peak: 0.016, spreadHip: 0.034, spreadAim: 0.0034, spreadMoving: 0.030,
+    peak: 0.0236, spreadHip: 0.034, spreadAim: 0.0034, spreadMoving: 0.030,
     aimTime: 0.23, penetration: 5, loudness: 34,
   }),
 
@@ -212,9 +230,9 @@ export const WEAPONS = {
     name: 'AV-74', cls: 'rifle', blurb: '5,45×39, длинный ход поршня',
     from: 'Rainbow Six Siege — AK-74M (44 dmg, 650 rpm)',
     damage: 52, rpm: 600, magSize: 30, reserve: 120,
-    reloadTime: 2.4, reloadTimeEmpty: 3.2,
+    reloadTime: 2.5, reloadTimeEmpty: 3.3,
     range: { near: 25, far: 35, floor: 0.6 },
-    peak: 0.034, spreadHip: 0.040, spreadAim: 0.0030, spreadMoving: 0.034,
+    peak: 0.0506, spreadHip: 0.040, spreadAim: 0.0030, spreadMoving: 0.034,
     aimTime: 0.30, penetration: 14, loudness: 47, moveScale: 0.95, doorDamage: 10,
   }),
   // C8-SFW: 40 damage at 837 rpm — the easy one, fast and forgiving.
@@ -222,9 +240,9 @@ export const WEAPONS = {
     name: 'AR-556', cls: 'rifle', blurb: '5,56×45, короткий ход поршня',
     from: 'Rainbow Six Siege — C8-SFW (40 dmg, 837 rpm)',
     damage: 48, rpm: 800, magSize: 30, reserve: 120,
-    reloadTime: 2.2, reloadTimeEmpty: 3.0,
+    reloadTime: 2.3, reloadTimeEmpty: 3.1,
     range: { near: 25, far: 35, floor: 0.6 },
-    peak: 0.024, spreadHip: 0.038, spreadAim: 0.0026, spreadMoving: 0.032,
+    peak: 0.0384, spreadHip: 0.038, spreadAim: 0.0026, spreadMoving: 0.032,
     aimTime: 0.28, penetration: 13, loudness: 46, moveScale: 0.96, doorDamage: 10,
   }),
   // AR33: 41 damage, polymer lower, side-folding stock, one rail the length of
@@ -233,9 +251,9 @@ export const WEAPONS = {
     name: 'AC-556', cls: 'rifle', blurb: '5,56×45, полимерная коробка, складной',
     from: 'Rainbow Six Siege — AR33 (41 dmg, 749 rpm)',
     damage: 50, rpm: 620, magSize: 30, reserve: 120,
-    reloadTime: 2.3, reloadTimeEmpty: 3.1,
+    reloadTime: 2.4, reloadTimeEmpty: 3.2,
     range: { near: 28, far: 38, floor: 0.65 },
-    peak: 0.026, spreadHip: 0.042, spreadAim: 0.0022, spreadMoving: 0.034,
+    peak: 0.0419, spreadHip: 0.042, spreadAim: 0.0022, spreadMoving: 0.034,
     aimTime: 0.32, penetration: 13, loudness: 46, moveScale: 0.93, doorDamage: 10,
   }),
 
@@ -257,10 +275,10 @@ export const WEAPONS = {
   'sg-12-double': gun({
     name: 'SG-12D', cls: 'shotgun', blurb: '12 калибр, обрез, два ствола',
     from: 'Zero Hour — Sawed Off (7 pellets, 35 chest, 2 rounds)',
-    damage: 12, pellets: 7, fireMode: 'semi', rpm: 240, magSize: 2, reserve: 16,
-    reloadTime: 3.4, reloadTimeEmpty: 3.4,
-    range: { near: 5, far: 13, floor: 0.45 },
-    peak: 0.130, spreadHip: 0.075, spreadAim: 0.055, spreadMoving: 0.095,
+    damage: 17, pellets: 7, fireMode: 'semi', rpm: 240, magSize: 2, reserve: 16,
+    reloadTime: 3.0, reloadTimeEmpty: 3.0,
+    range: { near: 2, far: 10, floor: 0.4 },
+    peak: 0.157, spreadHip: 0.075, spreadAim: 0.055, spreadMoving: 0.095,
     aimTime: 0.18, penetration: 2, loudness: 52, armourPierce: 0.9,
     moveScale: 1.02, doorDamage: 16,
   }),
@@ -269,10 +287,10 @@ export const WEAPONS = {
   'sg-12-pump': gun({
     name: 'SG-12P', cls: 'shotgun', blurb: '12 калибр, помповое, магазин 7',
     from: 'Rainbow Six Siege — M590A1 (48/pellet x8, 87 rpm, 6+1)',
-    damage: 11, pellets: 8, fireMode: 'semi', rpm: 80, magSize: 7, reserve: 28,
-    reloadStyle: 'shell', reloadTime: 0.62, reloadTimeEmpty: 0.62,
-    range: { near: 8, far: 20, floor: 0.55 },
-    peak: 0.090, spreadHip: 0.055, spreadAim: 0.032, spreadMoving: 0.078,
+    damage: 15, pellets: 8, fireMode: 'semi', rpm: 80, magSize: 7, reserve: 28,
+    reloadStyle: 'shell', reloadTime: 0.58, reloadTimeEmpty: 0.58,
+    range: { near: 2.5, far: 14, floor: 0.5 },
+    peak: 0.131, spreadHip: 0.055, spreadAim: 0.032, spreadMoving: 0.078,
     aimTime: 0.26, penetration: 2, loudness: 55, armourPierce: 0.9,
     moveScale: 0.93, doorDamage: 12,
   }),
@@ -281,10 +299,10 @@ export const WEAPONS = {
   'sg-12-mag': gun({
     name: 'SG-12M', cls: 'shotgun', blurb: '12 калибр, самозарядное, магазин 8',
     from: 'Rainbow Six Siege — SASG-12 (26/pellet x8, 348 rpm, 10+1)',
-    damage: 9, pellets: 8, fireMode: 'semi', rpm: 240, magSize: 8, reserve: 32,
-    reloadTime: 2.6, reloadTimeEmpty: 3.4,
-    range: { near: 7, far: 18, floor: 0.5 },
-    peak: 0.075, spreadHip: 0.062, spreadAim: 0.040, spreadMoving: 0.085,
+    damage: 14, pellets: 8, fireMode: 'semi', rpm: 240, magSize: 8, reserve: 32,
+    reloadTime: 2.8, reloadTimeEmpty: 3.6,
+    range: { near: 2, far: 12, floor: 0.45 },
+    peak: 0.0977, spreadHip: 0.062, spreadAim: 0.040, spreadMoving: 0.085,
     aimTime: 0.28, penetration: 2, loudness: 54, armourPierce: 0.9,
     moveScale: 0.92, doorDamage: 9,
   }),
@@ -292,14 +310,18 @@ export const WEAPONS = {
   // ── Heavy ──
   // Siege has no .50, so its heaviest round stands in: the CSRX 300 at 135
   // damage and 52 rpm, one shot down at any armour, five surfaces punched
-  // through. Ours keeps that job and pays for it in everything else.
+  // through. Ours keeps the first half of that and refuses the second: one
+  // round in the gun, fifteen in the world, and one wall — not five. A rifle
+  // that walks the length of the flat through every partition is a rifle that
+  // makes rooms meaningless, and what arrives on the far side of the one wall
+  // it does cross is a wounded man, never a dead one.
   'amr-50': gun({
-    name: 'AMR-50', cls: 'heavy', blurb: '.50, самозарядная, пробивает стены',
+    name: 'AMR-50', cls: 'heavy', blurb: '.50, однозарядная, пробивает одну стену',
     from: 'Rainbow Six Siege — CSRX 300 (135 dmg, 52 rpm, one-shot down)',
-    damage: 190, oneShot: true, fireMode: 'semi', rpm: 60, magSize: 10, reserve: 30,
-    reloadTime: 3.2, reloadTimeEmpty: 4.2,
+    damage: 190, oneShot: true, fireMode: 'semi', rpm: 60, magSize: 1, reserve: 14, maxWalls: 1,
+    reloadTime: 3.4, reloadTimeEmpty: 3.4,
     range: { near: 40, far: 60, floor: 0.85 },
-    peak: 0.160, spreadHip: 0.075, spreadAim: 0.0016, spreadMoving: 0.070,
+    peak: 0.227, spreadHip: 0.075, spreadAim: 0.0016, spreadMoving: 0.070,
     aimTime: 0.52, penetration: 60, loudness: 75, armourPierce: 0,
     moveScale: 0.78, muzzleVelocity: 850, doorDamage: 60,
   }),
@@ -309,9 +331,9 @@ export const WEAPONS = {
     name: 'DMR-762', cls: 'heavy', blurb: '7,62×51, марксманская, магазин 20',
     from: 'Rainbow Six Siege — 417 / CAMRS (69 dmg, 444 rpm, 20+1)',
     damage: 54, fireMode: 'semi', rpm: 300, magSize: 20, reserve: 80,
-    reloadTime: 2.5, reloadTimeEmpty: 3.3,
+    reloadTime: 2.7, reloadTimeEmpty: 3.5,
     range: { near: 30, far: 40, floor: 0.7 },
-    peak: 0.055, spreadHip: 0.055, spreadAim: 0.0018, spreadMoving: 0.050,
+    peak: 0.0803, spreadHip: 0.055, spreadAim: 0.0018, spreadMoving: 0.050,
     aimTime: 0.34, penetration: 24, loudness: 55, armourPierce: 0.3,
     moveScale: 0.90, muzzleVelocity: 780, doorDamage: 14,
   }),

@@ -712,24 +712,46 @@ console.log('\nA door never pushes anyone through a wall:');
   }
 
   // The rule the roster is built on, asked of every entry directly rather than
-  // inferred from a firefight: one projectile, or one whole pattern, must
-  // leave a healthy player standing. Point blank, no cover, worst zone.
+  // inferred from a firefight: no single projectile may kill a healthy player.
+  // Point blank, no cover, worst zone.
+  //
+  // Two exceptions, and both are the point of the weapon rather than a hole in
+  // the rule. The .50 kills with its one round on a clean line. And a shotgun
+  // kills with a whole pattern at the muzzle — that is eight hits at once, not
+  // a lucky one, and it is the only thing a shotgun has.
   {
     const offenders = [];
     for (const [id, w] of Object.entries(WEAPONS)) {
       if (w.oneShot) continue;
       for (const zone of ['head', 'torso', 'limb']) {
-        const pattern = hitDamage(w, zone, 1) * w.pellets;
-        if (pattern >= PLAYER.maxHealth) offenders.push(`${id} ${zone} ${pattern.toFixed(0)}`);
+        const one = hitDamage(w, zone, 1);
+        if (one >= PLAYER.maxHealth) offenders.push(`${id} ${zone} ${one.toFixed(0)}`);
       }
     }
-    check('nothing but the .50 kills in a single hit', offenders.length === 0, offenders.join(', '));
+    check('nothing but the .50 kills with one projectile', offenders.length === 0,
+      offenders.join(', '));
 
-    const worst = Math.max(...Object.values(WEAPONS)
-      .filter((w) => !w.oneShot)
-      .flatMap((w) => ['head', 'torso'].map((z) => hitDamage(w, z, 1) * w.pellets)));
-    check('the worst single hit still leaves something to fight with',
-      PLAYER.maxHealth - worst >= 10, `${(PLAYER.maxHealth - worst).toFixed(0)} health left`);
+    const single = Object.values(WEAPONS)
+      .filter((w) => !w.oneShot && w.pellets === 1)
+      .flatMap((w) => ['head', 'torso'].map((z) => hitDamage(w, z, 1)));
+    check('and no rifle round comes close on its own',
+      PLAYER.maxHealth - Math.max(...single) >= 10,
+      `${(PLAYER.maxHealth - Math.max(...single)).toFixed(0)} health left`);
+  }
+
+  // Buckshot, on the other hand, has one job.
+  {
+    for (const id of ['sg-12-double', 'sg-12-pump', 'sg-12-mag']) {
+      const w = WEAPONS[id];
+      const atMuzzle = hitDamage(w, 'torso', 0.5) * w.pellets;
+      const acrossRoom = hitDamage(w, 'torso', 6) * w.pellets;
+      check(`${id}: the whole pattern at the muzzle kills`, atMuzzle >= PLAYER.maxHealth,
+        `${atMuzzle.toFixed(0)} damage`);
+      check(`${id}: six metres out, even a perfect pattern does not`,
+        acrossRoom < PLAYER.maxHealth, `${acrossRoom.toFixed(0)} damage`);
+      check(`${id}: and one pellet is still one pellet`,
+        hitDamage(w, 'head', 0.5) < 25, `${hitDamage(w, 'head', 0.5).toFixed(0)} per pellet`);
+    }
   }
 
   // The .50 is the exception, and only with nothing in the way.
@@ -748,16 +770,9 @@ console.log('\nA door never pushes anyone through a wall:');
     for (let i = 0; i < 20 && d.alive; i++) {
       stepSim(world, state, { a1: { ...createInput(), yaw: 0, fire: true }, d1: createInput() });
     }
-    check('one shell at the door wounds but does not kill',
-      d.alive && d.health < PLAYER.maxHealth * 0.5 && a.weapon.ammo === WEAPONS['sg-12-pump'].magSize - 1,
+    check('one shell in the doorway is the whole conversation',
+      !d.alive && a.weapon.ammo === WEAPONS['sg-12-pump'].magSize - 1,
       `ammo=${a.weapon.ammo} hp=${d.health.toFixed(0)}`);
-
-    // Pump and fire again. The trigger has to be released first: a self-loader
-    // held down never fires twice, which is the point of the fire mode.
-    for (let i = 0; i < TICK_RATE * 2 && d.alive; i++) {
-      stepSim(world, state, { a1: { ...createInput(), yaw: 0, fire: i % 10 < 3 }, d1: createInput() });
-    }
-    check('the second shell finishes it', !d.alive, `hp=${d.health.toFixed(0)}`);
   }
 
   // Damage falls off with distance the way Siege's model says it does.
@@ -765,7 +780,7 @@ console.log('\nA door never pushes anyone through a wall:');
     const pump = WEAPONS['sg-12-pump'];
     const dmr = WEAPONS['dmr-762'];
     check('a shell is worth its full damage at the door and its floor down a corridor',
-      rangeScale(pump, 3) === 1 && rangeScale(pump, 20) === pump.range.floor
+      rangeScale(pump, 2) === 1 && rangeScale(pump, 20) === pump.range.floor
       && rangeScale(pump, 9) < 1 && rangeScale(pump, 9) > pump.range.floor,
       `${rangeScale(pump, 9).toFixed(2)} at 9 m`);
     check('a marksman rifle keeps its damage across the whole flat',
@@ -786,14 +801,13 @@ console.log('\nA door never pushes anyone through a wall:');
     }
     check('buckshot still holds a pattern at ten metres',
       across.every(([, r]) => r <= 0.6), across.map(([id, r]) => `${id} ${(r * 100).toFixed(0)} cm`).join(', '));
-    check('and it is worth more than a scratch out there',
-      across.every(([, , scale]) => scale >= 0.55),
-      across.map(([id, , s]) => `${id} ${(s * 100).toFixed(0)}%`).join(', '));
-    // The close-range trade is unchanged: a pattern is many small hits, and
-    // all of them together still leave a man standing.
-    const pumpPattern = hitDamage(WEAPONS['sg-12-pump'], 'torso', 1) * WEAPONS['sg-12-pump'].pellets;
-    check('a shell at the door is still not a kill on its own',
-      pumpPattern < PLAYER.maxHealth, `${pumpPattern.toFixed(0)} damage`);
+    // Out there is where the three of them stop being the same weapon: the
+    // pump still has something to say at ten metres, the sawn-off does not.
+    const scaleOf = (id) => rangeScale(WEAPONS[id], 10);
+    check('the pump gun still carries down a corridor', scaleOf('sg-12-pump') >= 0.6,
+      `${(scaleOf('sg-12-pump') * 100).toFixed(0)}%`);
+    check('and the sawn-off does not', scaleOf('sg-12-double') <= 0.5,
+      `${(scaleOf('sg-12-double') * 100).toFixed(0)}%`);
   }
 
   // Shells go in one at a time, and the tube can be topped up part way.
@@ -826,9 +840,68 @@ console.log('\nA door never pushes anyone through a wall:');
       `${reserveBefore} → ${a.weapon.reserve}`);
   }
 
+  // Recoil has to be a different animal on every class, or rate of fire is
+  // free and the fastest gun simply wins. Two figures decide that: how far the
+  // sights climb over a second of holding the trigger, and how quickly they
+  // come back once it is released.
+  {
+    const climbPerSecond = (w) => {
+      const shots = Math.min(w.magSize, w.rpm / 60);
+      let climb = 0;
+      for (let i = 0; i < shots; i++) {
+        climb += i < w.recoilClimb.length ? w.recoilClimb[i][1] : w.recoilSettle.pitch;
+      }
+      return (climb * 180) / Math.PI;
+    };
+    const smg = Math.max(...['smg-9-roller', 'smg-57-pdw', 'smg-45-inline'].map((id) => climbPerSecond(WEAPONS[id])));
+    const rifle = Math.min(...['ar-545-piston', 'ar-556-piston', 'ar-556-folder'].map((id) => climbPerSecond(WEAPONS[id])));
+    check('a rifle climbs harder than any submachine gun', rifle > smg * 1.35,
+      `rifle ${rifle.toFixed(1)}°/s vs smg ${smg.toFixed(1)}°/s`);
+
+    const kick = (id) => (WEAPONS[id].peak * 180) / Math.PI;
+    check('and the heavier the round, the bigger the jump',
+      kick('smg-57-pdw') < kick('smg-9-roller') && kick('smg-9-roller') < kick('ar-556-piston')
+      && kick('ar-556-piston') < kick('dmr-762') && kick('dmr-762') < kick('sg-12-pump')
+      && kick('sg-12-pump') < kick('amr-50'),
+      ['smg-57-pdw', 'smg-9-roller', 'ar-556-piston', 'dmr-762', 'sg-12-pump', 'amr-50']
+        .map((id) => `${id} ${kick(id).toFixed(1)}°`).join(' < '));
+
+    const recovery = (cls) => new Set(Object.values(WEAPONS).filter((w) => w.cls === cls).map((w) => w.recoilRecovery));
+    const settles = ['smg', 'rifle', 'shotgun', 'heavy'].map((c) => [...recovery(c)][0]);
+    check('and the sights settle at a different speed on every class',
+      new Set(settles).size === 4 && settles[0] > settles[1] && settles[1] > settles[2] && settles[2] > settles[3],
+      settles.join(' > '));
+  }
+
+  // One round in the gun, fifteen in the world: every shot is a decision.
+  {
+    const fifty = WEAPONS['amr-50'];
+    check('the .50 is single-shot', fifty.magSize === 1, `${fifty.magSize} in the magazine`);
+    check('and carries fifteen rounds in all', fifty.magSize + fifty.reserve === 15,
+      `${fifty.magSize + fifty.reserve}`);
+
+    const { a, d } = duel('amr-50');
+    for (let i = 0; i < TICK_RATE; i++) {
+      stepSim(world, state, { a1: { ...createInput(), yaw: 0, fire: i % 6 < 2 }, d1: createInput() });
+    }
+    check('a second of trigger gets exactly one round away', a.weapon.ammo === 0,
+      `${a.weapon.ammo} left in the gun`);
+    check('and it was worth having', !d.alive, `hp=${d.health.toFixed(0)}`);
+
+    // Reloading it is three and a half seconds of standing there.
+    let ticks = 0;
+    for (let i = 0; i < TICK_RATE * 6 && a.weapon.ammo === 0; i++) {
+      stepSim(world, state, { a1: { ...createInput(), yaw: 0, reload: i === 0 }, d1: createInput() });
+      ticks++;
+    }
+    check('and feeding it takes the time the sheet says',
+      Math.abs(ticks / TICK_RATE - fifty.reloadTime) < 0.25,
+      `${(ticks / TICK_RATE).toFixed(1)} s of ${fifty.reloadTime}`);
+  }
+
   // Through the drywall partition between the living room and the study.
   {
-    function throughTheWall(weaponId) {
+    function throughTheWall(weaponId, targetX = -2) {
       restartRound();
       setLoadout(state, 'a1', weaponId);
       state.phase = 'live';
@@ -836,11 +909,10 @@ console.log('\nA door never pushes anyone through a wall:');
       const a = state.players.a1;
       const d = state.players.d1;
       a.pos = { x: -9, y: 0, z: -16 };
-      d.pos = { x: -2, y: 0, z: -16 };
+      d.pos = { x: targetX, y: 0, z: -16 };
       const yaw = -Math.PI / 2; // facing +x, across the partition at x = -5
       a.look = { yaw, pitch: 0 };
       const hp = d.health;
-      // Long enough for the .50 to get two of its slow rounds away.
       for (let i = 0; i < TICK_RATE * 3; i++) {
         stepSim(world, state, {
           a1: { ...createInput(), yaw, fire: i % 4 < 2, aim: true }, d1: createInput(),
@@ -849,11 +921,18 @@ console.log('\nA door never pushes anyone through a wall:');
       return hp - d.health;
     }
     const buck = throughTheWall('sg-12-pump');
-    const fifty = throughTheWall('amr-50');
     check('buckshot does not cross a drywall partition', buck === 0, `${buck.toFixed(0)} damage`);
-    // Two rounds, not one: through a wall even the .50 is held to the ceiling.
-    check('the .50 kills through it, in two', fifty >= PLAYER.maxHealth,
-      `${fifty.toFixed(0)} damage`);
+
+    // The .50 crosses one wall and one only. Through it the round arrives with
+    // most of its damage gone and held to the per-hit ceiling — a wounded man,
+    // not a dead one, and then three and a half seconds of reload to think
+    // about it. Two walls and it never arrives at all.
+    const oneWall = throughTheWall('amr-50');
+    check('the .50 goes through a wall and hurts', oneWall > 40, `${oneWall.toFixed(0)} damage`);
+    check('but a wall costs it the kill', oneWall < PLAYER.maxHealth,
+      `${oneWall.toFixed(0)} damage`);
+    const twoWalls = throughTheWall('amr-50', 9);
+    check('and the second wall stops it dead', twoWalls === 0, `${twoWalls.toFixed(0)} damage`);
   }
 
   // Weight is a real cost: the same sprint carries you less far.
