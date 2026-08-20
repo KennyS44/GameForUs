@@ -7,8 +7,8 @@
 <meta name="description" content="Хардкорный тактический шутер в тёмном двухэтажном пентхаусе: свет, звук и двери решают больше, чем реакция.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <!-- Written by tools/stamp-version.mjs; the page checks it against version.txt. -->
-<meta name="gameforus-version" content="031dc91d">
-<link rel="stylesheet" href="styles.css?v=031dc91d">
+<meta name="gameforus-version" content="d547eb56">
+<link rel="stylesheet" href="styles.css?v=d547eb56">
 </head>
 <body>
 
@@ -49,7 +49,8 @@
       <span class="weapon-name" id="weapon-name">PP-9</span>
       <span class="ammo-mag" id="ammo-mag">30</span>
       <span class="ammo-sep">/</span>
-      <span class="ammo-reserve" id="ammo-reserve">4</span>
+      <!-- Reserve is rounds left in the pockets, not magazines. -->
+      <span class="ammo-reserve" id="ammo-reserve">120</span>
       <span class="ammo-flag" id="flashlight-flag" hidden>ФОНАРЬ</span>
     </div>
   </div>
@@ -182,6 +183,11 @@
       <p class="hint">
         Пока идёт отсчёт, обе стороны стоят на месте. Дальше — полминуты
         подготовки: оборона расходится по квартире, штурм ждёт на площадке.
+      </p>
+      <p class="loadout-source">
+        Характеристики сняты с Rainbow Six Siege и Zero Hour и пересчитаны под
+        наши сто единиц здоровья. Урон падает с расстоянием — у дроби быстрее
+        всех. <a href="docs/weapons.html" target="_blank" rel="noopener">Чертежи всех одиннадцати</a>
       </p>
       <div class="actions">
         <button class="btn btn-primary" id="btn-loadout-ready">Готов</button>
@@ -379,6 +385,6 @@
   window.addEventListener('load', function () { window.setTimeout(offerUpdate, 1200); });
 })();
 </script>
-<script type="module" src="src/main.js?v=031dc91d"></script>
+<script type="module" src="src/main.js?v=d547eb56"></script>
 </body>
 </html>

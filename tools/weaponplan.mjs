@@ -806,9 +806,62 @@ ${notes}
 `;
 }
 
+// The same drawing with the paper stripped away: no grid, no dimensions, no
+// callouts, just the silhouette on a transparent background. This is what the
+// loadout screen puts on a card, so the gun a player picks is the gun that was
+// drawn rather than a second artist's idea of it.
+function icon(def) {
+  const g = painter();
+  def.build(g);
+
+  let hi = 0;
+  let lo = 0;
+  const seen = (y) => { if (y > hi) hi = y; if (y < lo) lo = y; };
+  for (const s of g.shapes) {
+    if (s.k === 'r') { seen(s.y1); seen(s.y2); }
+    else if (s.k === 'p') for (const [, y] of s.pts) seen(y);
+    else { seen(s.y - s.r); seen(s.y + s.r); }
+  }
+
+  const PAD_MM = 20;
+  const W = def.oal + PAD_MM * 2;
+  const H = hi - lo + PAD_MM * 2;
+  // Muzzle left, stock right, bore where the sheet puts it.
+  const sx = (x) => PAD_MM + x;
+  const sy = (y) => PAD_MM + hi - y;
+
+  const parts = g.shapes.map((s) => {
+    if (s.k === 'r') {
+      return `<rect x="${n(Math.min(sx(s.x1), sx(s.x2)))}" y="${n(Math.min(sy(s.y1), sy(s.y2)))}"`
+        + ` width="${n(Math.abs(s.x2 - s.x1))}" height="${n(Math.abs(s.y2 - s.y1))}" class="${s.cls}"/>`;
+    }
+    if (s.k === 'p') {
+      return `<polygon points="${s.pts.map(([x, y]) => `${n(sx(x))},${n(sy(y))}`).join(' ')}" class="${s.cls}"/>`;
+    }
+    return `<circle cx="${n(sx(s.x))}" cy="${n(sy(s.y))}" r="${n(s.r)}" class="${s.cls}"/>`;
+  });
+
+  // Dark UI, light drawing: the sheet's palette inverted just enough to read
+  // on the loadout screen's panels.
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n(W)} ${n(H)}" role="img" aria-label="${esc(def.code)}">
+<style>
+  .metal { fill: #9aa2ae; }
+  .polymer { fill: #6d737e; }
+  .rubber { fill: #464c56; }
+  .accent { fill: #c8531f; }
+  .glass { fill: #7fa8bd; opacity: 0.7; }
+  .cell { fill: #cfcabf; }
+  .cut { fill: #1a1d23; }
+</style>
+${parts.join('\n')}
+</svg>
+`;
+}
+
 mkdirSync(OUT, { recursive: true });
 for (const def of WEAPONS) {
   writeFileSync(join(OUT, `${def.id}.svg`), sheet(def));
+  writeFileSync(join(OUT, `${def.id}-icon.svg`), icon(def));
 }
 
 // An index page so the sheets can be flipped through on the published site.

@@ -339,13 +339,55 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 .weapon-card:hover { background: #262a33; border-color: #3a3f4a; }
 .weapon-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .weapon-card.selected { border-color: var(--accent); background: #221a12; }
+/* The blueprint silhouette, muzzle to the left. Given a fixed band of its own
+   so an obrez and a .50 line up on the same baseline across the grid. */
+.weapon-art {
+  display: block;
+  width: 100%;
+  height: 52px;
+  margin-bottom: var(--s-1);
+  object-fit: contain;
+  object-position: left center;
+  opacity: 0.85;
+}
+.weapon-card.selected .weapon-art { opacity: 1; }
+.weapon-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  width: 100%;
+}
 .weapon-code {
   font-family: var(--mono);
   font-size: 20px;
   letter-spacing: 0.08em;
 }
 .weapon-card.selected .weapon-code { color: var(--accent); }
+.weapon-mode {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
+}
 .weapon-blurb { font-size: 14px; line-height: 1.5; color: var(--text-dim); }
+.weapon-stats {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--s-3);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+.weapon-stats .stat { white-space: nowrap; }
+.loadout-source {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  margin: 0;
+}
+.loadout-source a { color: var(--accent); }
 
 /* ── HUD ─────────────────────────────────────────────────────────────── */
 

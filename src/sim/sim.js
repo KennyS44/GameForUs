@@ -7,13 +7,13 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-} from './constants.js?v=031dc91d';
+} from './constants.js?v=d547eb56';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=031dc91d';
+} from './math.js?v=d547eb56';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-} from './world.js?v=031dc91d';
+} from './world.js?v=d547eb56';
 
 const GRAVITY = 18;
 
@@ -52,7 +52,9 @@ function createPlayer(id, team, spawn, name) {
     weapon: {
       id: DEFAULT_WEAPON,
       ammo: w.magSize,
-      mags: w.reserveMags,
+      // Reserve is counted in rounds, not magazines: a shotgun is fed shell by
+      // shell, so magazines are not a unit every weapon here even has.
+      reserve: w.reserve,
       cooldown: 0,
       reloading: 0,
       reloadTotal: 0,
@@ -129,12 +131,14 @@ export function setLoadout(state, id, weaponId) {
   p.weapon = {
     id: weaponId,
     ammo: def.magSize,
-    mags: def.reserveMags,
+    reserve: def.reserve,
     cooldown: 0,
     reloading: 0,
     reloadTotal: 0,
   };
-  // A swapped weapon is a fresh weapon: the old gun's spray does not carry over.
+  // A swapped weapon is a fresh weapon: the old gun's spray does not carry
+  // over, and neither does a finger left on the trigger of the last one.
+  p.triggerDown = false;
   p.burstShots = 0;
   p.sinceShot = 99;
   p.recoil = { yaw: 0, pitch: 0 };
@@ -262,7 +266,7 @@ function fireBullet(world, state, shooter, origin, dir) {
     const firstGeo = geo[0];
     // Player hit first — nothing blocking.
     if (best && (!firstGeo || best.t < firstGeo.t)) {
-      applyDamage(state, shooter, best.player, best.zone, damageScale);
+      applyDamage(state, shooter, best.player, best.zone, damageScale, start + best.t);
       const at = addScaled(origin, dir, start + best.t);
       emit(state, { type: 'impact', pos: at, normal: { x: 0, y: 1, z: 0 }, material: 'flesh' });
       return;
@@ -286,10 +290,10 @@ function fireBullet(world, state, shooter, origin, dir) {
     const thicknessCm = Math.max(1, (firstGeo.exit - firstGeo.t) * 100);
     const mat = firstGeo.material;
     if (mat.penetration <= 0 || thicknessCm > penetrationLeft) {
-      if (firstGeo.kind === 'door') damageDoor(world, state, firstGeo.doorId, 8, shooter);
+      if (firstGeo.kind === 'door') damageDoor(world, state, firstGeo.doorId, weapon.doorDamage, shooter);
       return; // stopped
     }
-    if (firstGeo.kind === 'door') damageDoor(world, state, firstGeo.doorId, 8, shooter);
+    if (firstGeo.kind === 'door') damageDoor(world, state, firstGeo.doorId, weapon.doorDamage, shooter);
 
     penetrationLeft -= thicknessCm;
     damageScale *= Math.max(0.25, 1 - (thicknessCm * DAMAGE.penetrationLossPerCm) / 100);
@@ -302,13 +306,32 @@ function addScaled(o, d, s) {
   return { x: o.x + d.x * s, y: o.y + d.y * s, z: o.z + d.z * s };
 }
 
-function applyDamage(state, shooter, target, zone, scale) {
+// How much of its damage a round still has at this distance. Straight from
+// Rainbow Six Siege's published model: full damage out to `near`, a straight
+// line down to `far`, then a floor it never drops below.
+export function rangeScale(def, metres) {
+  const { near, far, floor } = def.range;
+  if (metres <= near) return 1;
+  if (metres >= far) return floor;
+  return 1 - (1 - floor) * ((metres - near) / (far - near));
+}
+
+function applyDamage(state, shooter, target, zone, scale, distance) {
   // Nobody dies before the round starts. Rounds are one life each, so being
   // shot while choosing a weapon or taking position is not a fair way to lose it.
   if (state.phase === 'select' || state.phase === 'prep') return;
 
-  let dmg = DAMAGE[zone] * scale;
-  if (zone === 'torso' && target.armour) dmg = Math.max(6, dmg - DAMAGE.armourReduction);
+  const def = WEAPONS[shooter.weapon.id];
+  const head = def.pellets > 1 ? DAMAGE.pelletHead : DAMAGE.head;
+  const zoneScale = zone === 'head' ? head : zone === 'limb' ? DAMAGE.limb : 1;
+  let dmg = def.damage * zoneScale * rangeScale(def, distance) * scale;
+  if (zone === 'torso' && target.armour) {
+    // A vest soaks a fixed amount per hit, so a shot split into eight pellets
+    // must not be charged eight times over — each pellet meets its share of
+    // the plate. Armour-piercing rounds go through nearly all of it.
+    const soak = (DAMAGE.armourReduction / def.pellets) * def.armourPierce;
+    dmg = Math.max(dmg * 0.15, dmg - soak);
+  }
 
   target.health -= dmg;
   emit(state, { type: 'hit', targetId: target.id, by: shooter.id, zone, damage: dmg });
@@ -477,6 +500,10 @@ function stepPlayer(world, state, p, input, dt) {
   else if (input.run && !input.aim) speed = PLAYER.speedRun;
   else speed = PLAYER.speedWalk;
   if (p.aimAmount > 0.5) speed *= 0.7;
+  // What you carry is what you walk at. A sawn-off weighs nothing and a .50
+  // anti-materiel rifle is a fifth of your speed — that, not damage, is what
+  // makes the big gun a decision.
+  speed *= weapon.moveScale;
 
   const sin = Math.sin(p.look.yaw);
   const cos = Math.cos(p.look.yaw);
@@ -627,39 +654,75 @@ function holdInZone(world, state, p, wasAt) {
   p.vel.z = 0;
 }
 
+// Start a reload — a whole magazine, or the next shell into the tube.
+function startReload(state, p, def) {
+  const w = p.weapon;
+  w.reloadTotal = w.ammo > 0 ? def.reloadTime : def.reloadTimeEmpty;
+  w.reloading = w.reloadTotal;
+  makeNoise(state, p.pos, NOISE.reload, 'reload', p.id);
+  emit(state, { type: 'reload', by: p.id, empty: w.ammo === 0, shell: def.reloadStyle === 'shell' });
+}
+
 function stepWeapon(world, state, p, input, dt) {
   const w = p.weapon;
   const def = WEAPONS[w.id];
 
-  w.cooldown = Math.max(0, w.cooldown - dt);
+  // Carry the remainder rather than clamping it away: an interval of 55 ms on
+  // a 17 ms tick would otherwise round up to 67 ms and quietly cost a 1100
+  // rounds-a-minute weapon a fifth of its rate.
+  w.cooldown = Math.max(-0.034, w.cooldown - dt);
 
   // Let go of the trigger for a moment and the muzzle climb starts over.
   p.sinceShot = (p.sinceShot ?? 0) + dt;
   if (p.sinceShot > def.burstResetTime) p.burstShots = 0;
 
+  // A self-loader fires once per pull. Held down, the trigger does nothing
+  // after the first round: this is what separates the pump gun and the .50
+  // from the automatics, and it has to be decided here rather than by how fast
+  // the player can click.
+  const pulled = input.fire && !p.triggerDown;
+  p.triggerDown = !!input.fire;
+  const wantsShot = def.fireMode === 'semi' ? pulled : !!input.fire;
+
   if (w.reloading > 0) {
+    // Shells go in one at a time, and a shotgun can be fired mid-reload: what
+    // is already in the tube stays there. Every other gun is committed.
+    if (def.reloadStyle === 'shell' && wantsShot && w.ammo > 0) {
+      w.reloading = 0;
+      w.cooldown = Math.max(w.cooldown, 0.25); // still has to close the action
+      // The pull that cancelled the reload is the pull that fires: hold the
+      // trigger through it and the shot goes as soon as the action is closed,
+      // instead of asking for a second press.
+      p.triggerDown = false;
+      return;
+    }
     w.reloading -= dt;
     if (w.reloading <= 0) {
-      // Hardcore: the partial magazine is dropped, not merged.
-      if (w.mags > 0) {
-        w.mags--;
-        w.ammo = def.magSize;
+      if (def.reloadStyle === 'shell') {
+        w.ammo++;
+        w.reserve--;
+        emit(state, { type: 'reloadDone', by: p.id });
+        // Keep feeding until the tube is full or the pockets are empty.
+        if (w.ammo < def.magSize && w.reserve > 0) startReload(state, p, def);
+      } else {
+        // Hardcore: the partial magazine is dropped, not merged. What was left
+        // in it goes with it, so the cost of an early reload is a full mag.
+        const take = Math.min(def.magSize, w.reserve);
+        w.reserve -= take;
+        w.ammo = take;
+        w.reloading = 0;
+        emit(state, { type: 'reloadDone', by: p.id });
       }
-      w.reloading = 0;
-      emit(state, { type: 'reloadDone', by: p.id });
     }
     return;
   }
 
-  if (input.reload && w.ammo < def.magSize && w.mags > 0) {
-    w.reloadTotal = w.ammo > 0 ? def.reloadTime : def.reloadTimeEmpty;
-    w.reloading = w.reloadTotal;
-    makeNoise(state, p.pos, NOISE.reload, 'reload', p.id);
-    emit(state, { type: 'reload', by: p.id, empty: w.ammo === 0 });
+  if (input.reload && w.ammo < def.magSize && w.reserve > 0) {
+    startReload(state, p, def);
     return;
   }
 
-  if (!input.fire || w.cooldown > 0) return;
+  if (!wantsShot || w.cooldown > 0) return;
 
   if (w.ammo <= 0) {
     if (input.fire) emit(state, { type: 'dryFire', by: p.id });
@@ -668,7 +731,7 @@ function stepWeapon(world, state, p, input, dt) {
   }
 
   w.ammo--;
-  w.cooldown = 60 / def.rpm;
+  w.cooldown += 60 / def.rpm;
   p.sinceShot = 0;
 
   const eye = eyePosition(p);
@@ -678,13 +741,18 @@ function stepWeapon(world, state, p, input, dt) {
   if (p.crouching) spread *= 0.7;
 
   const base = aimDirection(p);
-  // Random point in the cone.
-  const a = nextRandom(state) * Math.PI * 2;
-  const r = Math.sqrt(nextRandom(state)) * spread;
-  const dir = coneDirection(base, a, r);
-
-  fireBullet(world, state, p, eye, dir);
-  checkLightHits(world, state, eye, dir, p);
+  // Buckshot is the same shot fired several times over: every pellet gets its
+  // own point in the cone, its own path through the walls and its own damage.
+  // That is what makes a shotgun lethal at the door and useless down a
+  // corridor without a single special case in the damage code.
+  let dir = base;
+  for (let pellet = 0; pellet < def.pellets; pellet++) {
+    const a = nextRandom(state) * Math.PI * 2;
+    const r = Math.sqrt(nextRandom(state)) * spread;
+    dir = coneDirection(base, a, r);
+    fireBullet(world, state, p, eye, dir);
+    checkLightHits(world, state, eye, dir, p);
+  }
 
   // Recoil walks the weapon's spray pattern. The count is per burst, not per
   // magazine: what matters is how long you have been holding the trigger.
@@ -854,9 +922,10 @@ export function resetRound(world, state) {
     p.loadout = weaponId;
     p.weapon.id = weaponId;
     p.weapon.ammo = def.magSize;
-    p.weapon.mags = def.reserveMags;
+    p.weapon.reserve = def.reserve;
     p.weapon.reloading = 0;
     p.weapon.cooldown = 0;
+    p.triggerDown = false;
   }
   for (const d of world.doors) {
     const ds = state.doors[d.id];

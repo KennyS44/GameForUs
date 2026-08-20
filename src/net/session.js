@@ -5,12 +5,12 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=031dc91d';
+import { buildWorld } from '../sim/world.js?v=d547eb56';
 import {
   createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout,
-} from '../sim/sim.js?v=031dc91d';
-import { createBotBrain } from '../sim/bot.js?v=031dc91d';
-import { DT } from '../sim/constants.js?v=031dc91d';
+} from '../sim/sim.js?v=d547eb56';
+import { createBotBrain } from '../sim/bot.js?v=d547eb56';
+import { DT } from '../sim/constants.js?v=d547eb56';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 
@@ -22,9 +22,13 @@ export function createLocalSession({ map, name = 'Игрок', bots = 1, seed = 
 
   const brain = createBotBrain(seed);
   const botIds = [];
+  // Defenders do not all carry the same gun: walking into a room and being met
+  // by buckshot rather than by a rifle is half of what the roster is for.
+  const botGuns = ['ar-556-piston', 'sg-12-pump', 'smg-45-inline', 'ar-545-piston', 'dmr-762'];
   for (let i = 0; i < bots; i++) {
     const id = `bot${i}`;
     addPlayer(world, state, id, 'defenders', `Бот ${i + 1}`);
+    setLoadout(state, id, botGuns[i % botGuns.length]);
     botIds.push(id);
   }
 

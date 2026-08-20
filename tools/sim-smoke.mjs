@@ -9,7 +9,7 @@
 import { APARTMENT } from '../src/maps/apartment.js';
 import { buildWorld, hasLineOfSight, doorAngle } from '../src/sim/world.js';
 import {
-  createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout,
+  createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout, rangeScale,
 } from '../src/sim/sim.js';
 import {
   TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES,
@@ -253,7 +253,10 @@ check(
   victim.pos = { x: 0, y: 0, z: 8 };
   victim.look = { yaw: 0, pitch: 0 };
   victim.lean = 1;
-  shooter.pos = { x: 0, y: 0, z: 5.5 };
+  // Inside the landing, not out on the doorstep: the front door is steel, and
+  // now that a 9 mm no longer punches through one, standing behind it would be
+  // testing penetration rather than the lean.
+  shooter.pos = { x: 0, y: 0, z: 6.6 };
   const target = eyePosition(victim);
   const from = eyePosition(shooter);
   const dx = target.x - from.x;
@@ -293,9 +296,15 @@ check(
 {
   const deg = (r) => (r * 180) / Math.PI;
 
+  // Every weapon walks the same shape, so the pattern is checked on one gun:
+  // the piston carbine, the middle of the roster and the closest thing it has
+  // to a reference. The class-to-class comparison comes after.
+  const REFERENCE = 'ar-556-piston';
+
   // Hold the trigger down and record where the sights sit after every shot.
-  function sprayPath(shots) {
+  function sprayPath(shots, weaponId = REFERENCE) {
     restartRound();
+    setLoadout(state, 'a1', weaponId);
     state.phase = 'live';
     state.phaseTime = 60;
     const p = state.players.a1;
@@ -386,6 +395,20 @@ check(
   }
   check('the sights settle after the burst', state.players.a1.recoil.pitch < peak * 0.2,
     `peak=${deg(peak).toFixed(2)}° now=${deg(state.players.a1.recoil.pitch).toFixed(2)}°`);
+
+  // The shape is shared; how hard it kicks is not. A 9 mm walks a gentler path
+  // than a 5.56 carbine, and 5.45 walks the hardest of the three.
+  const seven = (id) => sprayPath(7, id)[6].pitch;
+  const smg = seven('smg-9-roller');
+  const carbine = seven(REFERENCE);
+  const heavyRifle = seven('ar-545-piston');
+  check('a heavier round walks the sights further up the same path',
+    smg < carbine && carbine < heavyRifle,
+    `PP-9 ${smg.toFixed(1)}° < AR-556 ${carbine.toFixed(1)}° < AV-74 ${heavyRifle.toFixed(1)}°`);
+
+  // Leave the shared player as the tests after this one expect to find them.
+  restartRound();
+  setLoadout(state, 'a1', DEFAULT_WEAPON);
 }
 
 // ── The staging minute keeps the two sides apart ──────────────────────────
@@ -626,19 +649,188 @@ console.log('\nA door never pushes anyone through a wall:');
   check('a swinging door never flings anyone across the map', worstJump < 0.6, farthest ?? '');
 }
 
+// ── Eleven weapons that behave like eleven weapons ────────────────────────
+//
+// The roster carries real figures now, so what matters is that the differences
+// between entries reach the simulation: a self-loader is not an automatic, a
+// shotgun is not a rifle with a big number, and a heavy round goes through a
+// wall a 9 mm dies in.
+{
+  console.log('\nBallistics:');
+
+  // Two players facing each other on the landing, nothing in between.
+  function duel(weaponId, gap = 1.4) {
+    restartRound();
+    setLoadout(state, 'a1', weaponId);
+    state.phase = 'live';
+    state.phaseTime = 60;
+    const a = state.players.a1;
+    const d = state.players.d1;
+    a.pos = { x: 0, y: 0, z: 8 };
+    d.pos = { x: 0, y: 0, z: 8 - gap };
+    a.look = { yaw: 0, pitch: 0 };
+    return { a, d };
+  }
+
+  // Every entry has to be complete: a missing field is a weapon that behaves
+  // like whatever `undefined` happens to do in arithmetic.
+  const specOk = Object.entries(WEAPONS).every(([, w]) =>
+    w.damage > 0 && w.rpm > 0 && w.magSize > 0 && w.reserve >= w.magSize
+    && w.recoilClimb.length === 7 && w.recoilClimb.every(([y, p]) => Number.isFinite(y) && p > 0)
+    && w.range.near > 0 && w.range.far > w.range.near && w.range.floor > 0 && w.range.floor <= 1
+    && w.aimTime > 0 && w.moveScale > 0 && w.pellets >= 1);
+  check('every entry carries a full set of numbers', specOk);
+  // Where a figure came from is part of the figure: an entry nobody can trace
+  // back to a real weapon is one nobody can argue with later.
+  check('every entry says which real weapon its numbers came from',
+    Object.values(WEAPONS).every((w) => /Siege|Zero Hour/.test(w.from ?? '')),
+    Object.entries(WEAPONS).filter(([, w]) => !w.from).map(([id]) => id).join(' '));
+
+  // Held down, a self-loader fires exactly once.
+  {
+    const { a } = duel('dmr-762');
+    const held = { ...createInput(), yaw: 0, fire: true };
+    for (let i = 0; i < TICK_RATE; i++) stepSim(world, state, { a1: held, d1: createInput() });
+    check('the trigger held down fires a self-loader once',
+      a.weapon.ammo === WEAPONS['dmr-762'].magSize - 1, `ammo=${a.weapon.ammo}`);
+
+    // Let go, press again: the second round goes.
+    for (let i = 0; i < 6; i++) stepSim(world, state, { a1: { ...createInput(), yaw: 0 }, d1: createInput() });
+    for (let i = 0; i < 20; i++) stepSim(world, state, { a1: held, d1: createInput() });
+    check('letting go and pressing again fires the next one',
+      a.weapon.ammo === WEAPONS['dmr-762'].magSize - 2, `ammo=${a.weapon.ammo}`);
+  }
+
+  // The same second of held trigger empties an automatic instead.
+  {
+    const { a } = duel('smg-45-inline');
+    const held = { ...createInput(), yaw: 0, fire: true };
+    for (let i = 0; i < TICK_RATE; i++) stepSim(world, state, { a1: held, d1: createInput() });
+    const fired = WEAPONS['smg-45-inline'].magSize - a.weapon.ammo;
+    check('an automatic empties its magazine on one pull', fired >= 18, `${fired} rounds`);
+  }
+
+  // One shell, eight pellets, one dead defender at the door.
+  {
+    const { a, d } = duel('sg-12-pump', 1.4);
+    for (let i = 0; i < 20 && d.alive; i++) {
+      stepSim(world, state, { a1: { ...createInput(), yaw: 0, fire: true }, d1: createInput() });
+    }
+    check('one shell kills at the door', !d.alive && a.weapon.ammo === WEAPONS['sg-12-pump'].magSize - 1,
+      `ammo=${a.weapon.ammo} hp=${d.health.toFixed(0)}`);
+  }
+
+  // Damage falls off with distance the way Siege's model says it does.
+  {
+    const pump = WEAPONS['sg-12-pump'];
+    const dmr = WEAPONS['dmr-762'];
+    check('a shell is worth its full damage at the door and its floor down a corridor',
+      rangeScale(pump, 3) === 1 && rangeScale(pump, 20) === pump.range.floor
+      && rangeScale(pump, 9) < 1 && rangeScale(pump, 9) > pump.range.floor,
+      `${rangeScale(pump, 9).toFixed(2)} at 9 m`);
+    check('a marksman rifle keeps its damage across the whole flat',
+      rangeScale(dmr, 30) === 1 && rangeScale(dmr, 35) > 0.8,
+      `${rangeScale(dmr, 35).toFixed(2)} at 35 m`);
+  }
+
+  // Shells go in one at a time, and the tube can be topped up part way.
+  {
+    const { a } = duel('sg-12-pump');
+    const def = WEAPONS['sg-12-pump'];
+    a.weapon.ammo = 2;
+    const reserveBefore = a.weapon.reserve;
+    for (let i = 0; i < TICK_RATE * 5; i++) {
+      stepSim(world, state, { a1: { ...createInput(), yaw: 0, reload: i === 0 }, d1: createInput() });
+    }
+    check('the tube fills shell by shell', a.weapon.ammo === def.magSize,
+      `ammo=${a.weapon.ammo}`);
+    check('every shell came out of the pocket it was in',
+      a.weapon.reserve === reserveBefore - (def.magSize - 2),
+      `${reserveBefore} → ${a.weapon.reserve}`);
+  }
+
+  // A magazine, by contrast, is dropped with whatever was left in it.
+  {
+    const { a } = duel('ar-556-piston');
+    const def = WEAPONS['ar-556-piston'];
+    a.weapon.ammo = 21;
+    const reserveBefore = a.weapon.reserve;
+    for (let i = 0; i < TICK_RATE * 4 && a.weapon.ammo !== def.magSize; i++) {
+      stepSim(world, state, { a1: { ...createInput(), yaw: 0, reload: i === 0 }, d1: createInput() });
+    }
+    check('an early reload costs a whole magazine, not the rounds used',
+      a.weapon.ammo === def.magSize && a.weapon.reserve === reserveBefore - def.magSize,
+      `${reserveBefore} → ${a.weapon.reserve}`);
+  }
+
+  // Through the drywall partition between the living room and the study.
+  {
+    function throughTheWall(weaponId) {
+      restartRound();
+      setLoadout(state, 'a1', weaponId);
+      state.phase = 'live';
+      state.phaseTime = 60;
+      const a = state.players.a1;
+      const d = state.players.d1;
+      a.pos = { x: -9, y: 0, z: -16 };
+      d.pos = { x: -2, y: 0, z: -16 };
+      const yaw = -Math.PI / 2; // facing +x, across the partition at x = -5
+      a.look = { yaw, pitch: 0 };
+      const hp = d.health;
+      // Long enough for the .50 to get two of its slow rounds away.
+      for (let i = 0; i < TICK_RATE * 3; i++) {
+        stepSim(world, state, {
+          a1: { ...createInput(), yaw, fire: i % 4 < 2, aim: true }, d1: createInput(),
+        });
+      }
+      return hp - d.health;
+    }
+    const buck = throughTheWall('sg-12-pump');
+    const fifty = throughTheWall('amr-50');
+    check('buckshot does not cross a drywall partition', buck === 0, `${buck.toFixed(0)} damage`);
+    check('the .50 kills through it', fifty >= PLAYER.maxHealth, `${fifty.toFixed(0)} damage`);
+  }
+
+  // Weight is a real cost: the same sprint carries you less far.
+  {
+    function runFor(weaponId) {
+      restartRound();
+      setLoadout(state, 'a1', weaponId);
+      state.phase = 'live';
+      state.phaseTime = 60;
+      const p = state.players.a1;
+      // Speed reached, not ground covered: a run measured across the flat
+      // would be measuring the furniture in the way.
+      p.pos = { x: 0, y: 0, z: 8 };
+      let top = 0;
+      for (let i = 0; i < TICK_RATE; i++) {
+        stepSim(world, state, { a1: { ...createInput(), moveZ: -1, run: true, yaw: 0 }, d1: createInput() });
+        top = Math.max(top, Math.hypot(p.vel.x, p.vel.z));
+      }
+      return top;
+    }
+    const light = runFor('sg-12-double');
+    const heavy = runFor('amr-50');
+    check('the .50 is carried at a walk, the sawn-off at a run', heavy < light * 0.85,
+      `${light.toFixed(2)} m/s vs ${heavy.toFixed(2)} m/s`);
+  }
+
+  restartRound();
+  setLoadout(state, 'a1', DEFAULT_WEAPON);
+}
+
 // ── Choosing a weapon ─────────────────────────────────────────────────────
 //
-// The roster is eight stubs sharing one set of numbers, so nothing here checks
-// balance. What it checks is the frame: that the choice is refused when it
-// should be, that it really lands in the player's hands, and that it survives
-// into the next round.
+// Beyond the numbers: that the choice is refused when it should be, that it
+// really lands in the player's hands, and that it survives into the next round.
 {
   console.log('\nWeapon selection:');
 
   const ids = Object.keys(WEAPONS);
-  check('the roster has two weapons in each of the four classes',
-    WEAPON_CLASSES.length === 4 &&
-    WEAPON_CLASSES.every((c) => ids.filter((id) => WEAPONS[id].cls === c.id).length === 2),
+  check('the roster is the eleven blueprint sheets, three-three-three-two',
+    ids.length === 11 && WEAPON_CLASSES.length === 4 &&
+    [3, 3, 3, 2].every((n, i) =>
+      ids.filter((id) => WEAPONS[id].cls === WEAPON_CLASSES[i].id).length === n),
     ids.map((id) => `${id}:${WEAPONS[id].cls}`).join(' '));
   check('no entry carries a manufacturer name or model number',
     !ids.some((id) => /mp5|ak|m4|glock|colt|hk|scar|vector|remington|barrett|saiga/i.test(id + WEAPONS[id].name)),
@@ -675,8 +867,8 @@ console.log('\nA door never pushes anyone through a wall:');
   check('the new weapon is in their hands', attacker.weapon.id === 'amr-50', attacker.weapon.id);
   check('it comes with a full magazine',
     attacker.weapon.ammo === WEAPONS['amr-50'].magSize &&
-    attacker.weapon.mags === WEAPONS['amr-50'].reserveMags,
-    `${attacker.weapon.ammo}/${attacker.weapon.mags}`);
+    attacker.weapon.reserve === WEAPONS['amr-50'].reserve,
+    `${attacker.weapon.ammo}/${attacker.weapon.reserve}`);
 
   // Run the select phase out: it must hand over to staging, not to the round.
   for (let i = 0; i < Math.ceil(ROUND.selectTime * TICK_RATE) + 2; i++) stepSim(world, state, {});
@@ -684,24 +876,24 @@ console.log('\nA door never pushes anyone through a wall:');
     state.phase === 'prep' && state.phaseTime > ROUND.prepTime - 1,
     `phase=${state.phase} t=${state.phaseTime.toFixed(2)}`);
   check('a late change of mind is still allowed while staging',
-    setLoadout(state, 'a1', 'sg-12p') === true && attacker.weapon.id === 'sg-12p');
+    setLoadout(state, 'a1', 'sg-12-pump') === true && attacker.weapon.id === 'sg-12-pump');
 
   for (let i = 0; i < Math.ceil(ROUND.prepTime * TICK_RATE) + 2; i++) stepSim(world, state, {});
   check('staging gives way to the round', state.phase === 'live', `phase=${state.phase}`);
   check('the attackers wait half a minute, not a whole one',
     ROUND.prepTime === 30, `prepTime=${ROUND.prepTime}`);
   check('no swapping weapons once the shooting starts',
-    setLoadout(state, 'a1', 'pp-45') === false && attacker.weapon.id === 'sg-12p',
+    setLoadout(state, 'a1', 'smg-45-inline') === false && attacker.weapon.id === 'sg-12-pump',
     attacker.weapon.id);
 
   // Half a magazine gone, then a new round: the choice stays, the gun is new.
   attacker.weapon.ammo = 3;
   resetRound(world, state);
   check('the choice survives into the next round',
-    attacker.loadout === 'sg-12p' && attacker.weapon.id === 'sg-12p',
+    attacker.loadout === 'sg-12-pump' && attacker.weapon.id === 'sg-12-pump',
     `${attacker.loadout}/${attacker.weapon.id}`);
   check('but the magazine is full again',
-    attacker.weapon.ammo === WEAPONS['sg-12p'].magSize, `ammo=${attacker.weapon.ammo}`);
+    attacker.weapon.ammo === WEAPONS['sg-12-pump'].magSize, `ammo=${attacker.weapon.ammo}`);
 }
 
 // ── A client's pick reaches the host ──────────────────────────────────────
@@ -726,12 +918,12 @@ console.log('\nA door never pushes anyone through a wall:');
   handlers.join('guest', { name: 'Guest' });
   const guest = host.state.players.guest;
 
-  handlers.msg('guest', { t: 'loadout', id: 'sg-12d' });
+  handlers.msg('guest', { t: 'loadout', id: 'sg-12-double' });
   check('a guest\'s pick lands on the host',
-    guest.loadout === 'sg-12d' && guest.weapon.id === 'sg-12d', guest.weapon.id);
+    guest.loadout === 'sg-12-double' && guest.weapon.id === 'sg-12-double', guest.weapon.id);
 
   handlers.msg('guest', { t: 'loadout', id: 'railgun' });
-  check('the host refuses a weapon that does not exist', guest.weapon.id === 'sg-12d');
+  check('the host refuses a weapon that does not exist', guest.weapon.id === 'sg-12-double');
 
   host.chooseWeapon('amr-50');
   check('the host can pick for itself', host.me.weapon.id === 'amr-50', host.me.weapon.id);
@@ -740,7 +932,8 @@ console.log('\nA door never pushes anyone through a wall:');
   for (let i = 0; i < 6; i++) host.tick(createInput(), 1 / 60);
   const snap = sent.map(([, m]) => m).find((m) => m.t === 'snap');
   check('the snapshot carries who is holding what',
-    snap?.players?.guest?.loadout === 'sg-12d' && snap.players.guest.weapon.id === 'sg-12d',
+    snap?.players?.guest?.loadout === 'sg-12-double'
+      && snap.players.guest.weapon.id === 'sg-12-double',
     JSON.stringify(snap?.players?.guest?.loadout));
 }
 

@@ -4,9 +4,9 @@
 // The bot plays the way the map wants to be played: it holds an angle, reacts
 // to sound, and pushes only when it has a reason to.
 
-import { createInput, eyePosition, aimDirection } from './sim.js?v=031dc91d';
-import { hasLineOfSight } from './world.js?v=031dc91d';
-import { distXZ, clamp } from './math.js?v=031dc91d';
+import { createInput, eyePosition, aimDirection } from './sim.js?v=d547eb56';
+import { hasLineOfSight } from './world.js?v=d547eb56';
+import { distXZ, clamp } from './math.js?v=d547eb56';
 
 // Indoors nobody picks a figure out of the gloom across the whole map.
 const MAX_SIGHT = 24;
@@ -150,7 +150,10 @@ export function createBotBrain(seed = 7) {
       const len = Math.hypot(dx, dy, dz) || 1;
       const onTarget = (dir.x * dx + dir.y * dy + dir.z * dz) / len;
       if (onTarget > 0.985) {
-        input.fire = true;
+        // Held down, the trigger only ever fires a self-loader once. Pressing
+        // it exactly when the weapon is ready works for both kinds of gun, and
+        // keeps a bot with a pump gun from freezing on a single shell.
+        input.fire = bot.weapon.cooldown <= 0;
         input.aim = visible.dist > 5;
         b.burst += dt;
         if (b.burst > 0.22 + rand(b) * 0.2) {
@@ -162,7 +165,7 @@ export function createBotBrain(seed = 7) {
       b.burst = 0;
     }
 
-    if (bot.weapon.ammo === 0 && bot.weapon.mags > 0) input.reload = true;
+    if (bot.weapon.ammo === 0 && bot.weapon.reserve > 0) input.reload = true;
 
     // ── Move ──
     const investigate = !visible && b.heardGuess && state.time - b.heardAt < 6;

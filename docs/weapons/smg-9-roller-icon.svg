@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 354" role="img" aria-label="PP-9">
+<style>
+  .metal { fill: #9aa2ae; }
+  .polymer { fill: #6d737e; }
+  .rubber { fill: #464c56; }
+  .accent { fill: #c8531f; }
+  .glass { fill: #7fa8bd; opacity: 0.7; }
+  .cell { fill: #cfcabf; }
+  .cut { fill: #1a1d23; }
+</style>
+<rect x="20" y="109" width="52" height="26" class="metal"/>
+<rect x="26" y="109" width="7.2" height="9.8" class="cut"/>
+<rect x="39.3" y="109" width="7.2" height="9.8" class="cut"/>
+<rect x="52.7" y="109" width="7.2" height="9.8" class="cut"/>
+<rect x="66" y="113" width="180" height="18" class="metal"/>
+<rect x="66" y="95" width="168" height="57" class="polymer"/>
+<rect x="90" y="141" width="42" height="7" class="cut"/>
+<rect x="154" y="141" width="42" height="7" class="cut"/>
+<rect x="64" y="82" width="450" height="10" class="accent"/>
+<rect x="68" y="82" width="4" height="4" class="cut"/>
+<rect x="78" y="82" width="4" height="4" class="cut"/>
+<rect x="88" y="82" width="4" height="4" class="cut"/>
+<rect x="98" y="82" width="4" height="4" class="cut"/>
+<rect x="108" y="82" width="4" height="4" class="cut"/>
+<rect x="118" y="82" width="4" height="4" class="cut"/>
+<rect x="128" y="82" width="4" height="4" class="cut"/>
+<rect x="138" y="82" width="4" height="4" class="cut"/>
+<rect x="148" y="82" width="4" height="4" class="cut"/>
+<rect x="158" y="82" width="4" height="4" class="cut"/>
+<rect x="168" y="82" width="4" height="4" class="cut"/>
+<rect x="178" y="82" width="4" height="4" class="cut"/>
+<rect x="188" y="82" width="4" height="4" class="cut"/>
+<rect x="198" y="82" width="4" height="4" class="cut"/>
+<rect x="208" y="82" width="4" height="4" class="cut"/>
+<rect x="218" y="82" width="4" height="4" class="cut"/>
+<rect x="228" y="82" width="4" height="4" class="cut"/>
+<rect x="238" y="82" width="4" height="4" class="cut"/>
+<rect x="248" y="82" width="4" height="4" class="cut"/>
+<rect x="258" y="82" width="4" height="4" class="cut"/>
+<rect x="268" y="82" width="4" height="4" class="cut"/>
+<rect x="278" y="82" width="4" height="4" class="cut"/>
+<rect x="288" y="82" width="4" height="4" class="cut"/>
+<rect x="298" y="82" width="4" height="4" class="cut"/>
+<rect x="308" y="82" width="4" height="4" class="cut"/>
+<rect x="318" y="82" width="4" height="4" class="cut"/>
+<rect x="328" y="82" width="4" height="4" class="cut"/>
+<rect x="338" y="82" width="4" height="4" class="cut"/>
+<rect x="348" y="82" width="4" height="4" class="cut"/>
+<rect x="358" y="82" width="4" height="4" class="cut"/>
+<rect x="368" y="82" width="4" height="4" class="cut"/>
+<rect x="378" y="82" width="4" height="4" class="cut"/>
+<rect x="388" y="82" width="4" height="4" class="cut"/>
+<rect x="398" y="82" width="4" height="4" class="cut"/>
+<rect x="408" y="82" width="4" height="4" class="cut"/>
+<rect x="418" y="82" width="4" height="4" class="cut"/>
+<rect x="428" y="82" width="4" height="4" class="cut"/>
+<rect x="438" y="82" width="4" height="4" class="cut"/>
+<rect x="448" y="82" width="4" height="4" class="cut"/>
+<rect x="458" y="82" width="4" height="4" class="cut"/>
+<rect x="468" y="82" width="4" height="4" class="cut"/>
+<rect x="478" y="82" width="4" height="4" class="cut"/>
+<rect x="488" y="82" width="4" height="4" class="cut"/>
+<rect x="498" y="82" width="4" height="4" class="cut"/>
+<rect x="234" y="92" width="280" height="52" class="metal"/>
+<rect x="514" y="104" width="30" height="30" class="metal"/>
+<rect x="256" y="144" width="188" height="42" class="metal"/>
+<polygon points="264,186 336,186 310,334 238,334" class="polymer"/>
+<polygon points="372,186 434,186 434,220 422,232 384,232 372,220" class="metal"/>
+<polygon points="388,186 462,186 492,318 412,318" class="polymer"/>
+<rect x="540" y="106" width="134" height="30" class="metal"/>
+<polygon points="580,76 670,76 670,162 610,162" class="polymer"/>
+<rect x="670" y="72" width="30" height="96" class="rubber"/>
+<rect x="310" y="54.1" width="30" height="27.9" class="accent"/>
+<rect x="392" y="54.1" width="30" height="27.9" class="accent"/>
+<rect x="296" y="20" width="140" height="37.2" class="metal"/>
+<rect x="300" y="26" width="12" height="25" class="glass"/>
+<rect x="420" y="26" width="12" height="25" class="glass"/>
+<rect x="100" y="157" width="106" height="22" class="metal"/>
+<rect x="84" y="154" width="16" height="28" class="accent"/>
+<rect x="172" y="148" width="22" height="9" class="accent"/>
+<polygon points="170,152 216,152 252,238 210,238" class="polymer"/>
+<circle cx="490" cy="92" r="9" class="accent"/>
+</svg>

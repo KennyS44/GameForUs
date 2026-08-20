@@ -1,9 +1,10 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=031dc91d';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV } from '../sim/constants.js?v=031dc91d';
-import { lerp } from '../sim/math.js?v=031dc91d';
+import * as THREE from '../../vendor/three.module.js?v=d547eb56';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=d547eb56';
+import { lerp } from '../sim/math.js?v=d547eb56';
+import { buildWeaponModel } from './weapons.js?v=d547eb56';
 
 export function createView(scene) {
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.02, 120);
@@ -35,9 +36,26 @@ export function createView(scene) {
 
   // The weapon model sits further out and scaled up rather than close and
   // small: same size on screen, far less perspective distortion at a wide FOV.
-  const weapon = buildWeaponModel();
-  weapon.group.scale.setScalar(1.7);
+  //
+  // Which model is in hand follows the player: the pick reaches this pass the
+  // same way it reaches the simulation, by id, and the group is rebuilt only
+  // when that id actually changes.
+  let weapon = buildWeaponModel(DEFAULT_WEAPON);
+  let weaponId = DEFAULT_WEAPON;
+  weapon.group.scale.setScalar(weapon.scale);
   viewScene.add(weapon.group);
+
+  function carry(id) {
+    if (id === weaponId || !id) return;
+    viewScene.remove(weapon.group);
+    // Materials are shared across the roster; geometry is not. Drop it, or a
+    // player who tries all eleven leaves eleven models on the graphics card.
+    weapon.group.traverse((o) => o.geometry?.dispose());
+    weapon = buildWeaponModel(id);
+    weaponId = id;
+    weapon.group.scale.setScalar(weapon.scale);
+    viewScene.add(weapon.group);
+  }
 
   // Key light from the upper right, plus a cool fill so the shadowed side
   // never goes to pure black.
@@ -76,6 +94,7 @@ export function createView(scene) {
   const CLEARANCE = 1.15;
 
   function update(player, dt, moving, wallDistance = Infinity) {
+    carry(player.weapon?.id);
     const height = PLAYER.heightCrouch + (PLAYER.heightStand - PLAYER.heightCrouch) * player.stance;
     const eyeY = player.pos.y + height - PLAYER.eyeOffset;
 
@@ -137,9 +156,16 @@ export function createView(scene) {
 
     // Far enough forward that the stock never crowds the near plane — a gun
     // model straddling the eye reads as a grey slab across the screen.
-    // In ADS the y offset puts the rear sight exactly on the screen centre.
-    const hip = { x: 0.13, y: -0.20, z: -0.80 };
-    const ads = { x: 0.0, y: -0.093, z: -0.64 };
+    //
+    // ADS is computed rather than tuned: the offset is whatever puts this
+    // weapon's own sight on the middle of the screen. A scope sits 130 mm over
+    // the bore and an SMG's optic 50 mm, and neither needs a magic number.
+    const hip = { x: 0.16, y: -0.20, z: -0.92 };
+    const ads = {
+      x: -weapon.sight.position.x * weapon.scale,
+      y: -weapon.sight.position.y * weapon.scale,
+      z: -0.78,
+    };
     const t = smoothed.aim;
     weapon.group.position.set(
       lerp(hip.x, ads.x, t) + smoothed.sway.x * (1 - t * 0.7) + bobX * 0.8,
@@ -150,7 +176,7 @@ export function createView(scene) {
     // when carried; aiming straightens it onto the sight line.
     weapon.group.rotation.set(
       lerp(0.05, 0, t) + smoothed.recoilKick * 1.4,
-      lerp(-0.07, 0, t) + smoothed.sway.x * 0.6 + smoothed.recoilRoll * 0.8,
+      lerp(-0.16, 0, t) + smoothed.sway.x * 0.6 + smoothed.recoilRoll * 0.8,
       lerp(0.06, 0, t) + smoothed.recoilRoll,
     );
 
@@ -217,7 +243,10 @@ export function createView(scene) {
   }
 
   return {
-    camera, torch, weapon, viewScene, viewCamera,
+    camera, torch, viewScene, viewCamera,
+    // A getter, not the object: the model is replaced whenever the player
+    // picks a different weapon.
+    get weapon() { return weapon; },
     update, muzzleWorldPosition, flash, setAspect, smoothed,
     // Burn the torch for one warm-up frame: that is what allocates its shadow
     // map and compiles the shaders that use it.
@@ -232,80 +261,3 @@ export function createView(scene) {
   };
 }
 
-// A blocky MP5. The shapes are simple, but the proportions and the two-tone
-// finish are what make it read as a weapon rather than a plank.
-function buildWeaponModel() {
-  const group = new THREE.Group();
-
-  // A touch of emissive keeps the silhouette readable when every light is out.
-  const steel = new THREE.MeshStandardMaterial({
-    color: 0x24262c, roughness: 0.5, metalness: 0.6, emissive: 0x0c0e13,
-  });
-  const polymer = new THREE.MeshStandardMaterial({
-    color: 0x111216, roughness: 0.95, metalness: 0.05, emissive: 0x080a0e,
-  });
-
-  const add = (geo, mat, x, y, z, rx = 0) => {
-    const m = new THREE.Mesh(geo, mat);
-    m.position.set(x, y, z);
-    if (rx) m.rotation.x = rx;
-    group.add(m);
-    return m;
-  };
-
-  // Receiver: the long spine of the gun, running away from the camera.
-  const receiver = add(new THREE.BoxGeometry(0.05, 0.072, 0.26), steel, 0, 0, -0.05);
-  // Raised top rail, so the top face has an edge to catch light.
-  add(new THREE.BoxGeometry(0.028, 0.018, 0.24), steel, 0, 0.044, -0.05);
-
-  // Handguard and barrel out front.
-  add(new THREE.BoxGeometry(0.046, 0.05, 0.15), polymer, 0, -0.008, -0.245);
-  const barrel = add(new THREE.CylinderGeometry(0.011, 0.011, 0.13, 10), steel, 0, 0.008, -0.36);
-  barrel.rotation.x = Math.PI / 2;
-  // Muzzle ring gives the front end some weight.
-  const cap = add(new THREE.CylinderGeometry(0.017, 0.017, 0.03, 10), steel, 0, 0.008, -0.415);
-  cap.rotation.x = Math.PI / 2;
-
-  // Magazine, raked forward the way an MP5's is.
-  add(new THREE.BoxGeometry(0.026, 0.15, 0.042), polymer, 0, -0.10, -0.105, -0.14);
-
-  // Pistol grip and trigger guard.
-  add(new THREE.BoxGeometry(0.032, 0.105, 0.045), polymer, 0, -0.095, 0.035, 0.3);
-  add(new THREE.BoxGeometry(0.026, 0.012, 0.05), steel, 0, -0.048, -0.02);
-
-  // Folding stock: two thin rails and a pad, not a solid block.
-  add(new THREE.BoxGeometry(0.012, 0.012, 0.15), steel, 0.024, -0.01, 0.15);
-  add(new THREE.BoxGeometry(0.012, 0.012, 0.15), steel, -0.024, -0.01, 0.15);
-  add(new THREE.BoxGeometry(0.05, 0.055, 0.018), polymer, 0, -0.01, 0.225);
-
-  // Iron sights — the aiming reference when you press RMB. The rear aperture
-  // sits at x=0 so it lands exactly on the screen centre in ADS.
-  const rearSight = new THREE.Mesh(new THREE.TorusGeometry(0.010, 0.0028, 6, 12), steel);
-  rearSight.position.set(0, 0.06, 0.055);
-  group.add(rearSight);
-
-  // Front sight tower with a post inside it.
-  add(new THREE.BoxGeometry(0.004, 0.026, 0.005), steel, 0.013, 0.052, -0.33);
-  add(new THREE.BoxGeometry(0.004, 0.026, 0.005), steel, -0.013, 0.052, -0.33);
-  add(new THREE.BoxGeometry(0.003, 0.018, 0.004), steel, 0, 0.05, -0.33);
-
-  // Charging handle on the left — an asymmetric detail that sells the shape.
-  add(new THREE.BoxGeometry(0.018, 0.012, 0.05), steel, -0.033, 0.03, -0.19);
-
-  // Gloved hands, wrapped tight onto the grip and handguard. Kept small and
-  // slightly lighter than the polymer, so they read as hands holding the gun
-  // rather than as dark blocks floating beneath it.
-  const glove = new THREE.MeshStandardMaterial({
-    color: 0x2b2e35, roughness: 1.0, emissive: 0x0d0f14,
-  });
-  // Firing hand on the pistol grip.
-  add(new THREE.BoxGeometry(0.048, 0.07, 0.058), glove, 0.002, -0.072, 0.028, 0.3);
-  // Support hand on the handguard.
-  add(new THREE.BoxGeometry(0.056, 0.058, 0.08), glove, 0.002, -0.03, -0.245);
-
-  const muzzle = new THREE.Object3D();
-  muzzle.position.set(0, 0.008, -0.44);
-  group.add(muzzle);
-
-  return { group, muzzle, receiver };
-}

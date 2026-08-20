@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 430" role="img" aria-label="PP-45">
+<style>
+  .metal { fill: #9aa2ae; }
+  .polymer { fill: #6d737e; }
+  .rubber { fill: #464c56; }
+  .accent { fill: #c8531f; }
+  .glass { fill: #7fa8bd; opacity: 0.7; }
+  .cell { fill: #cfcabf; }
+  .cut { fill: #1a1d23; }
+</style>
+<rect x="20" y="122" width="46" height="24" class="metal"/>
+<rect x="26" y="122" width="6.4" height="9" class="cut"/>
+<rect x="37.3" y="122" width="6.4" height="9" class="cut"/>
+<rect x="48.7" y="122" width="6.4" height="9" class="cut"/>
+<rect x="60" y="126" width="102" height="16" class="metal"/>
+<rect x="60" y="104" width="150" height="62" class="polymer"/>
+<rect x="84" y="155" width="42" height="7" class="cut"/>
+<rect x="139" y="155" width="42" height="7" class="cut"/>
+<rect x="58" y="80" width="388" height="10" class="accent"/>
+<rect x="62" y="80" width="4" height="4" class="cut"/>
+<rect x="72" y="80" width="4" height="4" class="cut"/>
+<rect x="82" y="80" width="4" height="4" class="cut"/>
+<rect x="92" y="80" width="4" height="4" class="cut"/>
+<rect x="102" y="80" width="4" height="4" class="cut"/>
+<rect x="112" y="80" width="4" height="4" class="cut"/>
+<rect x="122" y="80" width="4" height="4" class="cut"/>
+<rect x="132" y="80" width="4" height="4" class="cut"/>
+<rect x="142" y="80" width="4" height="4" class="cut"/>
+<rect x="152" y="80" width="4" height="4" class="cut"/>
+<rect x="162" y="80" width="4" height="4" class="cut"/>
+<rect x="172" y="80" width="4" height="4" class="cut"/>
+<rect x="182" y="80" width="4" height="4" class="cut"/>
+<rect x="192" y="80" width="4" height="4" class="cut"/>
+<rect x="202" y="80" width="4" height="4" class="cut"/>
+<rect x="212" y="80" width="4" height="4" class="cut"/>
+<rect x="222" y="80" width="4" height="4" class="cut"/>
+<rect x="232" y="80" width="4" height="4" class="cut"/>
+<rect x="242" y="80" width="4" height="4" class="cut"/>
+<rect x="252" y="80" width="4" height="4" class="cut"/>
+<rect x="262" y="80" width="4" height="4" class="cut"/>
+<rect x="272" y="80" width="4" height="4" class="cut"/>
+<rect x="282" y="80" width="4" height="4" class="cut"/>
+<rect x="292" y="80" width="4" height="4" class="cut"/>
+<rect x="302" y="80" width="4" height="4" class="cut"/>
+<rect x="312" y="80" width="4" height="4" class="cut"/>
+<rect x="322" y="80" width="4" height="4" class="cut"/>
+<rect x="332" y="80" width="4" height="4" class="cut"/>
+<rect x="342" y="80" width="4" height="4" class="cut"/>
+<rect x="352" y="80" width="4" height="4" class="cut"/>
+<rect x="362" y="80" width="4" height="4" class="cut"/>
+<rect x="372" y="80" width="4" height="4" class="cut"/>
+<rect x="382" y="80" width="4" height="4" class="cut"/>
+<rect x="392" y="80" width="4" height="4" class="cut"/>
+<rect x="402" y="80" width="4" height="4" class="cut"/>
+<rect x="412" y="80" width="4" height="4" class="cut"/>
+<rect x="422" y="80" width="4" height="4" class="cut"/>
+<rect x="432" y="80" width="4" height="4" class="cut"/>
+<rect x="162" y="90" width="284" height="74" class="metal"/>
+<polygon points="162,90 446,90 446,72 200,72" class="metal"/>
+<polygon points="288,164 338,164 338,196 326,208 300,208 288,196" class="metal"/>
+<polygon points="316,164 396,164 396,284 324,284" class="polymer"/>
+<polygon points="324,284 396,284 396,410 324,410" class="polymer"/>
+<polygon points="446,94 636,88 636,168 476,168" class="polymer"/>
+<rect x="636" y="84" width="24" height="90" class="rubber"/>
+<rect x="246" y="53" width="30" height="27" class="accent"/>
+<rect x="326" y="53" width="30" height="27" class="accent"/>
+<rect x="232" y="20" width="138" height="36" class="metal"/>
+<rect x="236" y="26" width="12" height="24" class="glass"/>
+<rect x="354" y="26" width="12" height="24" class="glass"/>
+<rect x="92" y="171" width="102" height="22" class="metal"/>
+<rect x="76" y="168" width="16" height="28" class="accent"/>
+<rect x="160" y="162" width="22" height="9" class="accent"/>
+<polygon points="140,166 186,166 220,254 178,254" class="polymer"/>
+<circle cx="436" cy="164" r="9" class="accent"/>
+</svg>

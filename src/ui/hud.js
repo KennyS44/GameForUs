@@ -1,6 +1,6 @@
 // HUD: reads simulation state, writes DOM. Never the other way round.
 
-import { WEAPONS, PLAYER } from '../sim/constants.js?v=031dc91d';
+import { WEAPONS, PLAYER } from '../sim/constants.js?v=d547eb56';
 
 const $ = (id) => document.getElementById(id);
 
@@ -70,7 +70,7 @@ export function createHud() {
     el.weaponName.textContent = def.name;
     el.ammoMag.textContent = w.reloading > 0 ? '- -' : w.ammo;
     el.ammoMag.classList.toggle('low', w.ammo <= def.magSize * 0.25);
-    el.ammoReserve.textContent = w.mags;
+    el.ammoReserve.textContent = w.reserve;
     el.flashlightFlag.hidden = !me.flashlight;
 
     // ── Crosshair opens up with your actual cone of fire ──
