@@ -7,13 +7,13 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-} from './constants.js?v=0f7349cc';
+} from './constants.js?v=ec0046cf';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=0f7349cc';
+} from './math.js?v=ec0046cf';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-} from './world.js?v=0f7349cc';
+} from './world.js?v=ec0046cf';
 
 const GRAVITY = 18;
 
@@ -316,22 +316,46 @@ export function rangeScale(def, metres) {
   return 1 - (1 - floor) * ((metres - near) / (far - near));
 }
 
-function applyDamage(state, shooter, target, zone, scale, distance) {
-  // Nobody dies before the round starts. Rounds are one life each, so being
-  // shot while choosing a weapon or taking position is not a fair way to lose it.
-  if (state.phase === 'select' || state.phase === 'prep') return;
-
-  const def = WEAPONS[shooter.weapon.id];
+// What one projectile takes off, before it is subtracted from anyone.
+//
+// Pure and exported so the roster can be checked entry by entry: the promise
+// that no weapon kills in a single hit is only worth as much as the test that
+// proves it, and the test needs to ask this question directly rather than by
+// shooting a bot in the dark and hoping the right hitbox was in the way.
+//
+//   zone      'head' | 'torso' | 'limb'
+//   distance  metres travelled, for falloff
+//   armour    is the target wearing a vest
+//   cover     what the round has left after punching through walls, 1 = clean
+export function hitDamage(def, zone, distance, { armour = true, cover = 1 } = {}) {
   const head = def.pellets > 1 ? DAMAGE.pelletHead : DAMAGE.head;
   const zoneScale = zone === 'head' ? head : zone === 'limb' ? DAMAGE.limb : 1;
-  let dmg = def.damage * zoneScale * rangeScale(def, distance) * scale;
-  if (zone === 'torso' && target.armour) {
+  let dmg = def.damage * zoneScale * rangeScale(def, distance) * cover;
+
+  if (zone === 'torso' && armour) {
     // A vest soaks a fixed amount per hit, so a shot split into eight pellets
     // must not be charged eight times over — each pellet meets its share of
     // the plate. Armour-piercing rounds go through nearly all of it.
     const soak = (DAMAGE.armourReduction / def.pellets) * def.armourPierce;
     dmg = Math.max(dmg * 0.15, dmg - soak);
   }
+
+  // The ceiling. A .50 on a clean line is the one round in the game allowed
+  // through it — that is the whole point of carrying something that slow and
+  // that heavy. Shoot the same round through a wall and it comes out the far
+  // side as just another very hard hit: the shot that kills outright has to be
+  // one you actually had the angle for.
+  const uncapped = def.oneShot && cover >= 1;
+  return uncapped ? dmg : Math.min(dmg, DAMAGE.maxPerHit);
+}
+
+function applyDamage(state, shooter, target, zone, scale, distance) {
+  // Nobody dies before the round starts. Rounds are one life each, so being
+  // shot while choosing a weapon or taking position is not a fair way to lose it.
+  if (state.phase === 'select' || state.phase === 'prep') return;
+
+  const def = WEAPONS[shooter.weapon.id];
+  const dmg = hitDamage(def, zone, distance, { armour: target.armour, cover: scale });
 
   target.health -= dmg;
   emit(state, { type: 'hit', targetId: target.id, by: shooter.id, zone, damage: dmg });

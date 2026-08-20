@@ -9,10 +9,11 @@
 import { APARTMENT } from '../src/maps/apartment.js';
 import { buildWorld, hasLineOfSight, doorAngle } from '../src/sim/world.js';
 import {
-  createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout, rangeScale,
+  createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout,
+  rangeScale, hitDamage,
 } from '../src/sim/sim.js';
 import {
-  TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES,
+  TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES, DAMAGE,
 } from '../src/sim/constants.js';
 import { createHostSession } from '../src/net/session.js';
 
@@ -710,14 +711,53 @@ console.log('\nA door never pushes anyone through a wall:');
     check('an automatic empties its magazine on one pull', fired >= 18, `${fired} rounds`);
   }
 
-  // One shell, eight pellets, one dead defender at the door.
+  // The rule the roster is built on, asked of every entry directly rather than
+  // inferred from a firefight: one projectile, or one whole pattern, must
+  // leave a healthy player standing. Point blank, no cover, worst zone.
+  {
+    const offenders = [];
+    for (const [id, w] of Object.entries(WEAPONS)) {
+      if (w.oneShot) continue;
+      for (const zone of ['head', 'torso', 'limb']) {
+        const pattern = hitDamage(w, zone, 1) * w.pellets;
+        if (pattern >= PLAYER.maxHealth) offenders.push(`${id} ${zone} ${pattern.toFixed(0)}`);
+      }
+    }
+    check('nothing but the .50 kills in a single hit', offenders.length === 0, offenders.join(', '));
+
+    const worst = Math.max(...Object.values(WEAPONS)
+      .filter((w) => !w.oneShot)
+      .flatMap((w) => ['head', 'torso'].map((z) => hitDamage(w, z, 1) * w.pellets)));
+    check('the worst single hit still leaves something to fight with',
+      PLAYER.maxHealth - worst >= 10, `${(PLAYER.maxHealth - worst).toFixed(0)} health left`);
+  }
+
+  // The .50 is the exception, and only with nothing in the way.
+  {
+    const fifty = WEAPONS['amr-50'];
+    check('a clean .50 hit kills outright', hitDamage(fifty, 'torso', 1) >= PLAYER.maxHealth,
+      `${hitDamage(fifty, 'torso', 1).toFixed(0)}`);
+    check('the same round through cover does not',
+      hitDamage(fifty, 'torso', 1, { cover: 0.58 }) <= DAMAGE.maxPerHit,
+      `${hitDamage(fifty, 'torso', 1, { cover: 0.58 }).toFixed(0)}`);
+  }
+
+  // One shell hurts badly and does not kill; the second one does.
   {
     const { a, d } = duel('sg-12-pump', 1.4);
     for (let i = 0; i < 20 && d.alive; i++) {
       stepSim(world, state, { a1: { ...createInput(), yaw: 0, fire: true }, d1: createInput() });
     }
-    check('one shell kills at the door', !d.alive && a.weapon.ammo === WEAPONS['sg-12-pump'].magSize - 1,
+    check('one shell at the door wounds but does not kill',
+      d.alive && d.health < PLAYER.maxHealth * 0.5 && a.weapon.ammo === WEAPONS['sg-12-pump'].magSize - 1,
       `ammo=${a.weapon.ammo} hp=${d.health.toFixed(0)}`);
+
+    // Pump and fire again. The trigger has to be released first: a self-loader
+    // held down never fires twice, which is the point of the fire mode.
+    for (let i = 0; i < TICK_RATE * 2 && d.alive; i++) {
+      stepSim(world, state, { a1: { ...createInput(), yaw: 0, fire: i % 10 < 3 }, d1: createInput() });
+    }
+    check('the second shell finishes it', !d.alive, `hp=${d.health.toFixed(0)}`);
   }
 
   // Damage falls off with distance the way Siege's model says it does.
@@ -788,7 +828,9 @@ console.log('\nA door never pushes anyone through a wall:');
     const buck = throughTheWall('sg-12-pump');
     const fifty = throughTheWall('amr-50');
     check('buckshot does not cross a drywall partition', buck === 0, `${buck.toFixed(0)} damage`);
-    check('the .50 kills through it', fifty >= PLAYER.maxHealth, `${fifty.toFixed(0)} damage`);
+    // Two rounds, not one: through a wall even the .50 is held to the ceiling.
+    check('the .50 kills through it, in two', fifty >= PLAYER.maxHealth,
+      `${fifty.toFixed(0)} damage`);
   }
 
   // Weight is a real cost: the same sprint carries you less far.

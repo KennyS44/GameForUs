@@ -42,24 +42,39 @@ export const LOOK = {
   pitchLimit: Math.PI / 2 - 0.02,
 };
 
-// Hardcore damage: torso hits kill in one or two rounds, no health regeneration.
+// Damage: every hit hurts, no hit is a coin flip you lose the round to.
 //
-// A weapon carries its own torso figure now (see the roster below); what lives
+// The rule the whole roster is built around: one hit never kills a healthy
+// player. Not a lucky round out of a spray, not a head clipped by the ninth
+// bullet of a burst — the fight is decided by how many rounds you land, which
+// is what makes aiming worth anything. The single exception is the .50, and
+// only on a clean line: put a wall in front of it and it obeys the rule too.
+//
+// A weapon carries its own torso figure (see the roster below); what lives
 // here is what every weapon shares — where a hit landed and what it went
 // through on the way.
 export const DAMAGE = {
-  // Multipliers on the weapon's torso damage. Head is set so that the weakest
-  // gun in the roster still kills outright: 33 x 3.4 = 112 against 100 health.
-  head: 3.4,
+  // No single hit may take more than this, so the worst case still leaves 15
+  // health and a chance to shoot back, break line of sight or close a door.
+  // The ceiling is what makes the rule a rule rather than a lucky sum: every
+  // figure below can be retuned without ever creating a one-shot kill.
+  maxPerHit: 85,
+  // Multipliers on the weapon's torso damage. A head hit is worth nearly two
+  // body hits and halves how long anyone needs to be exposed — decisive, but
+  // still a hit you have to follow up.
+  head: 1.8,
   limb: 0.55,
-  // A single pellet of buckshot is not a rifle round: it gets a modest head
-  // bonus instead of a lethal one, so a shotgun kills by putting a pattern
-  // into someone, not by clipping their ear.
-  pelletHead: 1.6,
+  // Buckshot gets no head bonus at all. A pattern is a dozen small hits, and
+  // multiplying every one of them by a head hit is how a shotgun ends up
+  // killing outright at the door — which is exactly what this roster does not
+  // do. Aiming a shotgun still pays: more of the pattern lands.
+  pelletHead: 1.0,
   // Armour soaks a flat amount per hit on the torso only. Buckshot is stopped
   // best by a vest, armour-piercing rounds barely notice it: each weapon
-  // scales this with its own `armourPierce`.
-  armourReduction: 22,
+  // scales this with its own `armourPierce`. Kept modest, because a flat soak
+  // punishes the low-damage weapons hardest and would push an SMG to six
+  // rounds a kill.
+  armourReduction: 12,
   // Bullets lose damage passing through cover.
   penetrationLossPerCm: 3.5,
 };
@@ -80,10 +95,14 @@ export const DAMAGE = {
 //
 // Two conversions were applied to every Siege figure:
 //
-//   Damage x1.6. Siege bodies hold 100-125 health and take three to five
-//   rifle rounds; ours hold 100 and this game promises two. The multiplier is
-//   flat, so the ladder between weapons survives — an AV-74 still hits harder
-//   than an AR-556 by exactly the margin an AK-74M does over a C8-SFW.
+//   Damage x1.2, then trimmed to the shots-to-kill this game wants. Siege
+//   bodies hold 100-125 health; ours hold 100 and nobody dies to one round.
+//   That fixes the ceiling — the hardest rifle lands on 52, because 52 x 1.8
+//   to the head is 94 and a head hit still has to be followed up — and the
+//   rest of the ladder is set by shots to kill rather than by the multiplier:
+//   three body hits for a rifle, four for an SMG, two for the marksman rifle,
+//   two patterns for a shotgun. Inside a class the Siege ordering survives:
+//   the AK-derived AV-74 still hits harder than the C8-derived AR-556.
 //
 //   Damage falloff is Siege's own model, stated in their Y6S3 designer's
 //   notes: full damage to `near` metres, a straight line down to `far`, then
@@ -157,7 +176,7 @@ export const WEAPONS = {
   'smg-9-roller': gun({
     name: 'PP-9', cls: 'smg', blurb: '9×19, роликовое запирание',
     from: 'Rainbow Six Siege — MP5 (27 dmg, 799 rpm, 30+1)',
-    damage: 43, rpm: 800, magSize: 30, reserve: 120,
+    damage: 42, rpm: 800, magSize: 30, reserve: 120,
     reloadTime: 2.2, reloadTimeEmpty: 2.9,
     range: { near: 18, far: 28, floor: 0.6 },
     peak: 0.019, spreadHip: 0.030, spreadAim: 0.0030, spreadMoving: 0.026,
@@ -169,18 +188,18 @@ export const WEAPONS = {
   'smg-57-pdw': gun({
     name: 'PDW-57', cls: 'smg', blurb: '5,7×28, буллпап, магазин 50',
     from: 'Rainbow Six Siege — P90 (22 dmg, 968 rpm, 50+1)',
-    damage: 33, rpm: 950, magSize: 50, reserve: 100,
+    damage: 34, rpm: 950, magSize: 50, reserve: 100,
     reloadTime: 2.4, reloadTimeEmpty: 2.9,
     range: { near: 18, far: 28, floor: 0.6 },
     peak: 0.014, spreadHip: 0.028, spreadAim: 0.0028, spreadMoving: 0.024,
-    aimTime: 0.22, penetration: 9, loudness: 38, armourPierce: 0.3,
+    aimTime: 0.22, penetration: 9, loudness: 38, armourPierce: 0.35,
   }),
   // Vector: 23 damage at 1200 rpm, the fastest gun in Siege and the shortest
   // barrel here, so it also loses its damage earlier than the rest of the class.
   'smg-45-inline': gun({
     name: 'PP-45', cls: 'smg', blurb: '.45 ACP, гасящий затвор',
     from: 'Rainbow Six Siege — Vector .45 ACP (23 dmg, 1200 rpm, 25+1)',
-    damage: 37, rpm: 1100, magSize: 25, reserve: 125,
+    damage: 38, rpm: 1100, magSize: 25, reserve: 125,
     reloadTime: 2.0, reloadTimeEmpty: 2.8,
     range: { near: 14, far: 24, floor: 0.55 },
     peak: 0.016, spreadHip: 0.034, spreadAim: 0.0034, spreadMoving: 0.030,
@@ -192,7 +211,7 @@ export const WEAPONS = {
   'ar-545-piston': gun({
     name: 'AV-74', cls: 'rifle', blurb: '5,45×39, длинный ход поршня',
     from: 'Rainbow Six Siege — AK-74M (44 dmg, 650 rpm)',
-    damage: 70, rpm: 600, magSize: 30, reserve: 120,
+    damage: 52, rpm: 600, magSize: 30, reserve: 120,
     reloadTime: 2.4, reloadTimeEmpty: 3.2,
     range: { near: 25, far: 35, floor: 0.6 },
     peak: 0.034, spreadHip: 0.040, spreadAim: 0.0030, spreadMoving: 0.034,
@@ -202,7 +221,7 @@ export const WEAPONS = {
   'ar-556-piston': gun({
     name: 'AR-556', cls: 'rifle', blurb: '5,56×45, короткий ход поршня',
     from: 'Rainbow Six Siege — C8-SFW (40 dmg, 837 rpm)',
-    damage: 64, rpm: 800, magSize: 30, reserve: 120,
+    damage: 48, rpm: 800, magSize: 30, reserve: 120,
     reloadTime: 2.2, reloadTimeEmpty: 3.0,
     range: { near: 25, far: 35, floor: 0.6 },
     peak: 0.024, spreadHip: 0.038, spreadAim: 0.0026, spreadMoving: 0.032,
@@ -213,7 +232,7 @@ export const WEAPONS = {
   'ar-556-folder': gun({
     name: 'AC-556', cls: 'rifle', blurb: '5,56×45, полимерная коробка, складной',
     from: 'Rainbow Six Siege — AR33 (41 dmg, 749 rpm)',
-    damage: 66, rpm: 620, magSize: 30, reserve: 120,
+    damage: 50, rpm: 620, magSize: 30, reserve: 120,
     reloadTime: 2.3, reloadTimeEmpty: 3.1,
     range: { near: 28, far: 38, floor: 0.65 },
     peak: 0.026, spreadHip: 0.042, spreadAim: 0.0022, spreadMoving: 0.034,
@@ -226,7 +245,7 @@ export const WEAPONS = {
   'sg-12-double': gun({
     name: 'SG-12D', cls: 'shotgun', blurb: '12 калибр, обрез, два ствола',
     from: 'Zero Hour — Sawed Off (7 pellets, 35 chest, 2 rounds)',
-    damage: 38, pellets: 7, fireMode: 'semi', rpm: 240, magSize: 2, reserve: 16,
+    damage: 12, pellets: 7, fireMode: 'semi', rpm: 240, magSize: 2, reserve: 16,
     reloadTime: 3.4, reloadTimeEmpty: 3.4,
     range: { near: 4, far: 11, floor: 0.4 },
     peak: 0.130, spreadHip: 0.105, spreadAim: 0.075, spreadMoving: 0.120,
@@ -238,7 +257,7 @@ export const WEAPONS = {
   'sg-12-pump': gun({
     name: 'SG-12P', cls: 'shotgun', blurb: '12 калибр, помповое, магазин 7',
     from: 'Rainbow Six Siege — M590A1 (48/pellet x8, 87 rpm, 6+1)',
-    damage: 34, pellets: 8, fireMode: 'semi', rpm: 80, magSize: 7, reserve: 28,
+    damage: 11, pellets: 8, fireMode: 'semi', rpm: 80, magSize: 7, reserve: 28,
     reloadStyle: 'shell', reloadTime: 0.62, reloadTimeEmpty: 0.62,
     range: { near: 5, far: 13, floor: 0.45 },
     peak: 0.090, spreadHip: 0.095, spreadAim: 0.062, spreadMoving: 0.105,
@@ -250,7 +269,7 @@ export const WEAPONS = {
   'sg-12-mag': gun({
     name: 'SG-12M', cls: 'shotgun', blurb: '12 калибр, самозарядное, магазин 8',
     from: 'Rainbow Six Siege — SASG-12 (26/pellet x8, 348 rpm, 10+1)',
-    damage: 20, pellets: 8, fireMode: 'semi', rpm: 240, magSize: 8, reserve: 32,
+    damage: 8, pellets: 8, fireMode: 'semi', rpm: 240, magSize: 8, reserve: 32,
     reloadTime: 2.6, reloadTimeEmpty: 3.4,
     range: { near: 5, far: 13, floor: 0.45 },
     peak: 0.075, spreadHip: 0.090, spreadAim: 0.058, spreadMoving: 0.100,
@@ -265,7 +284,7 @@ export const WEAPONS = {
   'amr-50': gun({
     name: 'AMR-50', cls: 'heavy', blurb: '.50, самозарядная, пробивает стены',
     from: 'Rainbow Six Siege — CSRX 300 (135 dmg, 52 rpm, one-shot down)',
-    damage: 190, fireMode: 'semi', rpm: 60, magSize: 10, reserve: 30,
+    damage: 190, oneShot: true, fireMode: 'semi', rpm: 60, magSize: 10, reserve: 30,
     reloadTime: 3.2, reloadTimeEmpty: 4.2,
     range: { near: 40, far: 60, floor: 0.85 },
     peak: 0.160, spreadHip: 0.075, spreadAim: 0.0016, spreadMoving: 0.070,
@@ -277,7 +296,7 @@ export const WEAPONS = {
   'dmr-762': gun({
     name: 'DMR-762', cls: 'heavy', blurb: '7,62×51, марксманская, магазин 20',
     from: 'Rainbow Six Siege — 417 / CAMRS (69 dmg, 444 rpm, 20+1)',
-    damage: 110, fireMode: 'semi', rpm: 300, magSize: 20, reserve: 80,
+    damage: 54, fireMode: 'semi', rpm: 300, magSize: 20, reserve: 80,
     reloadTime: 2.5, reloadTimeEmpty: 3.3,
     range: { near: 30, far: 40, floor: 0.7 },
     peak: 0.055, spreadHip: 0.055, spreadAim: 0.0018, spreadMoving: 0.050,
