@@ -1,17 +1,18 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=b0d71194';
+import * as THREE from '../vendor/three.module.js?v=3d9441b4';
 import {
-  buildScene, syncDoors, syncLights, makeAvatar, createEquipmentView,
-} from './render/scene.js?v=b0d71194';
-import { createEffects } from './render/effects.js?v=b0d71194';
-import { createView } from './render/view.js?v=b0d71194';
-import { createHud } from './ui/hud.js?v=b0d71194';
-import { DT, PLAYER } from './sim/constants.js?v=b0d71194';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=b0d71194';
-import { raycastGeometry } from './sim/world.js?v=b0d71194';
-import { distXZ } from './sim/math.js?v=b0d71194';
+  buildScene, syncDoors, syncLights, makeAvatar, poseAvatar, setAvatarWeapon,
+  createEquipmentView,
+} from './render/scene.js?v=3d9441b4';
+import { createEffects } from './render/effects.js?v=3d9441b4';
+import { createView } from './render/view.js?v=3d9441b4';
+import { createHud } from './ui/hud.js?v=3d9441b4';
+import { DT } from './sim/constants.js?v=3d9441b4';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=3d9441b4';
+import { raycastGeometry } from './sim/world.js?v=3d9441b4';
+import { distXZ } from './sim/math.js?v=3d9441b4';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -225,12 +226,8 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
       }
       av.visible = p.alive;
       if (!p.alive) continue;
-      const h = PLAYER.heightCrouch + (PLAYER.heightStand - PLAYER.heightCrouch) * p.stance;
-      av.position.set(p.pos.x, p.pos.y, p.pos.z);
-      av.scale.y = h / PLAYER.heightStand;
-      av.rotation.y = p.look.yaw;
-      // Tilt with their lean, so a peeking shoulder reads correctly.
-      av.rotation.z = -(p.lean ?? 0) * PLAYER.leanAngle;
+      setAvatarWeapon(av, p.weapon?.id);
+      poseAvatar(av, p);
     }
     for (const [id, av] of avatars) {
       if (!session.state.players[id]) {

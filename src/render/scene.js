@@ -1,8 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=b0d71194';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=b0d71194';
+import * as THREE from '../../vendor/three.module.js?v=3d9441b4';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=3d9441b4';
+import { PLAYER } from '../sim/constants.js?v=3d9441b4';
+import { buildWeaponModel } from './weapons.js?v=3d9441b4';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -438,42 +440,209 @@ export function createEquipmentView(scene) {
 }
 
 // ── Player avatars ────────────────────────────────────────────────────────
+//
+// A man, built to the same measurements the simulation shoots at. The three
+// hitboxes in sim.js are fractions of a player's height — head in the top
+// 26 cm, chest from 45% to that, legs below — so the rig below is laid out on
+// exactly those figures. What you aim at is what is there: a head that reads
+// as a head is a head you can hit, and the difference between hitting a
+// shoulder and hitting a helmet is the whole of this game.
+//
+// Two dozen boxes and cylinders, no skinning, no imported mesh: the silhouette
+// does the work. Gear tells the sides apart at a glance in a dark room —
+// attackers come in with helmets and plate carriers, defenders hold the flat
+// in soft caps and chest rigs.
 
-const TEAM_COLOR = {
-  attackers: 0x2e3d52,
-  defenders: 0x4a3328,
+const KIT = {
+  attackers: {
+    cloth: 0x2b3442, webbing: 0x1d2530, hard: 0x21262e, skin: 0x6b5344,
+  },
+  defenders: {
+    cloth: 0x3d3327, webbing: 0x2a2118, hard: 0x2a2620, skin: 0x6b5344,
+  },
 };
 
+// Materials are shared per side: five bodies on screen is five draw calls'
+// worth of material, not thirty.
+// How far the head sits above the chest pivot. Named because the lean maths
+// needs the same figure the rig is built with.
+const HEAD_HEIGHT = 0.70;
+
+const kitMaterials = new Map();
+function kitMats(team) {
+  if (!kitMaterials.has(team)) {
+    const c = KIT[team] ?? KIT.attackers;
+    kitMaterials.set(team, {
+      cloth: new THREE.MeshStandardMaterial({ color: c.cloth, roughness: 0.95 }),
+      webbing: new THREE.MeshStandardMaterial({ color: c.webbing, roughness: 1.0 }),
+      hard: new THREE.MeshStandardMaterial({ color: c.hard, roughness: 0.55, metalness: 0.35 }),
+      skin: new THREE.MeshStandardMaterial({ color: c.skin, roughness: 0.9 }),
+      visor: new THREE.MeshStandardMaterial({
+        color: 0x11161c, roughness: 0.25, metalness: 0.6, emissive: 0x080c12,
+      }),
+    });
+  }
+  return kitMaterials.get(team);
+}
+
+// A box, given its centre and size. Everything below is measured in metres off
+// the floor, for a man of PLAYER.heightStand; the whole rig is scaled by the
+// player's actual height, which is what keeps it inside the hitboxes.
+function box(parent, mat, w, h, d, x, y, z, rx = 0) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  mesh.position.set(x, y, z);
+  mesh.rotation.x = rx;
+  mesh.castShadow = true;
+  parent.add(mesh);
+  return mesh;
+}
+
+function limb(parent, mat, radius, length, x, y, z, rx) {
+  const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 3, 8), mat);
+  mesh.position.set(x, y, z);
+  mesh.rotation.x = rx;
+  mesh.castShadow = true;
+  parent.add(mesh);
+  return mesh;
+}
+
 export function makeAvatar(team) {
+  const m = kitMats(team);
   const group = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({
-    color: TEAM_COLOR[team] ?? 0x333333,
-    roughness: 0.85,
-  });
 
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.55, 4, 8), mat);
-  torso.position.y = 1.15;
-  torso.castShadow = true;
-  group.add(torso);
+  // ── Legs: floor to 45% of height ──
+  const legsRig = new THREE.Group();
+  group.add(legsRig);
+  for (const side of [-1, 1]) {
+    const leg = new THREE.Group();
+    leg.position.set(side * 0.105, 0.78, 0);
+    legsRig.add(leg);
+    limb(leg, m.cloth, 0.075, 0.24, 0, -0.16, 0, 0);        // thigh
+    box(leg, m.webbing, 0.135, 0.10, 0.14, 0, -0.30, 0.02);  // knee pad
+    limb(leg, m.cloth, 0.06, 0.24, 0, -0.46, 0.01, 0);      // shin
+    box(leg, m.webbing, 0.115, 0.09, 0.27, 0, -0.72, -0.03); // boot
+  }
+  // The hips belong to the legs, not to the chest: a man leaning out of a
+  // doorway swings his shoulders over them and leaves his belt where it was.
+  box(legsRig, m.cloth, 0.30, 0.16, 0.21, 0, 0.80, 0);
+  box(legsRig, m.webbing, 0.32, 0.06, 0.23, 0, 0.87, 0);     // belt
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), mat);
-  head.position.y = 1.63;
-  head.castShadow = true;
-  group.add(head);
+  // ── Chest: 45% to the base of the head ──
+  const chest = new THREE.Group();
+  chest.position.y = 0.79;
+  group.add(chest);
 
-  const legs = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.5, 4, 8), mat);
-  legs.position.y = 0.45;
-  legs.castShadow = true;
-  group.add(legs);
+  // Waist first, tapered in, so the join over the belt reads as a body
+  // bending rather than a block sliding sideways.
+  box(chest, m.cloth, 0.26, 0.16, 0.17, 0, 0.06, 0);        // waist
+  box(chest, m.cloth, 0.34, 0.24, 0.20, 0, 0.20, 0);        // belly
+  box(chest, m.cloth, 0.40, 0.30, 0.22, 0, 0.44, 0);        // ribs
+  // The carrier: the thing that makes a torso hit worth less than a head hit.
+  box(chest, m.webbing, 0.42, 0.36, 0.26, 0, 0.42, 0);
+  box(chest, m.hard, 0.24, 0.20, 0.03, 0, 0.44, 0.135);     // front plate
+  box(chest, m.webbing, 0.11, 0.10, 0.07, -0.13, 0.30, 0.13); // pouches
+  box(chest, m.webbing, 0.11, 0.10, 0.07, 0.13, 0.30, 0.13);
+  box(chest, m.webbing, 0.26, 0.22, 0.11, 0, 0.44, -0.16);  // pack on the back
+  box(chest, m.cloth, 0.44, 0.10, 0.22, 0, 0.58, 0);        // shoulders
+  box(chest, m.skin, 0.11, 0.07, 0.11, 0, 0.65, 0);         // neck
 
-  // The gun, so you can tell which way someone is actually facing.
-  const gun = new THREE.Mesh(
-    new THREE.BoxGeometry(0.07, 0.12, 0.42),
-    new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.6, metalness: 0.4 }),
-  );
-  gun.position.set(0.16, 1.3, -0.3);
-  group.add(gun);
+  // ── Head: the top 26 cm, and it turns on its own ──
+  const head = new THREE.Group();
+  head.position.y = HEAD_HEIGHT;
+  chest.add(head);
+  box(head, m.skin, 0.155, 0.20, 0.19, 0, 0.09, 0);
+  if (team === 'defenders') {
+    box(head, m.webbing, 0.185, 0.075, 0.20, 0, 0.185, 0);       // soft cap
+    box(head, m.webbing, 0.17, 0.03, 0.09, 0, 0.165, 0.135);     // peak
+    box(head, m.cloth, 0.16, 0.10, 0.02, 0, 0.10, 0.10);         // face wrap
+  } else {
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.115, 12, 8), m.hard);
+    helmet.scale.set(1, 0.92, 1.05);
+    helmet.position.set(0, 0.135, -0.005);
+    helmet.castShadow = true;
+    head.add(helmet);
+    box(head, m.hard, 0.085, 0.05, 0.06, 0, 0.20, 0.075);        // mount
+    box(head, m.visor, 0.17, 0.055, 0.02, 0, 0.115, 0.098);      // goggles
+  }
 
-  group.userData = { torso, head, legs, gun };
+  // ── Arms and whatever they are holding ──
+  //
+  // One rig: both arms and the weapon move together, so a man aiming up
+  // raises his gun with his eyes instead of pointing it at the floor.
+  const arms = new THREE.Group();
+  arms.position.set(0, 0.55, 0);
+  chest.add(arms);
+
+  limb(arms, m.cloth, 0.058, 0.16, -0.185, -0.09, -0.02, 0.55);  // support upper
+  limb(arms, m.cloth, 0.055, 0.17, -0.14, -0.19, -0.20, 1.15);   // support fore
+  limb(arms, m.cloth, 0.058, 0.16, 0.185, -0.10, -0.03, 0.75);   // firing upper
+  limb(arms, m.cloth, 0.055, 0.15, 0.11, -0.20, -0.16, 1.05);    // firing fore
+
+  const hold = new THREE.Group();          // the grip hand, where a gun goes
+  hold.position.set(0.055, -0.235, -0.24);
+  arms.add(hold);
+  // Gloves: the viewmodel's own pair is switched off for an avatar, because
+  // these are the hands that belong to these arms.
+  box(hold, m.webbing, 0.055, 0.085, 0.07, 0, 0.01, 0.02);
+  box(hold, m.webbing, 0.06, 0.07, 0.09, -0.055, 0.055, -0.20);
+
+  group.userData = { team, chest, head, arms, hold, legsRig, weaponId: null, weapon: null };
   return group;
+}
+
+// The gun in their hands is the gun they picked: same model as the viewmodel,
+// at true size rather than the compressed scale a first-person weapon uses.
+export function setAvatarWeapon(av, weaponId) {
+  const u = av.userData;
+  if (!weaponId || u.weaponId === weaponId) return;
+  if (u.weapon) {
+    u.hold.remove(u.weapon.group);
+    u.weapon.group.traverse((o) => o.geometry?.dispose());
+  }
+  const built = buildWeaponModel(weaponId, { hands: false });
+  built.group.position.set(0, 0.03, -0.02);
+  built.group.traverse((o) => { o.castShadow = true; });
+  u.hold.add(built.group);
+  u.weapon = built;
+  u.weaponId = weaponId;
+}
+
+// Pose one avatar from one player's state.
+//
+// Height, lean and where they are looking all come straight out of the
+// simulation, in the same proportions it uses to decide what a bullet hit.
+export function poseAvatar(av, p) {
+  const u = av.userData;
+  const height = PLAYER.heightCrouch + (PLAYER.heightStand - PLAYER.heightCrouch) * p.stance;
+  av.position.set(p.pos.x, p.pos.y, p.pos.z);
+  av.rotation.y = p.look.yaw;
+  // Every hitbox is a fraction of the player's height, so scaling the whole
+  // man is what keeps the drawing and the shooting in agreement.
+  av.scale.setScalar(height / PLAYER.heightStand);
+
+  // Leaning moves the head out over the shoulder and takes the chest part of
+  // the way with it — exactly the offsets sim.js applies to the hitboxes. The
+  // feet stay planted, which is why a lean is a peek and not a step.
+  const lean = p.lean ?? 0;
+  const out = lean * PLAYER.leanMax;
+  // A body tilts as well as slides, and a tilt carries the head sideways on
+  // its own — so whatever the tilt gives, the neck takes back. The head lands
+  // exactly where the simulation put its hitbox, and the man still leans.
+  const roll = lean * PLAYER.leanAngle * 0.3;
+  u.chest.position.x = out * 0.6;
+  u.chest.rotation.z = -roll;
+  u.head.position.x = out * 0.4 - HEAD_HEIGHT * Math.sin(roll);
+  u.head.rotation.z = -roll * 0.5;
+
+  const pitch = clampPitch(p.look.pitch ?? 0);
+  u.head.rotation.x = pitch * 0.7;
+  u.arms.rotation.x = pitch;
+
+  // Crouching folds the knees forward rather than sinking the man into the
+  // floor: same envelope, better shape.
+  u.legsRig.rotation.x = (1 - p.stance) * 0.12;
+}
+
+function clampPitch(pitch) {
+  return Math.max(-1.1, Math.min(1.1, pitch));
 }

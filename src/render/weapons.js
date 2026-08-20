@@ -10,7 +10,7 @@
 // is the silhouette — a bullpup with the magazine on its back is not the same
 // shape as a sawn-off, and that difference is the whole point of the roster.
 
-import * as THREE from '../../vendor/three.module.js?v=b0d71194';
+import * as THREE from '../../vendor/three.module.js?v=3d9441b4';
 
 const MM = 0.001;
 
@@ -378,7 +378,10 @@ function viewScale(oal) {
 // Returns the group, the muzzle (where the flash and the tracer start) and the
 // sight (what ADS puts on the centre of the screen), plus the scale the
 // renderer should apply.
-export function buildWeaponModel(id) {
+// `hands` draws the gloves that belong to a first-person view. Hung on another
+// player's avatar the gun already has arms attached to it, and a second pair
+// of hands inside the first is exactly the sort of thing you notice.
+export function buildWeaponModel(id, { hands = true } = {}) {
   const def = BUILDS[id] ?? BUILDS['smg-9-roller'];
   const group = partsToGroup(def.parts, def.grip);
   const z = (x) => (x - def.grip) * MM;
@@ -386,14 +389,16 @@ export function buildWeaponModel(id) {
   // Gloved hands: one wrapped round the grip, one under the forend. Kept small
   // and a shade lighter than the polymer so they read as hands rather than as
   // more gun.
-  const firing = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.07, 0.058), MATS.glove);
-  firing.position.set(0.002, -0.072, z(def.grip + 30));
-  firing.rotation.x = 0.3;
-  group.add(firing);
+  if (hands) {
+    const firing = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.07, 0.058), MATS.glove);
+    firing.position.set(0.002, -0.072, z(def.grip + 30));
+    firing.rotation.x = 0.3;
+    group.add(firing);
 
-  const support = new THREE.Mesh(new THREE.BoxGeometry(0.056, 0.058, 0.08), MATS.glove);
-  support.position.set(0.002, -0.03, z(def.support));
-  group.add(support);
+    const support = new THREE.Mesh(new THREE.BoxGeometry(0.056, 0.058, 0.08), MATS.glove);
+    support.position.set(0.002, -0.03, z(def.support));
+    group.add(support);
+  }
 
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, 0, z(-20));
