@@ -10,7 +10,7 @@
 //   - some strict NATs need a TURN relay, which this free setup doesn't have.
 // Both go away when the simulation moves to a real server.
 
-import { createBusHost, joinBus } from './localbus.js?v=5cb8f0e6';
+import { createBusHost, joinBus } from './localbus.js?v=49b50937';
 
 // PeerJS ships as a classic browser bundle, so it is loaded on demand rather
 // than imported. Solo play never downloads it.

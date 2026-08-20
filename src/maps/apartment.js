@@ -32,6 +32,9 @@ export const MATERIALS = {
   // rounds and the pane is out of the frame.
   glass: { name: 'glass', penetration: 40, color: 0x88a0aa, hardness: 0.05, seeThrough: true },
   metal: { name: 'metal', penetration: 1, color: 0x4a4e52, hardness: 0.9 },
+  // Wet rooms are tiled, and tile behaves like the floor it is laid on: a
+  // separate material only so the renderer can tell them apart.
+  tile: { name: 'tile', penetration: 0, color: 0x6d6b66, hardness: 1.0 },
   fabric: { name: 'fabric', penetration: 20, color: 0x3d3a42, hardness: 0.2 },
 };
 
@@ -578,12 +581,32 @@ const rooms = [
   { id: 'shaft-e-top', name: 'Лестница В', floor: 1, shaft: true, min: { x: 13.6, z: -7.4 }, max: { x: 16, z: 1 } },
 ];
 
+// ── Tiled floors ──────────────────────────────────────────────────────────
+//
+// Wet rooms and the kitchen are laid in porcelain, not parquet. The tile is
+// cut from the room table above rather than typed out a second time, and it
+// goes *into* the slab — the top thirty millimetres of it, standing five
+// millimetres proud the way tile stands proud of the screed it is bedded on.
+// Five millimetres is nothing to walk over, and it keeps the two surfaces off
+// the same plane, which is what map-check is there to catch.
+const TILED = ['kitchen', 'bathroom', 'spa', 'kids-bath', 'master-bath', 'laundry'];
+
+const tiledFloors = rooms
+  .filter((r) => TILED.includes(r.id))
+  .map((r) => {
+    const base = r.floor === 1 ? F2 : 0;
+    return box(r.min.x, base - 0.03, r.min.z, r.max.x, base + 0.005, r.max.z, M.tile);
+  });
+
 export const APARTMENT = {
   id: 'penthouse',
   name: 'Пентхаус',
   bounds: { min: { x: -16.2, y: 0, z: -18.2 }, max: { x: 16.2, y: ROOF + 0.3, z: 9.7 } },
   upperFloorY: F2,
-  geometry: [...shell, ...courtStair, ...groundWalls, ...upperWalls, ...eastStair, ...blockers, ...furniture],
+  geometry: [
+    ...shell, ...courtStair, ...groundWalls, ...upperWalls, ...eastStair,
+    ...blockers, ...furniture, ...tiledFloors,
+  ],
   rooms,
   doors,
   lights,

@@ -10,7 +10,7 @@
 // is the silhouette — a bullpup with the magazine on its back is not the same
 // shape as a sawn-off, and that difference is the whole point of the roster.
 
-import * as THREE from '../../vendor/three.module.js?v=5cb8f0e6';
+import * as THREE from '../../vendor/three.module.js?v=49b50937';
 
 const MM = 0.001;
 

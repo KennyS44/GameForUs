@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=5cb8f0e6';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=5cb8f0e6';
-import { PLAYER } from '../sim/constants.js?v=5cb8f0e6';
-import { buildWeaponModel } from './weapons.js?v=5cb8f0e6';
+import * as THREE from '../../vendor/three.module.js?v=49b50937';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=49b50937';
+import { PLAYER } from '../sim/constants.js?v=49b50937';
+import { buildWeaponModel } from './weapons.js?v=49b50937';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -25,6 +25,9 @@ const TEXTURES = {
     map: 'wood_diff.jpg', normal: 'wood_nor.jpg',
     metresPerTile: 1.4, normalScale: 0.6, tint: 0x7d6144,
   },
+  // Large-format porcelain, laid at 1.2 m to the tile — the floor of a
+  // bathroom you would find in a flat like this one.
+  tile: { map: 'tile_diff.jpg', normal: 'tile_nor.jpg', metresPerTile: 1.2, normalScale: 0.7 },
   // Sofas and beds. The weave is small and tiles tight — at three metres it is
   // the difference between upholstery and a painted crate.
   fabric: {
@@ -74,6 +77,9 @@ function materialFor(def) {
     params.roughness = 0.55;
   } else if (def.name === 'wood') {
     params.roughness = 0.62;
+  } else if (def.name === 'tile') {
+    // Glazed: wetter-looking than parquet, and it throws the torch back.
+    params.roughness = 0.32;
   } else if (def.name === 'metal') {
     params.roughness = 0.45;
     params.metalness = 0.75;
