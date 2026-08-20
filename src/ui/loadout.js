@@ -2,7 +2,7 @@
 // round — picking a card calls back out, and what a player is actually carrying
 // is whatever the simulation says a moment later.
 
-import { WEAPONS, WEAPON_CLASSES } from '../sim/constants.js?v=d547eb56';
+import { WEAPONS, WEAPON_CLASSES } from '../sim/constants.js?v=0f7349cc';
 
 const $ = (id) => document.getElementById(id);
 
