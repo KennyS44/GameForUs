@@ -1,10 +1,10 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=387e0d38';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=387e0d38';
-import { lerp } from '../sim/math.js?v=387e0d38';
-import { buildWeaponModel } from './weapons.js?v=387e0d38';
+import * as THREE from '../../vendor/three.module.js?v=5cb8f0e6';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=5cb8f0e6';
+import { lerp } from '../sim/math.js?v=5cb8f0e6';
+import { buildWeaponModel } from './weapons.js?v=5cb8f0e6';
 
 export function createView(scene) {
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.02, 120);
@@ -14,10 +14,15 @@ export function createView(scene) {
   // which keeps the scene cheap while still feeling properly dark.
   const torch = new THREE.SpotLight(0xf2f0e4, 0, FLASHLIGHT.range, FLASHLIGHT.angle, 0.75, 1.7);
   torch.castShadow = true;
-  torch.shadow.mapSize.set(1024, 1024);
+  torch.shadow.mapSize.set(2048, 2048);
   torch.shadow.camera.near = 0.1;
   torch.shadow.camera.far = FLASHLIGHT.range;
   torch.shadow.bias = -0.0016;
+  // A torch is a lamp in someone's hand, not the sun: its shadows have soft
+  // edges. The map is doubled so there is detail to blur — a megabyte more of
+  // video memory, and every doorway stops looking cut out with scissors.
+  torch.shadow.radius = 3;
+  torch.shadow.blurSamples = 12;
   scene.add(torch);
   scene.add(torch.target);
   scene.add(camera);

@@ -10,20 +10,28 @@
 // is the silhouette — a bullpup with the magazine on its back is not the same
 // shape as a sawn-off, and that difference is the whole point of the roster.
 
-import * as THREE from '../../vendor/three.module.js?v=387e0d38';
+import * as THREE from '../../vendor/three.module.js?v=5cb8f0e6';
 
 const MM = 0.001;
 
 // A touch of emissive keeps the silhouette readable when every light is out.
 const MATS = {
+  // Steel and polymer are the two halves of every weapon here, and they were
+  // near enough the same shade of black that a receiver read as one lump.
+  // Now the metal catches the light and the plastic drinks it: which part of
+  // a gun you are looking at is something you can see.
   steel: new THREE.MeshStandardMaterial({
-    color: 0x24262c, roughness: 0.5, metalness: 0.6, emissive: 0x0c0e13,
+    color: 0x3c424c, roughness: 0.34, metalness: 0.9, emissive: 0x0f1218,
   }),
   polymer: new THREE.MeshStandardMaterial({
-    color: 0x111216, roughness: 0.95, metalness: 0.05, emissive: 0x080a0e,
+    color: 0x15171c, roughness: 0.92, metalness: 0.04, emissive: 0x080a0e,
   }),
   rubber: new THREE.MeshStandardMaterial({
     color: 0x0c0d10, roughness: 1.0, metalness: 0.0, emissive: 0x060709,
+  }),
+  // Webbing: the sling, and anything else woven.
+  webbing: new THREE.MeshStandardMaterial({
+    color: 0x262a31, roughness: 1.0, metalness: 0.0, emissive: 0x090b0e,
   }),
   glass: new THREE.MeshStandardMaterial({
     color: 0x2a3a44, roughness: 0.2, metalness: 0.3, emissive: 0x0a1016,
@@ -72,6 +80,39 @@ const MATS = {
 // ['sight', x0, x1, radius, y] — an open-ended housing: a red dot's tube or a
 //   scope body, hollow so aiming through it shows the room and not a slab.
 
+// Nothing in a workshop has a square edge. A chamfer of a millimetre or two
+// down every long corner is the difference between a machined part and a
+// child's brick, and it costs one extra quad per corner: the profile is a
+// rectangle with its corners cut, extruded along the part.
+//
+// Geometry is cached by size, because a roster of eleven weapons repeats the
+// same few masses over and over.
+const boxCache = new Map();
+function chamferedBox(w, h, d) {
+  const key = `${w.toFixed(4)}|${h.toFixed(4)}|${d.toFixed(4)}`;
+  if (boxCache.has(key)) return boxCache.get(key);
+
+  const c = Math.min(0.004, Math.min(w, h) * 0.22);
+  const x = w / 2;
+  const y = h / 2;
+  const shape = new THREE.Shape();
+  shape.moveTo(-x + c, -y);
+  shape.lineTo(x - c, -y);
+  shape.lineTo(x, -y + c);
+  shape.lineTo(x, y - c);
+  shape.lineTo(x - c, y);
+  shape.lineTo(-x + c, y);
+  shape.lineTo(-x, y - c);
+  shape.lineTo(-x, -y + c);
+  shape.closePath();
+
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: false, curveSegments: 1 });
+  geo.translate(0, 0, -d / 2);
+  geo.computeVertexNormals();
+  boxCache.set(key, geo);
+  return geo;
+}
+
 function partsToGroup(parts, anchor) {
   const group = new THREE.Group();
   const z = (x) => (x - anchor) * MM;
@@ -83,7 +124,7 @@ function partsToGroup(parts, anchor) {
       const len = Math.abs(x1 - x0) * MM;
       const height = Math.abs(yHigh - yLow) * MM;
       const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(width * MM, height, len),
+        chamferedBox(width * MM, height, len),
         MATS[mat],
       );
       mesh.position.set(0, ((yLow + yHigh) / 2) * MM, z((x0 + x1) / 2));
@@ -92,7 +133,7 @@ function partsToGroup(parts, anchor) {
     } else if (kind === 'rod') {
       const [, x0, x1, radius, mat, y = 0] = part;
       const mesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(radius * MM, radius * MM, Math.abs(x1 - x0) * MM, 10),
+        new THREE.CylinderGeometry(radius * MM, radius * MM, Math.abs(x1 - x0) * MM, 16),
         MATS[mat],
       );
       mesh.rotation.x = Math.PI / 2;
@@ -269,7 +310,7 @@ const BUILDS = {
 
   // Sawn-off double: two barrels, a break-action frame and nothing else.
   'sg-12-double': {
-    oal: 420, grip: 370, support: 176, sight: [359, 74],
+    oal: 420, grip: 370, support: 176, sling: false, sight: [359, 74],
     parts: [
       ['slab', 0, 300, 3, 26, 46, 'steel'],
       ['slab', 0, 300, -26, -3, 46, 'steel'],
@@ -412,6 +453,7 @@ export function buildWeaponModel(id, { hands = true } = {}) {
 
   if (hands) addHands(group, def, z);
   addOptic(group, def, z, scale);
+  addSling(group, def, z);
 
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, 0, z(-20));
@@ -492,6 +534,23 @@ function limbAlong(group, mat, from, dir, len, radius) {
   );
   group.add(mesh);
   return mesh;
+}
+
+// A two-point sling, hanging where a sling hangs: off the handguard, under
+// the weapon, and back onto the stock. It is the piece that says the thing in
+// your hands is carried rather than spawned, and it is one tube.
+function addSling(group, def, z) {
+  if (def.sling === false) return;
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0.006, -0.030, z(def.support - 10)),
+    new THREE.Vector3(0.016, -0.150, z((def.support + def.oal) / 2)),
+    new THREE.Vector3(0.008, -0.022, z(def.oal - 90)),
+  ]);
+  const strap = new THREE.Mesh(
+    new THREE.TubeGeometry(curve, 14, 0.0055, 5, false),
+    MATS.webbing,
+  );
+  group.add(strap);
 }
 
 // ── Optics ─────────────────────────────────────────────────────────────────

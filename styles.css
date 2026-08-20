@@ -484,6 +484,16 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
   transition: opacity 0.42s var(--ease);
 }
 
+/* The permanent one: a stop of falloff into the corners, the way a lens sees
+   a dark room. Light enough that it is felt rather than noticed, and it holds
+   the eye where the shooting happens. */
+.frame-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 78% 78% at center, transparent 45%, rgba(0, 0, 0, 0.55) 100%);
+}
+
 .topbar {
   position: absolute;
   top: var(--s-4);

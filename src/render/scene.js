@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=387e0d38';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=387e0d38';
-import { PLAYER } from '../sim/constants.js?v=387e0d38';
-import { buildWeaponModel } from './weapons.js?v=387e0d38';
+import * as THREE from '../../vendor/three.module.js?v=5cb8f0e6';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=5cb8f0e6';
+import { PLAYER } from '../sim/constants.js?v=5cb8f0e6';
+import { buildWeaponModel } from './weapons.js?v=5cb8f0e6';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -633,9 +633,12 @@ export function setAvatarWeapon(av, weaponId) {
 // simulation, in the same proportions it uses to decide what a bullet hit.
 export function poseAvatar(av, p) {
   const u = av.userData;
+  if (!p.alive) return poseBody(av, p);
+  u.down = null;
+  av.rotation.set(0, p.look.yaw, 0);
+
   const height = PLAYER.heightCrouch + (PLAYER.heightStand - PLAYER.heightCrouch) * p.stance;
   av.position.set(p.pos.x, p.pos.y, p.pos.z);
-  av.rotation.y = p.look.yaw;
   // Every hitbox is a fraction of the player's height, so scaling the whole
   // man is what keeps the drawing and the shooting in agreement.
   av.scale.setScalar(height / PLAYER.heightStand);
@@ -661,6 +664,40 @@ export function poseAvatar(av, p) {
   // Crouching folds the knees forward rather than sinking the man into the
   // floor: same envelope, better shape.
   u.legsRig.rotation.x = (1 - p.stance) * 0.12;
+}
+
+// A man who is hit goes down where he was standing and stays there.
+//
+// The simulation has nothing to say about a body — it stopped caring the
+// moment the health reached zero — so the fall is recorded here, once, at the
+// spot and the facing he had when it happened. After that nothing moves: a
+// corpse in a doorway is information, and information that drifts is a lie.
+export function poseBody(av, p) {
+  const u = av.userData;
+  if (!u.down) {
+    // Which way he goes over is decided by his own name, so every client
+    // draws the same body in the same place without anyone sending it.
+    let h = 0;
+    for (let i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) & 0xffff;
+    u.down = {
+      pos: { x: p.pos.x, y: p.pos.y, z: p.pos.z },
+      yaw: p.look.yaw + ((h % 100) / 100 - 0.5) * 0.9,
+      roll: ((h >> 7) % 100) / 100 < 0.5 ? -1 : 1,
+    };
+    // Arms and legs let go: nothing here is held up any more.
+    u.chest.position.x = 0;
+    u.chest.rotation.z = 0;
+    u.head.position.x = 0;
+    u.head.rotation.set(0.25, 0, u.down.roll * 0.5);
+    u.arms.rotation.x = -0.35;
+    u.legsRig.rotation.x = 0.12;
+  }
+  const d = u.down;
+  // Face down, feet where they were, and lifted just clear of the floor so a
+  // shoulder is lying on the boards rather than through them.
+  av.position.set(d.pos.x, d.pos.y + 0.16, d.pos.z);
+  av.rotation.set(-Math.PI / 2, d.yaw, d.roll * 0.22);
+  av.scale.setScalar(1);
 }
 
 function clampPitch(pitch) {

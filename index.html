@@ -10,8 +10,8 @@
 <meta name="description" content="Хардкорный тактический шутер в тёмном двухэтажном пентхаусе: свет, звук и двери решают больше, чем реакция.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <!-- Written by tools/stamp-version.mjs; the page checks it against version.txt. -->
-<meta name="gameforus-version" content="387e0d38">
-<link rel="stylesheet" href="styles.css?v=387e0d38">
+<meta name="gameforus-version" content="5cb8f0e6">
+<link rel="stylesheet" href="styles.css?v=5cb8f0e6">
 </head>
 <body>
 
@@ -19,6 +19,8 @@
 
 <!-- ── In-game HUD ────────────────────────────────────────────────────── -->
 <div id="hud" class="hud" hidden>
+  <!-- The corners of a dark flat are dark. Always on, and never in the way. -->
+  <div class="frame-vignette" aria-hidden="true"></div>
   <div class="crosshair" id="crosshair" aria-hidden="true">
     <span class="ch ch-t"></span><span class="ch ch-r"></span>
     <span class="ch ch-b"></span><span class="ch ch-l"></span>
@@ -408,6 +410,6 @@
   window.addEventListener('load', function () { window.setTimeout(offerUpdate, 1200); });
 })();
 </script>
-<script type="module" src="src/main.js?v=387e0d38"></script>
+<script type="module" src="src/main.js?v=5cb8f0e6"></script>
 </body>
 </html>

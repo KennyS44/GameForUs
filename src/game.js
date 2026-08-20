@@ -1,18 +1,18 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=387e0d38';
+import * as THREE from '../vendor/three.module.js?v=5cb8f0e6';
 import {
   buildScene, syncDoors, syncLights, makeAvatar, poseAvatar, setAvatarWeapon,
   createEquipmentView,
-} from './render/scene.js?v=387e0d38';
-import { createEffects } from './render/effects.js?v=387e0d38';
-import { createView } from './render/view.js?v=387e0d38';
-import { createHud } from './ui/hud.js?v=387e0d38';
-import { DT } from './sim/constants.js?v=387e0d38';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=387e0d38';
-import { raycastGeometry } from './sim/world.js?v=387e0d38';
-import { distXZ } from './sim/math.js?v=387e0d38';
+} from './render/scene.js?v=5cb8f0e6';
+import { createEffects } from './render/effects.js?v=5cb8f0e6';
+import { createView } from './render/view.js?v=5cb8f0e6';
+import { createHud } from './ui/hud.js?v=5cb8f0e6';
+import { DT } from './sim/constants.js?v=5cb8f0e6';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=5cb8f0e6';
+import { raycastGeometry } from './sim/world.js?v=5cb8f0e6';
+import { distXZ } from './sim/math.js?v=5cb8f0e6';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -224,8 +224,9 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
         built.scene.add(av);
         avatars.set(p.id, av);
       }
-      av.visible = p.alive;
-      if (!p.alive) continue;
+      // The dead stay on the floor: a body in a doorway is half of what you
+      // know about the round you walked into.
+      av.visible = true;
       setAvatarWeapon(av, p.weapon?.id);
       poseAvatar(av, p);
     }
