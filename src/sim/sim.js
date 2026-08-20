@@ -8,14 +8,14 @@
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
   GADGETS, DEFAULT_GADGET, BLIND,
-} from './constants.js?v=45193364';
+} from './constants.js?v=387e0d38';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=45193364';
+} from './math.js?v=387e0d38';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=45193364';
+} from './world.js?v=387e0d38';
 
 const GRAVITY = 18;
 
@@ -705,7 +705,11 @@ function popFlash(world, state, t) {
     const facing = Math.max(0, to.x * look.x + to.y * look.y + to.z * look.z);
     const near = 1 - Math.min(1, dist / def.radius);
     const amount = Math.min(1, (0.35 + 0.65 * facing) * (0.35 + 0.75 * near));
-    p.blind = Math.max(p.blind, amount);
+    // Blindness is counted in seconds, not in screen-white: the gadget says
+    // five, so a man who took it square is out of the fight for five, the
+    // first of them with nothing on the screen but white. Anything less and
+    // a flash is a flicker nobody bothers to throw.
+    p.blind = Math.max(p.blind, amount * def.blind * BLIND.fade);
     emit(state, { type: 'blinded', id: p.id, amount });
   }
 }

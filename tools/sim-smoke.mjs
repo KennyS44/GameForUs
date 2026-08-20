@@ -773,6 +773,29 @@ console.log('\nA door never pushes anyone through a wall:');
       `${rangeScale(dmr, 35).toFixed(2)} at 35 m`);
   }
 
+  // A shotgun has to reach across a room. The old cones threw a pattern two
+  // metres wide at ten paces, which is a weapon that misses a standing man
+  // with every pellet but one — so the cone is checked in centimetres, at the
+  // range the flat is actually fought at.
+  {
+    const across = [];
+    for (const id of ['sg-12-double', 'sg-12-pump', 'sg-12-mag']) {
+      const w = WEAPONS[id];
+      // Radius of the pattern at ten metres, down the sights.
+      across.push([id, w.spreadAim * 10, rangeScale(w, 10)]);
+    }
+    check('buckshot still holds a pattern at ten metres',
+      across.every(([, r]) => r <= 0.6), across.map(([id, r]) => `${id} ${(r * 100).toFixed(0)} cm`).join(', '));
+    check('and it is worth more than a scratch out there',
+      across.every(([, , scale]) => scale >= 0.55),
+      across.map(([id, , s]) => `${id} ${(s * 100).toFixed(0)}%`).join(', '));
+    // The close-range trade is unchanged: a pattern is many small hits, and
+    // all of them together still leave a man standing.
+    const pumpPattern = hitDamage(WEAPONS['sg-12-pump'], 'torso', 1) * WEAPONS['sg-12-pump'].pellets;
+    check('a shell at the door is still not a kill on its own',
+      pumpPattern < PLAYER.maxHealth, `${pumpPattern.toFixed(0)} damage`);
+  }
+
   // Shells go in one at a time, and the tube can be topped up part way.
   {
     const { a } = duel('sg-12-pump');
@@ -1118,6 +1141,44 @@ console.log('\nA door never pushes anyone through a wall:');
     // And it burns off on its own.
     for (let i = 0; i < TICK_RATE * 6; i++) stepSim(world, state, { a1: createInput(), d1: createInput() });
     check('and it wears off', d.blind === 0, `blind=${d.blind.toFixed(2)}`);
+  }
+
+  // ── And what it costs the man who catches it square.
+  //
+  // The throw above lands where the physics puts it, which is the right test
+  // for line of sight and the wrong one for timing. This one pops a flash two
+  // metres in front of a man looking straight at it, which is the worst case
+  // and the one the kit advertises.
+  {
+    const { d } = atFrontDoor('flash');
+    // Out on the landing with nothing between the two of them: two metres
+    // closer to the door and the panel itself would take the flash.
+    d.pos = { x: 0, y: 0, z: 8.6 };
+    d.look = { yaw: 0, pitch: 0 };
+    const eye = eyePosition(d);
+    state.throwables.push({
+      kind: 'flash', by: 'a1', team: 'attackers',
+      pos: { x: eye.x, y: eye.y, z: eye.z - 1.5 },
+      vel: { x: 0, y: 0, z: 0 },
+      fuse: 0.001,
+    });
+    stepSim(world, state, { a1: createInput(), d1: createInput() });
+    check('one square in the eyes whites the screen out', d.blind > 1,
+      `blind=${d.blind.toFixed(2)}`);
+
+    let white = 0;
+    let ticks = 0;
+    for (let i = 0; i < TICK_RATE * 12 && d.blind > 0; i++) {
+      if (d.blind >= 1) white++;
+      ticks++;
+      stepSim(world, state, { a1: createInput(), d1: createInput() });
+    }
+    const seconds = ticks / TICK_RATE;
+    check('and costs the seconds the kit says it costs',
+      seconds > GADGETS.flash.blind - 0.4 && seconds < GADGETS.flash.blind + 0.4,
+      `${seconds.toFixed(1)} s of ${GADGETS.flash.blind}`);
+    check('the first of which are blind ones', white / TICK_RATE > 1.2,
+      `${(white / TICK_RATE).toFixed(1)} s of white`);
   }
 
   // ── Smoke: a cloud nobody sees through, bots included.

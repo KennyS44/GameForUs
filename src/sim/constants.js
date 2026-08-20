@@ -240,16 +240,28 @@ export const WEAPONS = {
   }),
 
   // ── Shotguns ──
+  //
+  // What was wrong with them was not the number on the pellet, it was the
+  // cone. Measured against a torso, a pattern put 74 damage on a man at
+  // contact and 5 at ten metres — a shotgun that could not reach across the
+  // living room, in a game played in rooms. Zero Hour's buckshot holds a
+  // pattern out to the far side of a flat and only then falls apart, so the
+  // cones below are tightened to the size buckshot actually throws — about a
+  // 30 cm circle at ten metres down the sights — and the falloff is pushed
+  // out to match. Per pellet nothing has grown much: it is the same shell,
+  // it just stops missing.
+  //
   // Zero Hour's sawn-off: seven pellets, and the hardest pellet in the game —
   // its 35 chest against the pump gun's 30. Two rounds, no stock, no sights.
+  // The widest cone here by a distance: everything it has, it has at the door.
   'sg-12-double': gun({
     name: 'SG-12D', cls: 'shotgun', blurb: '12 калибр, обрез, два ствола',
     from: 'Zero Hour — Sawed Off (7 pellets, 35 chest, 2 rounds)',
     damage: 12, pellets: 7, fireMode: 'semi', rpm: 240, magSize: 2, reserve: 16,
     reloadTime: 3.4, reloadTimeEmpty: 3.4,
-    range: { near: 4, far: 11, floor: 0.4 },
-    peak: 0.130, spreadHip: 0.105, spreadAim: 0.075, spreadMoving: 0.120,
-    aimTime: 0.18, penetration: 2, loudness: 52, armourPierce: 1.2,
+    range: { near: 5, far: 13, floor: 0.45 },
+    peak: 0.130, spreadHip: 0.075, spreadAim: 0.055, spreadMoving: 0.095,
+    aimTime: 0.18, penetration: 2, loudness: 52, armourPierce: 0.9,
     moveScale: 1.02, doorDamage: 16,
   }),
   // M590A1: Siege's hardest shotgun, 48 a pellet across eight pellets, and its
@@ -259,9 +271,9 @@ export const WEAPONS = {
     from: 'Rainbow Six Siege — M590A1 (48/pellet x8, 87 rpm, 6+1)',
     damage: 11, pellets: 8, fireMode: 'semi', rpm: 80, magSize: 7, reserve: 28,
     reloadStyle: 'shell', reloadTime: 0.62, reloadTimeEmpty: 0.62,
-    range: { near: 5, far: 13, floor: 0.45 },
-    peak: 0.090, spreadHip: 0.095, spreadAim: 0.062, spreadMoving: 0.105,
-    aimTime: 0.26, penetration: 2, loudness: 55, armourPierce: 1.2,
+    range: { near: 8, far: 20, floor: 0.55 },
+    peak: 0.090, spreadHip: 0.055, spreadAim: 0.032, spreadMoving: 0.078,
+    aimTime: 0.26, penetration: 2, loudness: 55, armourPierce: 0.9,
     moveScale: 0.93, doorDamage: 12,
   }),
   // SASG-12: the magazine-fed one, 26 a pellet — half the pump's punch, three
@@ -269,11 +281,11 @@ export const WEAPONS = {
   'sg-12-mag': gun({
     name: 'SG-12M', cls: 'shotgun', blurb: '12 калибр, самозарядное, магазин 8',
     from: 'Rainbow Six Siege — SASG-12 (26/pellet x8, 348 rpm, 10+1)',
-    damage: 8, pellets: 8, fireMode: 'semi', rpm: 240, magSize: 8, reserve: 32,
+    damage: 9, pellets: 8, fireMode: 'semi', rpm: 240, magSize: 8, reserve: 32,
     reloadTime: 2.6, reloadTimeEmpty: 3.4,
-    range: { near: 5, far: 13, floor: 0.45 },
-    peak: 0.075, spreadHip: 0.090, spreadAim: 0.058, spreadMoving: 0.100,
-    aimTime: 0.28, penetration: 2, loudness: 54, armourPierce: 1.2,
+    range: { near: 7, far: 18, floor: 0.5 },
+    peak: 0.075, spreadHip: 0.062, spreadAim: 0.040, spreadMoving: 0.085,
+    aimTime: 0.28, penetration: 2, loudness: 54, armourPierce: 0.9,
     moveScale: 0.92, doorDamage: 9,
   }),
 
@@ -398,9 +410,17 @@ export const GADGETS = {
 // What each side carries until it picks something else.
 export const DEFAULT_GADGET = { attackers: 'flash', defenders: 'wedge' };
 
-// How fast a blinded player recovers once the flash has burned out, and how
-// blind a bot has to be before it stops seeing anything at all.
-export const BLIND = { fade: 0.22, botThreshold: 0.35 };
+// How a flash wears off.
+//
+// `blind` is not a fraction of a white screen, it is how much blindness is
+// left: a full-strength flash starts above 1 and stays there — screen white,
+// nothing to be done — until it drops through 1 and begins to clear. That is
+// the shape Zero Hour's flash has, and the reason the number the gadget
+// advertises is the number the player counts: catching one square in the eyes
+// costs GADGETS.flash.blind seconds, of which the first third is total.
+//
+// `botThreshold` is how blind a bot has to be before it stops seeing at all.
+export const BLIND = { fade: 0.3, botThreshold: 0.35 };
 
 export const DOOR = {
   // A door swings flat against the wall, not to a tidy right angle, so an
