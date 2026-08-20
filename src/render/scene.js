@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=3d9441b4';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=3d9441b4';
-import { PLAYER } from '../sim/constants.js?v=3d9441b4';
-import { buildWeaponModel } from './weapons.js?v=3d9441b4';
+import * as THREE from '../../vendor/three.module.js?v=d55bee09';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=d55bee09';
+import { PLAYER } from '../sim/constants.js?v=d55bee09';
+import { buildWeaponModel } from './weapons.js?v=d55bee09';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -15,7 +15,22 @@ const DOOR_THICKNESS = 0.06;
 const TEXTURES = {
   concrete: { map: 'concrete_diff.jpg', normal: 'concrete_nor.jpg', metresPerTile: 3.0 },
   floor: { map: 'floor_diff.jpg', normal: 'floor_nor.jpg', metresPerTile: 2.4 },
-  drywall: { map: 'drywall_diff.jpg', metresPerTile: 3.4 },
+  drywall: { map: 'drywall_diff.jpg', normal: 'drywall_nor.jpg', metresPerTile: 3.4, normalScale: 0.45 },
+  // Doors and furniture: walnut veneer, tiled at the size veneer actually
+  // comes in, so a door reads as a door and not as a brown block.
+  // `tint` multiplies the map. Walls and floors keep the photograph's own
+  // colour; furniture does not — the flat is meant to be dark walnut and dark
+  // cloth, and a scan of pale veneer would repaint the whole penthouse.
+  wood: {
+    map: 'wood_diff.jpg', normal: 'wood_nor.jpg',
+    metresPerTile: 1.4, normalScale: 0.6, tint: 0x7d6144,
+  },
+  // Sofas and beds. The weave is small and tiles tight — at three metres it is
+  // the difference between upholstery and a painted crate.
+  fabric: {
+    map: 'fabric_diff.jpg', normal: 'fabric_nor.jpg',
+    metresPerTile: 0.55, normalScale: 1.0, tint: 0x878390,
+  },
 };
 
 const textureLoader = new THREE.TextureLoader();
@@ -42,18 +57,23 @@ function materialFor(def) {
 
   const tex = TEXTURES[def.name];
   if (tex) {
-    // The texture supplies the colour, so the tint is pulled back to white —
-    // otherwise the map gets multiplied down into mud.
-    params.color = 0xffffff;
+    // The texture supplies the colour unless the surface says otherwise.
+    params.color = tex.tint ?? 0xffffff;
     params.map = loadTexture(tex.map, { srgb: true });
     if (tex.normal) {
       params.normalMap = loadTexture(tex.normal, { srgb: false });
-      params.normalScale = new THREE.Vector2(0.8, 0.8);
+      // Plaster is nearly flat and cloth is not: how deep the grain reads
+      // belongs to the surface, not to one number for the whole flat.
+      const s = tex.normalScale ?? 0.8;
+      params.normalScale = new THREE.Vector2(s, s);
     }
   }
 
   if (def.name === 'floor') {
-    params.roughness = 0.85;
+    // Lacquered parquet: enough sheen to catch a torch beam down a corridor.
+    params.roughness = 0.55;
+  } else if (def.name === 'wood') {
+    params.roughness = 0.62;
   } else if (def.name === 'metal') {
     params.roughness = 0.45;
     params.metalness = 0.75;

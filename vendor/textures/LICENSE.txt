@@ -7,7 +7,10 @@ for any purpose, commercial or not, with no attribution required.
 Attribution is given here anyway, because the people who made them deserve it.
 
   concrete_diff.jpg, concrete_nor.jpg   from "concrete_wall_008"
-  drywall_diff.jpg                      from "plastered_wall"
+  drywall_diff.jpg, drywall_nor.jpg     from "plastered_wall"
   floor_diff.jpg, floor_nor.jpg         from "wood_floor"
+  wood_diff.jpg, wood_nor.jpg           from "black_walnut_veneer_01"
+  fabric_diff.jpg, fabric_nor.jpg       from "cotton_jersey"
 
-All downsampled to 1K JPG to keep the page light.
+All downsampled to 1K and re-encoded as progressive JPEG at quality 88: ten
+maps in 1.5 MB, which is less than the five they replaced.
