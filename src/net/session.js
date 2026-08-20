@@ -5,12 +5,12 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=fc214c40';
+import { buildWorld } from '../sim/world.js?v=b0d71194';
 import {
   createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout, setGadget,
-} from '../sim/sim.js?v=fc214c40';
-import { createBotBrain } from '../sim/bot.js?v=fc214c40';
-import { DT } from '../sim/constants.js?v=fc214c40';
+} from '../sim/sim.js?v=b0d71194';
+import { createBotBrain } from '../sim/bot.js?v=b0d71194';
+import { DT } from '../sim/constants.js?v=b0d71194';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 
@@ -25,10 +25,14 @@ export function createLocalSession({ map, name = 'Игрок', bots = 1, seed = 
   // Defenders do not all carry the same gun: walking into a room and being met
   // by buckshot rather than by a rifle is half of what the roster is for.
   const botGuns = ['ar-556-piston', 'sg-12-pump', 'smg-45-inline', 'ar-545-piston', 'dmr-762'];
+  // Nor the same kit: the first one wires a doorway, the rest hold theirs shut
+  // and shout about it. Staging is when they go and fit it.
+  const botKit = ['trap', 'wedge', 'alarm', 'wedge', 'alarm'];
   for (let i = 0; i < bots; i++) {
     const id = `bot${i}`;
     addPlayer(world, state, id, 'defenders', `Бот ${i + 1}`);
     setLoadout(state, id, botGuns[i % botGuns.length]);
+    setGadget(state, id, botKit[i % botKit.length]);
     botIds.push(id);
   }
 
@@ -140,7 +144,7 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
     for (const [id, d] of Object.entries(state.doors)) {
       doors[id] = {
         open: d.open, target: d.target, forced: d.forced, broken: d.broken,
-        locked: d.locked, health: d.health, device: d.device,
+        locked: d.locked, health: d.health, device: d.device, charge: d.charge,
       };
     }
     const lights = {};

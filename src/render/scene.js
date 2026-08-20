@@ -1,8 +1,8 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=fc214c40';
-import { doorAngle } from '../sim/world.js?v=fc214c40';
+import * as THREE from '../../vendor/three.module.js?v=b0d71194';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=b0d71194';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -324,6 +324,45 @@ export function createEquipmentView(scene) {
     transparent: true, opacity: 0.92, depthWrite: false, emissive: 0x14161b,
   });
   const deviceGeo = new THREE.BoxGeometry(0.14, 0.1, 0.06);
+  // The wire. Unlit on purpose: a thread you can only find with the torch on
+  // is a thread nobody ever shoots, and this one is meant to be spotted from
+  // across the room and cut. Built one metre long and scaled to the doorway.
+  const wireGeo = new THREE.BoxGeometry(1, TRIPWIRE.halfThickness, TRIPWIRE.halfThickness);
+  const wireMat = new THREE.MeshBasicMaterial({ color: 0xff6a4a });
+
+  // Everything bolted to a door, keyed by which door and which slot — the
+  // defenders' fitting and the attackers' charge can be on the same panel.
+  function deviceMesh(key, fitted, door, entry) {
+    const kind = fitted.kind;
+    let mesh = devices.get(key);
+    if (mesh) {
+      mesh.material.color.setHex(DEVICE_COLOR[kind] ?? 0xaaaaaa);
+      return;
+    }
+    mesh = new THREE.Mesh(deviceGeo, new THREE.MeshStandardMaterial({
+      color: DEVICE_COLOR[kind] ?? 0xaaaaaa,
+      roughness: 0.6, metalness: 0.3, emissive: 0x0a0c10,
+    }));
+    // Hung on the face of the panel: a wedge at the foot, everything else at
+    // handle height, which is where you would actually fit it. A charge goes
+    // on the far side of the handle so a wedge underneath it stays visible,
+    // and the grenade behind a tripwire sits on the same face as its thread.
+    mesh.position.set(
+      door.width * (kind === 'charge' ? 0.55 : 0.28),
+      kind === 'wedge' ? 0.08 : 1.05,
+      kind === 'charge' ? -0.07 : 0.07 * (fitted.side ?? 1),
+    );
+    entry?.pivot.add(mesh);
+    devices.set(key, mesh);
+  }
+
+  function dropMesh(key) {
+    const mesh = devices.get(key);
+    if (!mesh) return;
+    mesh.parent?.remove(mesh);
+    mesh.material.dispose();
+    devices.delete(key);
+  }
 
   function sync(state, world) {
     // Grenades in flight.
@@ -360,25 +399,34 @@ export function createEquipmentView(scene) {
     // Devices ride the door panel, so they swing with it.
     for (const door of world.doors) {
       const ds = state.doors[door.id];
-      const has = !!ds?.device;
-      let mesh = devices.get(door.id);
-      if (has && !mesh) {
-        mesh = new THREE.Mesh(deviceGeo, new THREE.MeshStandardMaterial({
-          color: DEVICE_COLOR[ds.device.kind] ?? 0xaaaaaa,
-          roughness: 0.6, metalness: 0.3, emissive: 0x0a0c10,
-        }));
-        // Hung on the face of the panel: a wedge at the foot, everything else
-        // at handle height, which is where you would actually fit it.
-        mesh.position.set(door.width * 0.28, ds.device.kind === 'wedge' ? 0.08 : 1.05, 0.07);
-        const entry = viewOf(door.id);
-        entry?.pivot.add(mesh);
-        devices.set(door.id, mesh);
-      } else if (!has && mesh) {
+      const entry = viewOf(door.id);
+      for (const slot of ['device', 'charge']) {
+        const fitted = ds?.[slot];
+        const key = `${door.id}|${slot}`;
+        if (fitted) deviceMesh(key, fitted, door, entry);
+        else dropMesh(key);
+      }
+
+      // The wire itself, strung across the doorway on the side it was fitted
+      // from — the same box the simulation lets you shoot at.
+      const wired = ds?.device?.kind === 'trap' ? ds.device : null;
+      const key = `${door.id}|wire`;
+      if (wired) {
+        let mesh = devices.get(key);
+        if (!mesh) {
+          mesh = new THREE.Mesh(wireGeo, wireMat);
+          entry?.pivot.add(mesh);
+          devices.set(key, mesh);
+        }
+        const w = trapWireLocal(door, wired.side ?? 1);
+        mesh.position.set(w.x, w.y, w.z);
+        mesh.scale.x = w.span;
+      } else if (devices.has(key)) {
+        // Shared material: unhook it, do not dispose it out from under the
+        // next wire.
+        const mesh = devices.get(key);
         mesh.parent?.remove(mesh);
-        mesh.material.dispose();
-        devices.delete(door.id);
-      } else if (has && mesh) {
-        mesh.material.color.setHex(DEVICE_COLOR[ds.device.kind] ?? 0xaaaaaa);
+        devices.delete(key);
       }
     }
   }

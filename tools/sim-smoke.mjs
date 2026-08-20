@@ -15,7 +15,7 @@ import {
 import {
   TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES, DAMAGE, GADGETS,
 } from '../src/sim/constants.js';
-import { createHostSession } from '../src/net/session.js';
+import { createHostSession, createLocalSession } from '../src/net/session.js';
 
 let failures = 0;
 function check(name, cond, detail = '') {
@@ -950,6 +950,60 @@ console.log('\nA door never pushes anyone through a wall:');
     check('the wire is spent', state.doors.front.device === null);
   }
 
+  // ── The wire is a target: cut it from down the landing and the grenade goes
+  // off in the doorway instead of in your face.
+  {
+    const { a, d } = atFrontDoor('trap');
+    stepSim(world, state, { d1: press({ gadget: true }), a1: createInput() });
+    check('the wire knows which side it was strung on',
+      state.doors.front.device?.side === 1, `side=${state.doors.front.device?.side}`);
+
+    // The defender falls back into the hall behind his own door; the attacker
+    // backs to the far end of the landing, outside the blast, and shoots the
+    // thread. Down the sights: at three metres the wire is a centimetre of
+    // target, which hip fire has no business hitting.
+    d.pos = { x: 0, y: 0, z: 5 };
+    a.pos = { x: 0, y: 0, z: 9 };
+    // The thread hangs a metre up, a hand's width in front of the panel.
+    const eye = eyePosition(a);
+    const pitch = Math.atan2(1 - eye.y, a.pos.z - 5.9);
+    const dHp = d.health;
+    const aHp = a.health;
+    for (let i = 0; i < 40 && state.doors.front.device; i++) {
+      stepSim(world, state, {
+        a1: press({ yaw: 0, pitch, aim: true, fire: i === 30 }),
+        d1: createInput(),
+      });
+    }
+    check('a round through the thread sets the trap off early',
+      state.doors.front.device === null, JSON.stringify(state.doors.front.device));
+    check('and the doorway it was on is still standing',
+      !state.doors.front.broken && state.doors.front.open === 0);
+    check('the man who cut it is too far away to be touched',
+      a.health === aHp, `hp=${a.health.toFixed(0)}`);
+    check('the defender behind his own door is not',
+      dHp - d.health > 20, `${(dHp - d.health).toFixed(0)} damage`);
+  }
+
+  // ── A wall is a wall: the blast stops at it.
+  {
+    const { a, d } = atFrontDoor('trap');
+    stepSim(world, state, { d1: press({ gadget: true }), a1: createInput() });
+    // The defender flattens himself against the wall beside the doorway —
+    // two and a half metres away, well inside the radius, with a wall in
+    // between. The attacker opens the door and takes the whole thing.
+    d.pos = { x: 2.5, y: 0, z: 6.5 };
+    a.pos = { x: 0, y: 0, z: 6.9 };
+    state.doors.front.locked = false;
+    const dHp = d.health;
+    const aHp = a.health;
+    for (let i = 0; i < 6; i++) stepSim(world, state, { a1: press({ use: i === 0 }), d1: createInput() });
+    check('the man who opened the door wears it', aHp - a.health > 20,
+      `${(aHp - a.health).toFixed(0)} damage`);
+    check('the man behind the wall does not', d.health === dHp,
+      `${(dHp - d.health).toFixed(0)} damage`);
+  }
+
   // ── The alarm: silent for its own side, loud for the other.
   {
     const { a, d } = atFrontDoor('alarm');
@@ -988,15 +1042,62 @@ console.log('\nA door never pushes anyone through a wall:');
   {
     const { a } = atFrontDoor('charge');
     stepSim(world, state, { a1: press({ gadget: true }), d1: createInput() });
-    check('a charge goes on the door', state.doors.front.device?.kind === 'charge');
+    check('a charge goes on the door', state.doors.front.charge?.kind === 'charge');
     check('it does not go off at once', state.doors.front.broken === false);
 
+    // Nobody plants a charge and stands in front of it: he steps behind the
+    // wall beside the doorway while it counts down.
+    a.pos = { x: 2.5, y: 0, z: 6.5 };
     for (let i = 0; i < TICK_RATE * 5 && !state.doors.front.broken; i++) {
       stepSim(world, state, { a1: press(), d1: createInput() });
     }
     check('four seconds later the door is gone',
-      state.doors.front.broken && state.doors.front.device === null,
+      state.doors.front.broken && state.doors.front.charge === null,
       JSON.stringify(state.doors.front.broken));
+  }
+
+  // ── A wedge does not stop a charge: it goes on over the top of it, and the
+  // breach takes the wedge with the door — plus anyone standing behind it.
+  {
+    restartRound();
+    setGadget(state, 'd1', 'wedge');
+    setGadget(state, 'a1', 'charge');
+    state.phase = 'live';
+    state.phaseTime = 120;
+    const a = state.players.a1;
+    const d = state.players.d1;
+
+    // The defender wedges the front door from inside the hall.
+    d.pos = { x: 0, y: 0, z: 4.9 };
+    d.look = { yaw: Math.PI, pitch: 0 };
+    stepSim(world, state, { d1: { ...press({ gadget: true }), yaw: Math.PI }, a1: createInput() });
+    check('the door is wedged shut', state.doors.front.device?.kind === 'wedge');
+
+    // He falls back into the hall — far enough to survive it, close enough to
+    // feel it. The attacker fits a charge to the same door.
+    d.pos = { x: 0, y: 0, z: 3.8 };
+    a.pos = { x: 0, y: 0, z: 6.9 };
+    a.look = { yaw: 0, pitch: 0 };
+    stepSim(world, state, { a1: press({ gadget: true }), d1: createInput() });
+    check('a charge goes on over the wedge',
+      state.doors.front.charge?.kind === 'charge' && state.doors.front.device?.kind === 'wedge',
+      JSON.stringify([state.doors.front.charge?.kind, state.doors.front.device?.kind]));
+
+    // And he does what a breacher does: flattens himself against the wall
+    // beside the doorway, where the blast cannot see him.
+    a.pos = { x: 2.5, y: 0, z: 6.5 };
+    const dHp = d.health;
+    for (let i = 0; i < TICK_RATE * 5 && !state.doors.front.broken; i++) {
+      stepSim(world, state, { a1: press(), d1: createInput() });
+    }
+    check('the breach takes the wedged door with it',
+      state.doors.front.broken && state.doors.front.device === null,
+      JSON.stringify([state.doors.front.broken, state.doors.front.device]));
+    const taken = dHp - d.health;
+    check('and hurts the defender who was holding the room behind it',
+      taken > 15 && taken < PLAYER.maxHealth, `${taken.toFixed(0)} damage`);
+    check('while the man stacked on the wall beside it is untouched',
+      a.health === PLAYER.maxHealth, `hp=${a.health.toFixed(0)}`);
   }
 
   // ── The flash: line of sight is the whole rule.
@@ -1044,6 +1145,22 @@ console.log('\nA door never pushes anyone through a wall:');
     check('it thins out and goes', state.smokes.length === 0 && hasLineOfSight(world, state, from, to));
   }
 
+  // ── Bots stage themselves, or the solo player never meets any of this.
+  //
+  // This runs on its own world: a session builds one, and the point of the
+  // check is the whole loop — kit handed out, staging walked, doors fitted.
+  {
+    const solo = createLocalSession({ map: APARTMENT, bots: 2 });
+    const idle = createInput();
+    for (let i = 0; i < TICK_RATE * (ROUND.selectTime + ROUND.prepTime) && solo.state.phase !== 'live'; i++) {
+      solo.tick(idle);
+    }
+    const fitted = Object.values(solo.state.doors).filter((d) => d.device).map((d) => d.device.kind);
+    check('the defenders fit their kit before the round starts', fitted.length >= 2,
+      fitted.join(', '));
+    check('and one of them wires a doorway', fitted.includes('trap'), fitted.join(', '));
+  }
+
   // ── A new round clears the flat.
   {
     const { d } = atFrontDoor('wedge');
@@ -1051,7 +1168,7 @@ console.log('\nA door never pushes anyone through a wall:');
     check('the device is really on the door before the round ends',
       state.doors.front.device?.kind === 'wedge');
     resetRound(world, state);
-    const anyDevice = Object.values(state.doors).some((ds) => ds.device);
+    const anyDevice = Object.values(state.doors).some((ds) => ds.device || ds.charge);
     check('a new round takes every device off every door', !anyDevice);
     check('and hands the kit back', d.gadgetLeft === GADGETS[d.gadget].count,
       `${d.gadgetLeft}/${GADGETS[d.gadget].count}`);

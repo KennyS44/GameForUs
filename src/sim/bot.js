@@ -4,10 +4,10 @@
 // The bot plays the way the map wants to be played: it holds an angle, reacts
 // to sound, and pushes only when it has a reason to.
 
-import { createInput, eyePosition, aimDirection } from './sim.js?v=fc214c40';
-import { hasLineOfSight } from './world.js?v=fc214c40';
-import { distXZ, clamp } from './math.js?v=fc214c40';
-import { BLIND } from './constants.js?v=fc214c40';
+import { createInput, eyePosition, aimDirection } from './sim.js?v=b0d71194';
+import { hasLineOfSight } from './world.js?v=b0d71194';
+import { distXZ, clamp } from './math.js?v=b0d71194';
+import { BLIND, GADGETS } from './constants.js?v=b0d71194';
 
 // Indoors nobody picks a figure out of the gloom across the whole map.
 const MAX_SIGHT = 24;
@@ -31,6 +31,11 @@ export function createBotBrain(seed = 7) {
         reactTimer: 0,
         aimError: { yaw: 0, pitch: 0 },
         errorTimer: 0,
+        // The doorway this bot is on its way to fit something to, and how long
+        // it has been trying. Cleared the moment the kit is on the door.
+        errand: null,
+        errandTime: 0,
+        skip: new Set(),
         rnd: seed + id.length,
       });
     }
@@ -49,6 +54,18 @@ export function createBotBrain(seed = 7) {
     input.yaw = bot.look.yaw;
     input.pitch = bot.look.pitch;
     if (!bot.alive) return input;
+
+    // ── Staging: fit the kit ──
+    //
+    // Half of what a defender does happens before anyone is shot at, and a
+    // flat where no door is ever wedged or wired is a flat with half its
+    // defence missing. So: pick the nearest doorway that has nothing on it,
+    // walk up to it, look at it, press the button — and then go back to
+    // holding the room like any other tick.
+    if (state.phase === 'prep' && bot.gadgetLeft > 0 && GADGETS[bot.gadget]?.kind === 'door') {
+      const errand = fitKit(world, state, bot, b, input, dt);
+      if (errand) return input;
+    }
 
     // ── Perceive ──
     const eye = eyePosition(bot);
@@ -193,6 +210,54 @@ export function createBotBrain(seed = 7) {
   }
 
   return { think, memory };
+}
+
+// Walk to a doorway and fit whatever is being carried to it. Returns false
+// once there is nothing to do — no door worth walking to, or the errand has
+// run long enough that the bot is plainly stuck on the furniture.
+const ERRAND_RANGE = 14; // metres worth walking during staging
+const ERRAND_GIVEUP = 9; // seconds before a bot admits it cannot get there
+
+function fitKit(world, state, bot, b, input, dt) {
+  if (b.errand && state.doors[b.errand.id].device) b.errand = null;
+  if (b.errand && b.errandTime > ERRAND_GIVEUP) {
+    // Whatever is between it and that doorway, it is not going to solve it by
+    // walking into it for another nine seconds. Try a different door.
+    b.skip.add(b.errand.id);
+    b.errand = null;
+  }
+  if (!b.errand) {
+    b.errandTime = 0;
+    let best = null;
+    for (const door of world.doors) {
+      const ds = state.doors[door.id];
+      if (ds.device || ds.broken || b.skip.has(door.id)) continue;
+      // Its own storey only: a bot has no stairs in its head.
+      if (Math.abs((door.pos.y ?? 0) - bot.pos.y) > 1) continue;
+      const d = distXZ(door.pos, bot.pos);
+      if (d > ERRAND_RANGE) continue;
+      if (!best || d < best.d) best = { door, d };
+    }
+    if (!best) return false;
+    b.errand = best.door;
+  }
+
+  const door = b.errand;
+  b.errandTime += dt;
+  // Face it. The panel is two metres of door, so eye level always finds it.
+  const want = Math.atan2(-(door.pos.x - bot.pos.x), -(door.pos.z - bot.pos.z));
+  input.yaw = turnToward(bot.look.yaw, want, dt * 3.2);
+  input.pitch = 0;
+
+  if (distXZ(door.pos, bot.pos) > 1.25) {
+    input.moveZ = 1;
+    input.sneak = true; // staging is quiet work
+    return true;
+  }
+  // Close enough, and pointed at it: press. The latch in the simulation means
+  // holding it down still only fits one.
+  input.gadget = true;
+  return true;
 }
 
 function turnToward(current, want, maxStep) {

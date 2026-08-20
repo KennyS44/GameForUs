@@ -2,11 +2,42 @@
 // geometry, and bullet raycasts that respect material penetration.
 // Pure — no engine types cross this boundary.
 
-import { rayBox, boxOverlaps, clamp } from './math.js?v=fc214c40';
-import { DOOR } from './constants.js?v=fc214c40';
+import { rayBox, boxOverlaps, clamp } from './math.js?v=b0d71194';
+import { DOOR } from './constants.js?v=b0d71194';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
+
+// A tripwire is strung across the panel at handle height, a hand's width clear
+// of its face, on whichever side the defender fitted it from. It is a thing in
+// the world with a size: you can see it, and you can shoot it.
+export const TRIPWIRE = {
+  height: 1.0,
+  inset: 0.12,
+  standoff: 0.05,
+  halfThickness: 0.03,
+};
+
+// Where the wire hangs, in the door's own frame, measured from its floor.
+export function trapWireLocal(door, side = 1) {
+  return {
+    x: door.width / 2,
+    y: TRIPWIRE.height,
+    z: (side < 0 ? -1 : 1) * (DOOR_THICKNESS / 2 + TRIPWIRE.standoff),
+    span: Math.max(0.1, door.width - TRIPWIRE.inset * 2),
+  };
+}
+
+// The same wire as a box a ray can hit, in the coordinates the door's own
+// raycasts use — so shooting it costs exactly the aim it looks like it costs.
+export function trapWireBox(door, side = 1) {
+  const w = trapWireLocal(door, side);
+  const h = TRIPWIRE.halfThickness;
+  return {
+    min: { x: w.x - w.span / 2, y: door.floorY + w.y - h, z: w.z - h },
+    max: { x: w.x + w.span / 2, y: door.floorY + w.y + h, z: w.z + h },
+  };
+}
 
 // Is the panel clear of the walls at this angle? Sampled along the leaf at a
 // few heights — enough for rectangular rooms, and it runs once at load.
@@ -330,7 +361,11 @@ export function raycastGeometry(world, state, origin, dir, maxDist) {
 }
 
 // True if `from` can see `to` with nothing solid in between.
-export function hasLineOfSight(world, state, from, to) {
+//
+// `throughDoorId` lets one door be treated as if it were not there. Only a
+// blast fitted to that door uses it: the panel a charge is taped to does not
+// get to shield the man opening it, while every other wall still does.
+export function hasLineOfSight(world, state, from, to, throughDoorId = null) {
   const d = { x: to.x - from.x, y: to.y - from.y, z: to.z - from.z };
   const len = Math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
   if (len < 1e-6) return true;
@@ -341,7 +376,7 @@ export function hasLineOfSight(world, state, from, to) {
   if (smokeBlocks(state, from, dir, len)) return false;
   // Glass is in the way of a bullet, not of your eyes.
   const hits = raycastGeometry(world, state, from, dir, len - 1e-3);
-  return hits.every((h) => h.material.seeThrough);
+  return hits.every((h) => h.material.seeThrough || h.doorId === throughDoorId);
 }
 
 // Does the segment pass through any live smoke cloud?

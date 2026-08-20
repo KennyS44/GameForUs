@@ -332,6 +332,21 @@ export const WEAPON_CLASSES = [
 //
 // Nothing here breaks the rule the guns follow: the hardest blast in the list
 // takes 70 of 100, so a device wounds and warns, it does not delete anyone.
+//
+// How far a blast reaches. Zero Hour never publishes a radius — its grenades
+// are only ever described as having a small one, and its breaching charge as
+// something you stack away from — so the shape here is ours, built to behave
+// the way that game feels:
+//
+//   • `blastCore` metres of full damage — arm's length, the doorway itself.
+//   • from there, straight down to nothing at `blastRadius`, so the edge of a
+//     blast is a scratch rather than a cliff.
+//   • no line of sight, no damage at all. A wall, a floor or a cloud between
+//     you and it is complete cover, which is why leaning out of the doorway is
+//     the difference between a bruise and a body.
+//
+// The one exception is the panel the device is fitted to: the door you are
+// opening does not shield you from the trap taped to it.
 export const GADGETS = {
   // Zero Hour's flash needs nothing but a line of sight, and it empties the
   // victim: five seconds blind, and an afterimage long after that. Ours keeps
@@ -353,8 +368,8 @@ export const GADGETS = {
   // gone rather than merely open. Loud enough that the whole flat hears it.
   charge: {
     name: 'Заряд C2', team: 'attackers', kind: 'door', count: 2,
-    blurb: 'На дверь. Через 4 с сносит её вместе с проёмом.',
-    fuse: 4, damage: 60, blastRadius: 2.6, loudness: 50,
+    blurb: 'На дверь. Через 4 с сносит её вместе с клином — и всех у проёма.',
+    fuse: 4, damage: 70, blastCore: 1.2, blastRadius: 3.4, loudness: 50,
   },
   // The wedge blocks opening, not breaking — the same trade Zero Hour makes.
   // The first boot tears it out, the second takes the door: a wedged doorway
@@ -363,11 +378,13 @@ export const GADGETS = {
     name: 'Дверной клин', team: 'defenders', kind: 'door', count: 2,
     blurb: 'Дверь не открыть — только выбить, и с двух ударов.',
   },
-  // Zero Hour's door trap: a tripwire and a grenade, seventy damage.
+  // Zero Hour's door trap: a tripwire and a grenade, seventy damage. Ours
+  // hangs the wire where you can see it — and where a steady shot can cut it
+  // from across the room, which is the attacker's answer to a wired doorway.
   trap: {
     name: 'Растяжка', team: 'defenders', kind: 'door', count: 1,
-    blurb: 'Сработает, когда дверь тронут. 70 урона в проёме.',
-    damage: 70, blastRadius: 2.4, loudness: 42,
+    blurb: 'Сработает, когда дверь тронут. Нить видно — и по ней можно попасть.',
+    damage: 70, blastCore: 0.9, blastRadius: 2.6, loudness: 42,
   },
   // The door alarm, defender-only over there too. In a game where the ears do
   // the scouting, a doorway that shouts is worth as much as one that holds.

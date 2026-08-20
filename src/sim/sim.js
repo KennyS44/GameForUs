@@ -8,14 +8,14 @@
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
   GADGETS, DEFAULT_GADGET, BLIND,
-} from './constants.js?v=fc214c40';
+} from './constants.js?v=b0d71194';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=fc214c40';
+} from './math.js?v=b0d71194';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-  hasLineOfSight,
-} from './world.js?v=fc214c40';
+  hasLineOfSight, trapWireBox,
+} from './world.js?v=b0d71194';
 
 const GRAVITY = 18;
 
@@ -92,9 +92,13 @@ export function createState(world, seed = 12345) {
       // longer be shut. The panel itself stays on its hinges and still stops
       // bullets — a kicked door is cover you can no longer close.
       forced: !!d.startsForced,
-      // A device fitted to this door: a wedge holding it, a charge counting
-      // down on it, a tripwire or an alarm waiting for it to move.
+      // The defenders' fitting on this door: a wedge holding it, a tripwire or
+      // an alarm waiting for it to move.
       device: null,
+      // The attackers' charge, counting down. It gets a slot of its own for
+      // the obvious reason: a doorway is wedged precisely so that nobody comes
+      // through it, and the answer to that is to tape a charge over the wedge.
+      charge: null,
       // Glass does not swing open when it loses: the pane falls out and the
       // doorway is simply gone.
       broken: false,
@@ -279,6 +283,18 @@ function fireBullet(world, state, shooter, origin, dir) {
     }
 
     const firstGeo = geo[0];
+
+    // Nearest tripwire along the same stretch of ray. A wire is a target like
+    // any other: hit it and the grenade behind it goes off there and then,
+    // which is how an attacker clears a wired doorway without standing in it.
+    const wire = nearestWire(world, state, addScaled(origin, dir, start), dir);
+    if (wire && (!best || wire.t < best.t) && (!firstGeo || wire.t < firstGeo.t)) {
+      const at = addScaled(origin, dir, start + wire.t);
+      emit(state, { type: 'impact', pos: at, normal: { x: 0, y: 1, z: 0 }, material: 'metal' });
+      detonateTrap(world, state, wire.door, shooter.id);
+      return;
+    }
+
     // Player hit first — nothing blocking.
     if (best && (!firstGeo || best.t < firstGeo.t)) {
       applyDamage(state, shooter, best.player, best.zone, damageScale, start + best.t);
@@ -319,6 +335,25 @@ function fireBullet(world, state, shooter, origin, dir) {
 
 function addScaled(o, d, s) {
   return { x: o.x + d.x * s, y: o.y + d.y * s, z: o.z + d.z * s };
+}
+
+// The closest tripwire this ray runs into. Traced in each door's own frame,
+// like the panel itself, so a wire swings with the door it is strung on.
+function nearestWire(world, state, from, dir) {
+  let best = null;
+  for (const door of world.doors) {
+    const ds = state.doors[door.id];
+    if (ds.broken || ds.device?.kind !== 'trap') continue;
+    const frame = doorFrame(door, ds.open);
+    const r = rayBox(
+      worldToLocal(frame, from),
+      dirToLocal(frame, dir),
+      trapWireBox(door, ds.device.side ?? 1),
+    );
+    if (!r.hit || r.tNear < 0) continue;
+    if (!best || r.tNear < best.t) best = { t: r.tNear, door };
+  }
+  return best;
 }
 
 // How much of its damage a round still has at this distance. Straight from
@@ -534,6 +569,12 @@ export function setGadget(state, id, gadgetId) {
   return true;
 }
 
+// Which face of the panel the man fitting a wire is standing on.
+function wireSide(found, p) {
+  const frame = doorFrame(found.door, found.state.open);
+  return worldToLocal(frame, eyePosition(p)).z < 0 ? -1 : 1;
+}
+
 const THROW_SPEED = 11;
 const THROW_LIFT = 2.2; // underarm, so it arcs rather than flying flat
 const BOUNCE = 0.36;
@@ -545,10 +586,17 @@ function useGadget(world, state, p) {
 
   if (def.kind === 'door') {
     const found = doorInReach(world, state, p, 1.9);
-    // One device to a door: a doorway that is already wedged, wired or wired
-    // to blow does not take a second.
-    if (!found || found.state.device) return false;
-    found.state.device = { kind: p.gadget, by: p.id, team: p.team, fuse: def.fuse ?? 0 };
+    if (!found) return false;
+    // One fitting each per doorway: the defenders' wedge, wire or alarm in one
+    // slot, the attackers' charge in the other. Neither side gets to stack two
+    // of its own on the same door, and neither is kept out by the other's.
+    const slot = p.gadget === 'charge' ? 'charge' : 'device';
+    if (found.state[slot]) return false;
+    const device = { kind: p.gadget, by: p.id, team: p.team, fuse: def.fuse ?? 0 };
+    // A wire is strung on the side you fitted it from — your own side of the
+    // door, which is what makes it something the other man has to spot.
+    if (p.gadget === 'trap') device.side = wireSide(found, p);
+    found.state[slot] = device;
     p.gadgetLeft--;
     p.gadgetCooldown = 0.8;
     makeNoise(state, doorNoisePos(found.door), 4, 'device', p.id);
@@ -662,19 +710,30 @@ function popFlash(world, state, t) {
   }
 }
 
-// A blast: everything within reach that can see the centre of it. Held to the
-// same ceiling as a bullet, so no device ever kills outright either.
-function blast(world, state, pos, damage, radius, by) {
+// A blast. Whose device it was does not enter into it: a doorway full of smoke
+// and shouting is exactly where your own trap catches your own man, so this
+// asks two questions of everyone standing in it and nothing about their colour.
+//
+//   How far?  Full damage inside `core`, then straight down to nothing at
+//             `radius` — see GADGETS for why the curve has that shape.
+//   Can they see it?  If not, they are behind something, and something is
+//             enough. `throughDoorId` is the one panel that does not count,
+//             because it is the panel the device is taped to.
+//
+// Held to the same ceiling as a bullet, so no device ever kills outright.
+function blast(world, state, { pos, damage, radius, core = 0, by, throughDoorId = null }) {
+  if (state.phase === 'select' || state.phase === 'prep') return;
   for (const p of Object.values(state.players)) {
     if (!p.alive) continue;
     const chest = { x: p.pos.x, y: p.pos.y + playerHeight(p) * 0.6, z: p.pos.z };
     const dist = Math.hypot(chest.x - pos.x, chest.y - pos.y, chest.z - pos.z);
-    if (dist > radius) continue;
-    if (!hasLineOfSight(world, state, chest, pos)) continue;
+    if (dist >= radius) continue;
+    if (!hasLineOfSight(world, state, chest, pos, throughDoorId)) continue;
 
-    const falloff = 1 - (dist / radius) * 0.6;
+    const reach = Math.max(1e-3, radius - Math.min(core, radius));
+    const falloff = 1 - Math.max(0, dist - core) / reach;
     const dmg = Math.min(DAMAGE.maxPerHit, damage * falloff);
-    if (state.phase === 'select' || state.phase === 'prep') continue;
+    if (dmg <= 0) continue;
     p.health -= dmg;
     const shooter = state.players[by];
     emit(state, { type: 'hit', targetId: p.id, by, zone: 'torso', damage: dmg });
@@ -688,6 +747,22 @@ function blast(world, state, pos, damage, radius, by) {
   }
 }
 
+// A tripwire going off, however it was set off: by the door moving, or by a
+// round through the wire. `by` is whoever caused it — the man who cut the wire
+// owns what the grenade behind it does, the same as if he had thrown it.
+function detonateTrap(world, state, door, by) {
+  const ds = state.doors[door.id];
+  const def = GADGETS.trap;
+  ds.device = null;
+  const at = doorNoisePos(door);
+  makeNoise(state, at, def.loudness, 'blast', by);
+  emit(state, { type: 'deviceBlast', pos: at, kind: 'trap', doorId: door.id });
+  blast(world, state, {
+    pos: at, damage: def.damage, radius: def.blastRadius, core: def.blastCore,
+    by, throughDoorId: door.id,
+  });
+}
+
 // Something moved the door: a tripwire goes off, an alarm starts screaming,
 // and anything else on the door carries on waiting.
 function triggerDoorDevice(world, state, door, p) {
@@ -695,16 +770,12 @@ function triggerDoorDevice(world, state, door, p) {
   const device = ds.device;
   if (!device) return;
   // Your own side's devices know you: a defender does not walk into their own
-  // tripwire, and does not set off their own alarm.
+  // tripwire, and does not set off their own alarm. Once one goes off, though,
+  // it is a grenade in a doorway and it does not care whose it was.
   if (p && device.team === p.team) return;
 
   if (device.kind === 'trap') {
-    const def = GADGETS.trap;
-    ds.device = null;
-    const at = doorNoisePos(door);
-    makeNoise(state, at, def.loudness, 'blast', device.by);
-    emit(state, { type: 'deviceBlast', pos: at, kind: 'trap', doorId: door.id });
-    blast(world, state, at, def.damage, def.blastRadius, device.by);
+    detonateTrap(world, state, door, device.by);
   } else if (device.kind === 'alarm') {
     const def = GADGETS.alarm;
     makeNoise(state, doorNoisePos(door), def.loudness, 'alarm', device.by);
@@ -716,16 +787,20 @@ function triggerDoorDevice(world, state, door, p) {
 function stepDoorDevices(world, state, dt) {
   for (const door of world.doors) {
     const ds = state.doors[door.id];
-    const device = ds.device;
-    if (!device || device.kind !== 'charge') continue;
+    const device = ds.charge;
+    if (!device) continue;
 
     device.fuse -= dt;
     if (device.fuse > 0) continue;
 
     const def = GADGETS.charge;
-    ds.device = null;
+    ds.charge = null;
     // The door does not swing, it stops existing: a breached doorway is a
-    // hole, and no amount of kicking puts it back on its hinges.
+    // hole, and no amount of kicking puts it back on its hinges. Whatever the
+    // defenders had on it goes with it — a wedge holds a door shut, and there
+    // is no door left to hold.
+    const held = ds.device;
+    ds.device = null;
     ds.broken = true;
     ds.forced = true;
     ds.locked = false;
@@ -734,8 +809,14 @@ function stepDoorDevices(world, state, dt) {
     const at = doorNoisePos(door);
     makeNoise(state, at, def.loudness, 'blast', device.by);
     emit(state, { type: 'deviceBlast', pos: at, kind: 'charge', doorId: door.id });
+    if (held) emit(state, { type: 'deviceBroken', doorId: door.id, kind: held.kind });
     emit(state, { type: 'doorBroken', doorId: door.id, by: device.by });
-    blast(world, state, at, def.damage, def.blastRadius, device.by);
+    // The panel is already gone by the time this is measured, so there is no
+    // door left to ignore — anyone in the doorway is simply in the open.
+    blast(world, state, {
+      pos: at, damage: def.damage, radius: def.blastRadius, core: def.blastCore,
+      by: device.by,
+    });
   }
 }
 
@@ -1250,6 +1331,7 @@ export function resetRound(world, state) {
   for (const d of world.doors) {
     const ds = state.doors[d.id];
     ds.device = null;
+    ds.charge = null;
     ds.open = d.startsForced ? 1 : 0;
     ds.target = d.startsForced ? 1 : 0;
     ds.speed = DOOR.openSpeed;
