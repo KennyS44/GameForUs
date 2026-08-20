@@ -318,6 +318,73 @@ export const WEAPON_CLASSES = [
   { id: 'heavy', label: 'Крупный калибр' },
 ];
 
+// ── Equipment ──────────────────────────────────────────────────────────────
+//
+// One device each, and the two sides do not share a list — that split is
+// straight out of Zero Hour, where SWAT carry breaching and optics while the
+// criminals hold the building with wedges and traps. Attack buys its way
+// through a door and takes the room's senses away; defence makes every door
+// cost time and noise.
+//
+// Two kinds, and the difference is how you deliver them:
+//   'throw' — lobbed underarm, bounces, then goes off on its fuse.
+//   'door'  — fitted to the door you are looking at, within arm's reach.
+//
+// Nothing here breaks the rule the guns follow: the hardest blast in the list
+// takes 70 of 100, so a device wounds and warns, it does not delete anyone.
+export const GADGETS = {
+  // Zero Hour's flash needs nothing but a line of sight, and it empties the
+  // victim: five seconds blind, and an afterimage long after that. Ours keeps
+  // the line-of-sight rule — the wall you are behind is the counter.
+  flash: {
+    name: 'Светошумовая', team: 'attackers', kind: 'throw', count: 2,
+    blurb: 'Слепит всех, кто её видит. За углом — не действует.',
+    fuse: 1.6, radius: 14, blind: 5, loudness: 34,
+  },
+  // Two per player in Zero Hour, full cloud a few seconds after it lands and
+  // gone within twenty. It hides bodies from bots as well as from players:
+  // the cloud is part of line of sight, not a decal.
+  smoke: {
+    name: 'Дымовая', team: 'attackers', kind: 'throw', count: 2,
+    blurb: 'Облако 3,5 м на 16 секунд: сквозь него не видно никому.',
+    fuse: 1.2, radius: 3.5, duration: 16, growTime: 2.5, loudness: 12,
+  },
+  // The C2 door charge: fitted to the handle, four seconds, and the door is
+  // gone rather than merely open. Loud enough that the whole flat hears it.
+  charge: {
+    name: 'Заряд C2', team: 'attackers', kind: 'door', count: 2,
+    blurb: 'На дверь. Через 4 с сносит её вместе с проёмом.',
+    fuse: 4, damage: 60, blastRadius: 2.6, loudness: 50,
+  },
+  // The wedge blocks opening, not breaking — the same trade Zero Hour makes.
+  // The first boot tears it out, the second takes the door: a wedged doorway
+  // costs an attacker a second and a lot of noise.
+  wedge: {
+    name: 'Дверной клин', team: 'defenders', kind: 'door', count: 2,
+    blurb: 'Дверь не открыть — только выбить, и с двух ударов.',
+  },
+  // Zero Hour's door trap: a tripwire and a grenade, seventy damage.
+  trap: {
+    name: 'Растяжка', team: 'defenders', kind: 'door', count: 1,
+    blurb: 'Сработает, когда дверь тронут. 70 урона в проёме.',
+    damage: 70, blastRadius: 2.4, loudness: 42,
+  },
+  // The door alarm, defender-only over there too. In a game where the ears do
+  // the scouting, a doorway that shouts is worth as much as one that holds.
+  alarm: {
+    name: 'Сигнализация', team: 'defenders', kind: 'door', count: 2,
+    blurb: 'Дверь открыли — вой на весь этаж. Слышно за 34 м.',
+    loudness: 34,
+  },
+};
+
+// What each side carries until it picks something else.
+export const DEFAULT_GADGET = { attackers: 'flash', defenders: 'wedge' };
+
+// How fast a blinded player recovers once the flash has burned out, and how
+// blind a bot has to be before it stops seeing anything at all.
+export const BLIND = { fade: 0.22, botThreshold: 0.35 };
+
 export const DOOR = {
   // A door swings flat against the wall, not to a tidy right angle, so an
   // opened doorway is genuinely clear instead of half blocked by its panel.

@@ -1,15 +1,15 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=ec0046cf';
-import { createGame } from './game.js?v=ec0046cf';
-import { createAudio } from './audio/audio.js?v=ec0046cf';
-import { createInputSource, saveSettings } from './input/input.js?v=ec0046cf';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=ec0046cf';
+import { APARTMENT } from './maps/apartment.js?v=fc214c40';
+import { createGame } from './game.js?v=fc214c40';
+import { createAudio } from './audio/audio.js?v=fc214c40';
+import { createInputSource, saveSettings } from './input/input.js?v=fc214c40';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=fc214c40';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=ec0046cf';
-import { createLoadout } from './ui/loadout.js?v=ec0046cf';
-import { storageGet, storageSet } from './util/storage.js?v=ec0046cf';
+} from './net/transport.js?v=fc214c40';
+import { createLoadout } from './ui/loadout.js?v=fc214c40';
+import { storageGet, storageSet } from './util/storage.js?v=fc214c40';
 
 const $ = (id) => document.getElementById(id);
 
@@ -57,9 +57,12 @@ function hideOverlay() {
 // for a countdown, and it keeps the runtime free of menus.
 
 const loadout = createLoadout({
-  onPick: (id) => {
-    game?.session.chooseWeapon?.(id);
-    refreshLoadout();
+  // The one place a choice reaches the game. Both roads lead here: the button
+  // and the countdown running out.
+  onConfirm: ({ weapon, gadget }) => {
+    game?.session.chooseWeapon?.(weapon);
+    game?.session.chooseGadget?.(gadget);
+    closeLoadout();
   },
 });
 let loadoutPoll = 0;
@@ -70,6 +73,7 @@ function refreshLoadout() {
 
 function openLoadout() {
   if (!game) return;
+  loadout.reset(); // a new round is a new decision
   showScreen('loadout'); // shown first: onPause reads it to know this is not a pause
   input.releaseLock();
   refreshLoadout();
@@ -88,7 +92,7 @@ function closeLoadout() {
   input.requestLock();
 }
 
-$('btn-loadout-ready').addEventListener('click', closeLoadout);
+
 
 function setStatus(el, msg, kind = '') {
   el.textContent = msg;

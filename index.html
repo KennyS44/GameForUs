@@ -10,8 +10,8 @@
 <meta name="description" content="Хардкорный тактический шутер в тёмном двухэтажном пентхаусе: свет, звук и двери решают больше, чем реакция.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <!-- Written by tools/stamp-version.mjs; the page checks it against version.txt. -->
-<meta name="gameforus-version" content="ec0046cf">
-<link rel="stylesheet" href="styles.css?v=ec0046cf">
+<meta name="gameforus-version" content="fc214c40">
+<link rel="stylesheet" href="styles.css?v=fc214c40">
 </head>
 <body>
 
@@ -25,6 +25,8 @@
   </div>
 
   <div class="hitmarker" id="hitmarker" aria-hidden="true"></div>
+  <!-- A flashbang in the eyes: full white, then a long fade back. -->
+  <div class="blindfold" id="blindfold" aria-hidden="true"></div>
   <div class="vignette" id="vignette" aria-hidden="true"></div>
 
   <div class="topbar">
@@ -55,6 +57,12 @@
       <!-- Reserve is rounds left in the pockets, not magazines. -->
       <span class="ammo-reserve" id="ammo-reserve">120</span>
       <span class="ammo-flag" id="flashlight-flag" hidden>ФОНАРЬ</span>
+      <!-- What is in the other hand, and how much of it is left. -->
+      <span class="gadget" id="gadget-slot">
+        <span class="gadget-key">G</span>
+        <span class="gadget-name" id="gadget-name">Светошумовая</span>
+        <span class="gadget-left" id="gadget-left">2</span>
+      </span>
     </div>
   </div>
 
@@ -129,14 +137,16 @@
         <div><dt>F</dt><dd>дверь: открыть / закрыть</dd></div>
         <div><dt>F в тихом шаге</dt><dd>приоткрыть тихо</dd></div>
         <div><dt>V</dt><dd>выбить дверь ногой</dd></div>
+        <div><dt>G</dt><dd>снаряжение: бросить или поставить на дверь</dd></div>
         <div><dt>T</dt><dd>фонарь</dd></div>
         <div><dt>B</dt><dd>таблица счёта</dd></div>
       </dl>
       <p class="hint">
         Тихий шаг включается один раз и держится сам; бег его сбрасывает.
         Лампы простреливаются. Гипсокартонные стены — тоже. Бетон — нет.
-        Выбитая дверь распахивается с одного удара, но закрыть её уже нельзя.
-        Шаги слышно дальше, чем вам кажется.
+        Выбитая дверь распахивается с одного удара, но закрыть её уже нельзя —
+        а вот заклиненную придётся бить дважды. Шаги слышно дальше, чем вам
+        кажется.
       </p>
     </div>
 
@@ -183,9 +193,16 @@
     </header>
     <div class="panel">
       <div class="loadout-grid" id="loadout-grid"></div>
+      <!-- Equipment: the row is filled by src/ui/loadout.js with your own
+           side's kit, so an attacker never sees a defender's wedge. -->
+      <section class="loadout-class" id="loadout-kit">
+        <h3>Снаряжение — <span id="loadout-kit-side">ваша сторона</span></h3>
+        <div class="loadout-row" id="loadout-kit-row"></div>
+      </section>
       <p class="hint">
         Пока идёт отсчёт, обе стороны стоят на месте. Дальше — полминуты
         подготовки: оборона расходится по квартире, штурм ждёт на площадке.
+        Снаряжение ставится и бросается клавишей <b>G</b>.
       </p>
       <p class="loadout-source">
         С одного попадания не убивает ничто, кроме AMR-50 — и той нужна прямая
@@ -194,8 +211,9 @@
         расстоянием, у дроби быстрее всех.
         <a href="docs/weapons.html" target="_blank" rel="noopener">Чертежи всех одиннадцати</a>
       </p>
+      <p class="loadout-status" id="loadout-status" role="status"></p>
       <div class="actions">
-        <button class="btn btn-primary" id="btn-loadout-ready">Готов</button>
+        <button class="btn btn-primary" id="btn-loadout-ready">В бой с этим</button>
       </div>
     </div>
   </section>
@@ -390,6 +408,6 @@
   window.addEventListener('load', function () { window.setTimeout(offerUpdate, 1200); });
 })();
 </script>
-<script type="module" src="src/main.js?v=ec0046cf"></script>
+<script type="module" src="src/main.js?v=fc214c40"></script>
 </body>
 </html>

@@ -383,6 +383,17 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
   color: var(--text-faint);
 }
 .weapon-stats .stat { white-space: nowrap; }
+/* A device card has no blueprint above it, so it needs its own floor to sit
+   at the same height as a weapon card in the row above. */
+.kit-card { min-height: 132px; }
+.loadout-status {
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--accent);
+  margin: 0;
+  min-height: 24px;
+}
 .loadout-source {
   font-size: 14px;
   line-height: 1.5;
@@ -392,6 +403,32 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 .loadout-source a { color: var(--accent); }
 
 /* ── HUD ─────────────────────────────────────────────────────────────── */
+
+.blindfold {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  pointer-events: none;
+  background: #f4f2ec;
+  opacity: 0;
+  transition: opacity 0.12s linear;
+}
+.gadget {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-left: var(--s-4);
+  font-size: 14px;
+  color: var(--text-dim);
+}
+.gadget.empty { opacity: 0.4; }
+.gadget-key {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 var(--s-1);
+  color: var(--text-faint);
+}
+.gadget-left { font-size: 20px; color: var(--text); }
 
 .hud {
   position: fixed;

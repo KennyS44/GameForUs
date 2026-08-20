@@ -10,10 +10,10 @@ import { APARTMENT } from '../src/maps/apartment.js';
 import { buildWorld, hasLineOfSight, doorAngle } from '../src/sim/world.js';
 import {
   createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout,
-  rangeScale, hitDamage,
+  setGadget, rangeScale, hitDamage,
 } from '../src/sim/sim.js';
 import {
-  TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES, DAMAGE,
+  TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES, DAMAGE, GADGETS,
 } from '../src/sim/constants.js';
 import { createHostSession } from '../src/net/session.js';
 
@@ -855,6 +855,206 @@ console.log('\nA door never pushes anyone through a wall:');
     const heavy = runFor('amr-50');
     check('the .50 is carried at a walk, the sawn-off at a run', heavy < light * 0.85,
       `${light.toFixed(2)} m/s vs ${heavy.toFixed(2)} m/s`);
+  }
+
+  restartRound();
+  setLoadout(state, 'a1', DEFAULT_WEAPON);
+}
+
+// ── Equipment ─────────────────────────────────────────────────────────────
+//
+// Six devices, two lists, and every one of them exists to change what a
+// doorway costs. What matters here is that they belong to the right side, that
+// they go off when they should and not when they should not, and that none of
+// them breaks the rule the guns keep: no single hit kills.
+{
+  console.log('\nEquipment:');
+
+  // The front door of the flat, with the attacker on the landing facing it.
+  function atFrontDoor(gadgetId) {
+    restartRound();
+    const a = state.players.a1;
+    const d = state.players.d1;
+    // Kit is chosen during staging, so pick before the round goes live.
+    if (gadgetId) setGadget(state, GADGETS[gadgetId].team === 'attackers' ? 'a1' : 'd1', gadgetId);
+    state.phase = 'live';
+    state.phaseTime = 120;
+    // Whoever is holding the device stands at the door; the other one stands
+    // clear of it.
+    const holder = gadgetId && GADGETS[gadgetId].team === 'defenders' ? d : a;
+    const other = holder === a ? d : a;
+    holder.pos = { x: 0, y: 0, z: 6.9 };
+    holder.look = { yaw: 0, pitch: 0 };
+    other.pos = { x: 0, y: 0, z: 8.6 };
+    other.look = { yaw: 0, pitch: 0 };
+    return { a, d };
+  }
+
+  const press = (extra = {}) => ({ ...createInput(), yaw: 0, ...extra });
+
+  check('a side only carries its own list',
+    setGadget(state, 'a1', 'wedge') === false && setGadget(state, 'a1', 'flash') === true,
+    `${state.players.a1.gadget}`);
+  check('the defenders get the other one',
+    setGadget(state, 'd1', 'flash') === false && setGadget(state, 'd1', 'trap') === true,
+    `${state.players.d1.gadget}`);
+
+  // ── The wedge: the door holds, the first boot takes the wedge, the second
+  // takes the door.
+  {
+    const { a, d } = atFrontDoor('wedge');
+    stepSim(world, state, { d1: press({ gadget: true }), a1: createInput() });
+    check('a wedge goes onto the door in front of you',
+      state.doors.front.device?.kind === 'wedge' && d.gadgetLeft === GADGETS.wedge.count - 1,
+      JSON.stringify(state.doors.front.device));
+
+    state.doors.front.locked = false; // the wedge, not the latch, is on trial
+    for (let i = 0; i < 10; i++) stepSim(world, state, { a1: press({ use: i === 0 }), d1: createInput() });
+    check('a wedged door will not open', state.doors.front.target === 0,
+      `target=${state.doors.front.target}`);
+
+    // The attacker steps up to the door the defender just wedged.
+    a.pos = { x: 0, y: 0, z: 6.9 };
+    d.pos = { x: 0, y: 0, z: 3.0 };
+    let kicks = 0;
+    for (let i = 0; i < TICK_RATE * 4 && !state.doors.front.forced; i++) {
+      const kick = a.kickCooldown <= 0;
+      if (kick) kicks++;
+      stepSim(world, state, { a1: press({ kick }), d1: createInput() });
+    }
+    check('it takes two kicks: one for the wedge, one for the door', kicks === 2, `${kicks} kicks`);
+  }
+
+  // ── The tripwire: it waits for the other side and hurts without killing.
+  {
+    const { a, d } = atFrontDoor('trap');
+    stepSim(world, state, { d1: press({ gadget: true }), a1: createInput() });
+    check('a tripwire goes on the door', state.doors.front.device?.kind === 'trap');
+
+    // Its owner walks through it unharmed.
+    state.doors.front.locked = false;
+    for (let i = 0; i < 6; i++) stepSim(world, state, { d1: press({ use: i === 0 }), a1: createInput() });
+    check('a defender does not trip their own wire',
+      state.doors.front.device?.kind === 'trap' && d.health === PLAYER.maxHealth,
+      `hp=${d.health}`);
+
+    // The attacker does.
+    const hp = a.health;
+    a.pos = { x: 0, y: 0, z: 6.9 };
+    d.pos = { x: 0, y: 0, z: 3.0 };
+    for (let i = 0; i < 6; i++) stepSim(world, state, { a1: press({ use: i === 0 }), d1: createInput() });
+    const taken = hp - a.health;
+    check('an attacker sets it off', taken > 20, `${taken.toFixed(0)} damage`);
+    check('and survives it, like everything else in this game',
+      a.alive && taken < PLAYER.maxHealth, `hp=${a.health.toFixed(0)}`);
+    check('the wire is spent', state.doors.front.device === null);
+  }
+
+  // ── The alarm: silent for its own side, loud for the other.
+  {
+    const { a, d } = atFrontDoor('alarm');
+    stepSim(world, state, { d1: press({ gadget: true }), a1: createInput() });
+    state.doors.front.locked = false;
+    check('an alarm goes on the door', state.doors.front.device?.kind === 'alarm');
+
+    // The defender opens it and shuts it again: their own alarm stays quiet.
+    let heard = 0;
+    const run = (who, ticks, extra = {}) => {
+      for (let i = 0; i < ticks; i++) {
+        const input = press({ ...extra, use: i === 0 && extra.use !== false });
+        stepSim(world, state, who === 'a1'
+          ? { a1: input, d1: createInput() }
+          : { d1: input, a1: createInput() });
+        heard += state.events.filter((e) => e.type === 'alarm').length;
+      }
+    };
+    run('d1', 60);            // the defender goes through their own door
+    check('its own side opens the door quietly', heard === 0, `${heard} alarms`);
+
+    // Shut it again from the simulation's side: a door standing flat against
+    // the wall is out of reach from the front, which is a property of doors
+    // and not of alarms.
+    state.doors.front.open = 0;
+    state.doors.front.target = 0;
+
+    // Now the attacker takes the same handle.
+    state.players.a1.pos = { x: 0, y: 0, z: 6.9 };
+    state.players.d1.pos = { x: 0, y: 0, z: 3.0 };
+    run('a1', 30);
+    check('the other side sets it screaming', heard === 1, `${heard} alarms`);
+  }
+
+  // ── The charge: four seconds, and the doorway is a hole.
+  {
+    const { a } = atFrontDoor('charge');
+    stepSim(world, state, { a1: press({ gadget: true }), d1: createInput() });
+    check('a charge goes on the door', state.doors.front.device?.kind === 'charge');
+    check('it does not go off at once', state.doors.front.broken === false);
+
+    for (let i = 0; i < TICK_RATE * 5 && !state.doors.front.broken; i++) {
+      stepSim(world, state, { a1: press(), d1: createInput() });
+    }
+    check('four seconds later the door is gone',
+      state.doors.front.broken && state.doors.front.device === null,
+      JSON.stringify(state.doors.front.broken));
+  }
+
+  // ── The flash: line of sight is the whole rule.
+  {
+    const { a, d } = atFrontDoor('flash');
+    // Both of them out in the open on the landing, facing each other.
+    a.pos = { x: 0, y: 0, z: 8.4 };
+    d.pos = { x: 0, y: 0, z: 7.0 };
+    d.look = { yaw: Math.PI, pitch: 0 };
+    for (let i = 0; i < TICK_RATE * 3 && d.blind === 0; i++) {
+      stepSim(world, state, {
+        a1: press({ gadget: i === 0, pitch: -0.15 }),
+        d1: { ...createInput(), yaw: Math.PI },
+      });
+    }
+    check('a flash blinds whoever was looking at it', d.blind > 0.3, `blind=${d.blind.toFixed(2)}`);
+
+    // And it burns off on its own.
+    for (let i = 0; i < TICK_RATE * 6; i++) stepSim(world, state, { a1: createInput(), d1: createInput() });
+    check('and it wears off', d.blind === 0, `blind=${d.blind.toFixed(2)}`);
+  }
+
+  // ── Smoke: a cloud nobody sees through, bots included.
+  {
+    restartRound();
+    setGadget(state, 'a1', 'smoke');
+    state.phase = 'live';
+    state.phaseTime = 120;
+    const a = state.players.a1;
+    a.pos = { x: -9, y: 0, z: -7 };
+    const yaw = -Math.PI / 2;
+    a.look = { yaw, pitch: 0 };
+    const from = { x: -9, y: 1.4, z: -7 };
+    const to = { x: -3, y: 1.4, z: -7 };
+    check('the line is clear to start with', hasLineOfSight(world, state, from, to));
+
+    for (let i = 0; i < TICK_RATE * 4 && state.smokes.length === 0; i++) {
+      stepSim(world, state, { a1: { ...createInput(), yaw, gadget: i === 0 }, d1: createInput() });
+    }
+    check('the can pops into a cloud', state.smokes.length === 1, `${state.smokes.length} clouds`);
+    for (let i = 0; i < TICK_RATE * 3; i++) stepSim(world, state, { a1: createInput(), d1: createInput() });
+    check('and nothing sees through it', !hasLineOfSight(world, state, from, to));
+
+    for (let i = 0; i < TICK_RATE * 20; i++) stepSim(world, state, { a1: createInput(), d1: createInput() });
+    check('it thins out and goes', state.smokes.length === 0 && hasLineOfSight(world, state, from, to));
+  }
+
+  // ── A new round clears the flat.
+  {
+    const { d } = atFrontDoor('wedge');
+    stepSim(world, state, { d1: press({ gadget: true }), a1: createInput() });
+    check('the device is really on the door before the round ends',
+      state.doors.front.device?.kind === 'wedge');
+    resetRound(world, state);
+    const anyDevice = Object.values(state.doors).some((ds) => ds.device);
+    check('a new round takes every device off every door', !anyDevice);
+    check('and hands the kit back', d.gadgetLeft === GADGETS[d.gadget].count,
+      `${d.gadgetLeft}/${GADGETS[d.gadget].count}`);
   }
 
   restartRound();

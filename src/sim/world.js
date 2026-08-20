@@ -2,8 +2,8 @@
 // geometry, and bullet raycasts that respect material penetration.
 // Pure — no engine types cross this boundary.
 
-import { rayBox, boxOverlaps, clamp } from './math.js?v=ec0046cf';
-import { DOOR } from './constants.js?v=ec0046cf';
+import { rayBox, boxOverlaps, clamp } from './math.js?v=fc214c40';
+import { DOOR } from './constants.js?v=fc214c40';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -335,7 +335,39 @@ export function hasLineOfSight(world, state, from, to) {
   const len = Math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
   if (len < 1e-6) return true;
   const dir = { x: d.x / len, y: d.y / len, z: d.z / len };
+  // Smoke is checked before geometry because it is cheaper and because it is
+  // the answer more often: a cloud in a doorway blocks the eye, the bot and
+  // the flashbang alike, which is the whole reason to throw one.
+  if (smokeBlocks(state, from, dir, len)) return false;
   // Glass is in the way of a bullet, not of your eyes.
   const hits = raycastGeometry(world, state, from, dir, len - 1e-3);
   return hits.every((h) => h.material.seeThrough);
+}
+
+// Does the segment pass through any live smoke cloud?
+//
+// A cloud is a sphere, so this is the classic ray-sphere test, with one twist:
+// a thin clip of the very edge should not hide anyone. The ray has to spend
+// real distance inside the cloud — a third of a metre — before it counts.
+const SMOKE_BITE = 0.35;
+
+export function smokeBlocks(state, from, dir, len) {
+  const clouds = state.smokes;
+  if (!clouds?.length) return false;
+  for (const c of clouds) {
+    const r = c.radius * c.grown;
+    if (r <= 0.05) continue;
+    const ox = from.x - c.pos.x;
+    const oy = from.y - c.pos.y;
+    const oz = from.z - c.pos.z;
+    const b = ox * dir.x + oy * dir.y + oz * dir.z;
+    const cc = ox * ox + oy * oy + oz * oz - r * r;
+    const disc = b * b - cc;
+    if (disc <= 0) continue;
+    const root = Math.sqrt(disc);
+    const enter = Math.max(0, -b - root);
+    const exit = Math.min(len, -b + root);
+    if (exit - enter > SMOKE_BITE) return true;
+  }
+  return false;
 }

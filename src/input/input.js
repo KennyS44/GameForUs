@@ -1,10 +1,10 @@
 // Keyboard and mouse -> a plain input object for the simulation.
 // Nothing here knows about the game rules; it only reports intent.
 
-import { createInput } from '../sim/sim.js?v=ec0046cf';
-import { LOOK } from '../sim/constants.js?v=ec0046cf';
-import { clamp } from '../sim/math.js?v=ec0046cf';
-import { storageGet, storageSet } from '../util/storage.js?v=ec0046cf';
+import { createInput } from '../sim/sim.js?v=fc214c40';
+import { LOOK } from '../sim/constants.js?v=fc214c40';
+import { clamp } from '../sim/math.js?v=fc214c40';
+import { storageGet, storageSet } from '../util/storage.js?v=fc214c40';
 
 export const DEFAULT_BINDINGS = {
   forward: 'KeyW',
@@ -19,6 +19,7 @@ export const DEFAULT_BINDINGS = {
   leanRight: 'KeyE',
   use: 'KeyF',
   kick: 'KeyV',
+  gadget: 'KeyG',
   flashlight: 'KeyT',
   reload: 'KeyR',
   scoreboard: 'KeyB',
@@ -47,7 +48,7 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
   const look = { yaw: 0, pitch: 0 };
   let mouseDown = 0; // bitmask
   // Edge-triggered actions: consumed once by the next input frame.
-  const pending = { use: false, kick: false, flashlight: false, reload: false, jump: false };
+  const pending = { use: false, kick: false, flashlight: false, reload: false, jump: false, gadget: false };
   // Sneaking is a mode you switch on, not a key you hold down: creeping across
   // a flat takes long enough that holding a key the whole way is just a chore.
   let sneaking = false;
@@ -71,6 +72,7 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
     keys.add(e.code);
     if (e.code === bindings.use) pending.use = true;
     if (e.code === bindings.kick) pending.kick = true;
+    if (e.code === bindings.gadget) pending.gadget = true;
     if (e.code === bindings.flashlight) pending.flashlight = true;
     if (e.code === bindings.reload) pending.reload = true;
     if (e.code === bindings.jump) pending.jump = true;
@@ -186,7 +188,9 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
       i.kick = pending.kick;
       i.toggleLight = pending.flashlight;
       i.reload = pending.reload;
+      i.gadget = pending.gadget;
       pending.use = pending.kick = pending.flashlight = pending.reload = pending.jump = false;
+      pending.gadget = false;
       return i;
     },
 

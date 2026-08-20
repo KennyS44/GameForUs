@@ -231,11 +231,13 @@ export function createAudio() {
     src.connect(f).connect(g).connect(out);
   }
 
-  function click(kind) {
+  function click(kind, pos) {
     if (!ensure() || !enabled) return;
     const t = ctx.currentTime;
     const g = ctx.createGain();
-    g.connect(master);
+    // Fitting a wedge happens somewhere in the flat; racking your own slide
+    // happens at your own hands.
+    g.connect(pos ? panner(pos, 1.5, 16) : master);
     const src = noiseSource(0.05, kind === 'dry' ? 1.6 : 1.0);
     const f = ctx.createBiquadFilter();
     f.type = 'highpass';
@@ -243,6 +245,56 @@ export function createAudio() {
     g.gain.setValueAtTime(kind === 'dry' ? 0.25 : 0.18, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
     src.connect(f).connect(g);
+  }
+
+  // Anything that goes off with a bang: the flashbang's crack, a charge, a
+  // tripwire, and the soft thump of a smoke can popping. One shape, three
+  // settings — a low body, a bright crack on top, and a tail of noise.
+  function blast(pos, kind = 'blast') {
+    if (!ensure() || !enabled) return;
+    const t = ctx.currentTime;
+    const out = panner(pos, 3, kind === 'smoke' ? 20 : 60);
+    const soft = kind === 'smoke';
+
+    const body = ctx.createOscillator();
+    body.type = 'sine';
+    body.frequency.setValueAtTime(soft ? 220 : 90, t);
+    body.frequency.exponentialRampToValueAtTime(soft ? 90 : 32, t + (soft ? 0.2 : 0.45));
+    const bg = ctx.createGain();
+    bg.gain.setValueAtTime(soft ? 0.25 : 1, t);
+    bg.gain.exponentialRampToValueAtTime(0.001, t + (soft ? 0.25 : 0.6));
+    body.connect(bg).connect(out);
+    body.start(t);
+    body.stop(t + 0.7);
+
+    const crack = noiseSource(soft ? 0.5 : 0.9, kind === 'flash' ? 1.6 : 1.0);
+    const f = ctx.createBiquadFilter();
+    f.type = soft ? 'lowpass' : 'highpass';
+    f.frequency.value = soft ? 900 : 700;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(soft ? 0.18 : 0.9, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + (soft ? 0.5 : 0.55));
+    crack.connect(f).connect(g).connect(out);
+  }
+
+  // The door alarm: a two-tone warble that carries across the flat.
+  function alarm(pos) {
+    if (!ensure() || !enabled) return;
+    const t = ctx.currentTime;
+    const out = panner(pos, 4, 40);
+    for (let i = 0; i < 4; i++) {
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      const at = t + i * 0.22;
+      osc.frequency.setValueAtTime(i % 2 ? 780 : 1180, at);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.linearRampToValueAtTime(0.22, at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, at + 0.18);
+      osc.connect(g).connect(out);
+      osc.start(at);
+      osc.stop(at + 0.2);
+    }
   }
 
   function hitMarker() {
@@ -267,6 +319,8 @@ export function createAudio() {
     impact,
     doorSound,
     click,
+    blast,
+    alarm,
     hitMarker,
     setEnabled(v) {
       enabled = v;

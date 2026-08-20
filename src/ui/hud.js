@@ -1,6 +1,6 @@
 // HUD: reads simulation state, writes DOM. Never the other way round.
 
-import { WEAPONS, PLAYER } from '../sim/constants.js?v=ec0046cf';
+import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=fc214c40';
 
 const $ = (id) => document.getElementById(id);
 
@@ -23,6 +23,10 @@ export function createHud() {
     ammoMag: $('ammo-mag'),
     ammoReserve: $('ammo-reserve'),
     flashlightFlag: $('flashlight-flag'),
+    gadgetSlot: $('gadget-slot'),
+    gadgetName: $('gadget-name'),
+    gadgetLeft: $('gadget-left'),
+    blindfold: $('blindfold'),
     clickToPlay: $('click-to-play'),
     deadNotice: $('dead-notice'),
     deadSub: $('dead-sub'),
@@ -32,6 +36,12 @@ export function createHud() {
 
   let lastHealth = PLAYER.maxHealth;
   let vignetteTimer = 0;
+
+  // A flash lands between two HUD updates, so paint the white immediately
+  // rather than waiting for the next frame to read the simulation.
+  function blindFlash(amount = 1) {
+    el.blindfold.style.opacity = String(Math.min(0.97, amount * 1.15));
+  }
 
   function show(on) {
     el.hud.hidden = !on;
@@ -72,6 +82,18 @@ export function createHud() {
     el.ammoMag.classList.toggle('low', w.ammo <= def.magSize * 0.25);
     el.ammoReserve.textContent = w.reserve;
     el.flashlightFlag.hidden = !me.flashlight;
+
+    // ── Equipment ──
+    const kit = GADGETS[me.gadget];
+    if (kit) {
+      el.gadgetName.textContent = kit.name;
+      el.gadgetLeft.textContent = me.gadgetLeft ?? 0;
+      el.gadgetSlot.classList.toggle('empty', (me.gadgetLeft ?? 0) <= 0);
+    }
+
+    // Being flashed is the simulation's business, so the screen just reads it.
+    // A blast of white, then a long climb back to seeing anything.
+    el.blindfold.style.opacity = String(Math.min(0.97, (me.blind ?? 0) * 1.15));
 
     // ── Crosshair opens up with your actual cone of fire ──
     const moving = Math.hypot(me.vel.x, me.vel.z) > 1.2;
@@ -170,7 +192,7 @@ export function createHud() {
   }
 
   return {
-    show, update, setPrompt, setClickToPlay, hitMark, killFeed,
+    show, blindFlash, update, setPrompt, setClickToPlay, hitMark, killFeed,
     scoreboard, setDeathInfo, el,
   };
 }

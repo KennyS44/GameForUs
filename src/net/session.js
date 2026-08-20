@@ -5,12 +5,12 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=ec0046cf';
+import { buildWorld } from '../sim/world.js?v=fc214c40';
 import {
-  createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout,
-} from '../sim/sim.js?v=ec0046cf';
-import { createBotBrain } from '../sim/bot.js?v=ec0046cf';
-import { DT } from '../sim/constants.js?v=ec0046cf';
+  createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout, setGadget,
+} from '../sim/sim.js?v=fc214c40';
+import { createBotBrain } from '../sim/bot.js?v=fc214c40';
+import { DT } from '../sim/constants.js?v=fc214c40';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 
@@ -54,6 +54,9 @@ export function createLocalSession({ map, name = 'Игрок', bots = 1, seed = 
     },
     chooseWeapon(weaponId) {
       return setLoadout(state, localId, weaponId);
+    },
+    chooseGadget(gadgetId) {
+      return setGadget(state, localId, gadgetId);
     },
     nextRound() {
       resetRound(world, state);
@@ -106,6 +109,8 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
       // The host is the only authority on who is carrying what, so a client's
       // pick goes through the same check as the host's own.
       setLoadout(state, peerId, msg.id);
+    } else if (msg.t === 'gadget') {
+      setGadget(state, peerId, msg.id);
     } else if (msg.t === 'ping') {
       transport.sendTo(peerId, { t: 'pong', c: msg.c, s: performance.now() });
     } else if (msg.t === 'rtt') {
@@ -123,6 +128,7 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
         health: p.health, alive: p.alive, flashlight: p.flashlight,
         aimAmount: p.aimAmount, grounded: p.grounded,
         weapon: p.weapon, loadout: p.loadout, kills: p.kills, deaths: p.deaths,
+        gadget: p.gadget, gadgetLeft: p.gadgetLeft, blind: p.blind,
         // Carried so a client replaying its pending inputs continues the
         // recoil climb and the jump timer from the host's numbers rather than
         // its own guess.
@@ -132,7 +138,10 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
     }
     const doors = {};
     for (const [id, d] of Object.entries(state.doors)) {
-      doors[id] = { open: d.open, target: d.target, forced: d.forced, broken: d.broken, locked: d.locked, health: d.health };
+      doors[id] = {
+        open: d.open, target: d.target, forced: d.forced, broken: d.broken,
+        locked: d.locked, health: d.health, device: d.device,
+      };
     }
     const lights = {};
     for (const [id, l] of Object.entries(state.lights)) lights[id] = { broken: l.broken };
@@ -144,6 +153,10 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
       phase: state.phase,
       phaseTime: state.phaseTime,
       players, doors, lights,
+      // Grenades in the air and clouds on the floor are world state like any
+      // other: a guest has to see the same smoke the host does.
+      throwables: state.throwables,
+      smokes: state.smokes,
       events: state.events,
       acks: Object.fromEntries([...clientInputs].map(([id, s]) => [id, s.seq])),
       pings,
@@ -175,6 +188,9 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
     },
     chooseWeapon(weaponId) {
       return setLoadout(state, localId, weaponId);
+    },
+    chooseGadget(gadgetId) {
+      return setGadget(state, localId, gadgetId);
     },
     nextRound() {
       resetRound(world, state);
@@ -236,6 +252,8 @@ export function createClientSession({ map, transport, myId, seed = 1337 }) {
     state.phaseTime = snap.phaseTime;
     state.doors = snap.doors;
     state.lights = snap.lights;
+    state.throwables = snap.throwables ?? [];
+    state.smokes = snap.smokes ?? [];
     Object.assign(pings, snap.pings ?? {});
 
     for (const ev of snap.events ?? []) {
@@ -358,6 +376,10 @@ export function createClientSession({ map, transport, myId, seed = 1337 }) {
       // Show it in our own hands straight away; the next snapshot either
       // confirms it or quietly puts the old gun back.
       return setLoadout(state, localId, weaponId);
+    },
+    chooseGadget(gadgetId) {
+      transport.send({ t: 'gadget', id: gadgetId });
+      return setGadget(state, localId, gadgetId);
     },
     nextRound() {
       // Only the host may start a round; clients wait for the reset message.

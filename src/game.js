@@ -1,15 +1,17 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=ec0046cf';
-import { buildScene, syncDoors, syncLights, makeAvatar } from './render/scene.js?v=ec0046cf';
-import { createEffects } from './render/effects.js?v=ec0046cf';
-import { createView } from './render/view.js?v=ec0046cf';
-import { createHud } from './ui/hud.js?v=ec0046cf';
-import { DT, PLAYER } from './sim/constants.js?v=ec0046cf';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=ec0046cf';
-import { raycastGeometry } from './sim/world.js?v=ec0046cf';
-import { distXZ } from './sim/math.js?v=ec0046cf';
+import * as THREE from '../vendor/three.module.js?v=fc214c40';
+import {
+  buildScene, syncDoors, syncLights, makeAvatar, createEquipmentView,
+} from './render/scene.js?v=fc214c40';
+import { createEffects } from './render/effects.js?v=fc214c40';
+import { createView } from './render/view.js?v=fc214c40';
+import { createHud } from './ui/hud.js?v=fc214c40';
+import { DT, PLAYER } from './sim/constants.js?v=fc214c40';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=fc214c40';
+import { raycastGeometry } from './sim/world.js?v=fc214c40';
+import { distXZ } from './sim/math.js?v=fc214c40';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -29,6 +31,10 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
   const built = buildScene(session.world);
   const view = createView(built.scene);
   const effects = createEffects(built.scene);
+  // Grenades, clouds and whatever is fitted to a door. It needs the door
+  // pivots so a charge swings with the panel it is stuck to.
+  const equipment = createEquipmentView(built.scene);
+  equipment.attachDoors(built.doorMeshes);
   const hud = createHud();
 
   // ── Warm-up ──
@@ -156,6 +162,43 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
         case 'lightBreak':
           audio.impact(ev.pos, 'glass');
           break;
+        case 'throw':
+          audio.click('throw');
+          break;
+        case 'bounce':
+          audio.impact(ev.pos, 'metal');
+          break;
+        case 'devicePlaced':
+        case 'deviceBroken': {
+          const door = session.world.doors.find((d) => d.id === ev.doorId);
+          if (door) audio.click('device', doorEar(door));
+          break;
+        }
+        case 'doorWedged': {
+          const door = session.world.doors.find((d) => d.id === ev.doorId);
+          if (door) audio.doorSound(doorEar(door), 'wedged');
+          break;
+        }
+        case 'alarm': {
+          const door = session.world.doors.find((d) => d.id === ev.doorId);
+          if (door) audio.alarm(doorEar(door));
+          break;
+        }
+        case 'flash':
+          effects.flash(ev.pos, 3.4);
+          audio.blast(ev.pos, 'flash');
+          break;
+        case 'deviceBlast':
+          effects.flash(ev.pos, 2.6);
+          audio.blast(ev.pos, 'blast');
+          break;
+        case 'smoke':
+          audio.blast(ev.pos, 'smoke');
+          break;
+        case 'blinded':
+          // Only our own eyes are ours to white out.
+          if (ev.id === me.id) hud.blindFlash(ev.amount);
+          break;
         case 'roundEnd':
           if (!roundEndFired) {
             roundEndFired = true;
@@ -266,6 +309,7 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
 
     syncDoors(built, session.state);
     syncLights(built, session.state, me ? me.pos.y : 0);
+    equipment.sync(session.state, session.world);
     syncAvatars();
     effects.update(dtReal);
 

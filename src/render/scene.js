@@ -1,8 +1,8 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=ec0046cf';
-import { doorAngle } from '../sim/world.js?v=ec0046cf';
+import * as THREE from '../../vendor/three.module.js?v=fc214c40';
+import { doorAngle } from '../sim/world.js?v=fc214c40';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -284,6 +284,109 @@ export function syncLights(view, state, viewerY = 0) {
     entry.bulb.visible = !broken;
     if (broken) entry.bulb.material.color.setHex(0x1a1a1a);
   }
+}
+
+// ── Equipment in the world ────────────────────────────────────────────────
+//
+// Three kinds of object, one pass: grenades in the air, clouds on the floor,
+// and whatever is bolted to a door. All of them are pooled — a round can throw
+// a dozen and a frame must not allocate.
+
+const DEVICE_COLOR = {
+  charge: 0xc8531f,
+  wedge: 0xb08a4a,
+  trap: 0xc23b3b,
+  alarm: 0x4a7fc2,
+};
+
+export function createEquipmentView(scene) {
+  // The door pivots belong to the scene view and are handed in once it exists,
+  // so a device can ride the panel it is fitted to.
+  let doorMeshes = null;
+  const viewOf = (id) => doorMeshes?.get(id);
+
+  const thrown = [];
+  const clouds = [];
+  const devices = new Map(); // doorId -> mesh
+
+  const grenadeGeo = new THREE.SphereGeometry(0.055, 10, 8);
+  const flashMat = new THREE.MeshStandardMaterial({
+    color: 0x9aa2ae, roughness: 0.5, metalness: 0.6, emissive: 0x1a1d22,
+  });
+  const smokeCanMat = new THREE.MeshStandardMaterial({
+    color: 0x2f5136, roughness: 0.8, metalness: 0.2, emissive: 0x0d1410,
+  });
+  // One sphere, drawn big and soft. Depth-write off so two clouds overlapping
+  // do not cut a hard edge into each other.
+  const cloudGeo = new THREE.SphereGeometry(1, 16, 12);
+  const cloudMat = new THREE.MeshStandardMaterial({
+    color: 0xb9bcc2, roughness: 1, metalness: 0,
+    transparent: true, opacity: 0.92, depthWrite: false, emissive: 0x14161b,
+  });
+  const deviceGeo = new THREE.BoxGeometry(0.14, 0.1, 0.06);
+
+  function sync(state, world) {
+    // Grenades in flight.
+    const flying = state.throwables ?? [];
+    while (thrown.length < flying.length) {
+      const mesh = new THREE.Mesh(grenadeGeo, flashMat);
+      scene.add(mesh);
+      thrown.push(mesh);
+    }
+    for (let i = 0; i < thrown.length; i++) {
+      const t = flying[i];
+      thrown[i].visible = !!t;
+      if (!t) continue;
+      thrown[i].material = t.kind === 'smoke' ? smokeCanMat : flashMat;
+      thrown[i].position.set(t.pos.x, t.pos.y, t.pos.z);
+    }
+
+    // Clouds.
+    const smokes = state.smokes ?? [];
+    while (clouds.length < smokes.length) {
+      const mesh = new THREE.Mesh(cloudGeo, cloudMat.clone());
+      scene.add(mesh);
+      clouds.push(mesh);
+    }
+    for (let i = 0; i < clouds.length; i++) {
+      const c = smokes[i];
+      clouds[i].visible = !!c;
+      if (!c) continue;
+      clouds[i].position.set(c.pos.x, c.pos.y + 0.5, c.pos.z);
+      clouds[i].scale.setScalar(Math.max(0.05, c.radius * c.grown));
+      clouds[i].material.opacity = 0.92 * Math.min(1, c.grown * 1.6);
+    }
+
+    // Devices ride the door panel, so they swing with it.
+    for (const door of world.doors) {
+      const ds = state.doors[door.id];
+      const has = !!ds?.device;
+      let mesh = devices.get(door.id);
+      if (has && !mesh) {
+        mesh = new THREE.Mesh(deviceGeo, new THREE.MeshStandardMaterial({
+          color: DEVICE_COLOR[ds.device.kind] ?? 0xaaaaaa,
+          roughness: 0.6, metalness: 0.3, emissive: 0x0a0c10,
+        }));
+        // Hung on the face of the panel: a wedge at the foot, everything else
+        // at handle height, which is where you would actually fit it.
+        mesh.position.set(door.width * 0.28, ds.device.kind === 'wedge' ? 0.08 : 1.05, 0.07);
+        const entry = viewOf(door.id);
+        entry?.pivot.add(mesh);
+        devices.set(door.id, mesh);
+      } else if (!has && mesh) {
+        mesh.parent?.remove(mesh);
+        mesh.material.dispose();
+        devices.delete(door.id);
+      } else if (has && mesh) {
+        mesh.material.color.setHex(DEVICE_COLOR[ds.device.kind] ?? 0xaaaaaa);
+      }
+    }
+  }
+
+  return {
+    attachDoors(meshes) { doorMeshes = meshes; },
+    sync,
+  };
 }
 
 // ── Player avatars ────────────────────────────────────────────────────────

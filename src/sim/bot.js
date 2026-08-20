@@ -4,9 +4,10 @@
 // The bot plays the way the map wants to be played: it holds an angle, reacts
 // to sound, and pushes only when it has a reason to.
 
-import { createInput, eyePosition, aimDirection } from './sim.js?v=ec0046cf';
-import { hasLineOfSight } from './world.js?v=ec0046cf';
-import { distXZ, clamp } from './math.js?v=ec0046cf';
+import { createInput, eyePosition, aimDirection } from './sim.js?v=fc214c40';
+import { hasLineOfSight } from './world.js?v=fc214c40';
+import { distXZ, clamp } from './math.js?v=fc214c40';
+import { BLIND } from './constants.js?v=fc214c40';
 
 // Indoors nobody picks a figure out of the gloom across the whole map.
 const MAX_SIGHT = 24;
@@ -53,7 +54,11 @@ export function createBotBrain(seed = 7) {
     const eye = eyePosition(bot);
     let visible = null;
     let bestDist = Infinity;
+    // A flashbang works on a bot exactly as it works on a player: while the
+    // white is in its eyes it sees nothing and can only go by what it heard.
+    const blinded = (bot.blind ?? 0) > BLIND.botThreshold;
     for (const p of Object.values(state.players)) {
+      if (blinded) break;
       if (!p.alive || p.team === bot.team) continue;
       const theirEye = eyePosition(p);
       if (!hasLineOfSight(world, state, eye, theirEye)) continue;

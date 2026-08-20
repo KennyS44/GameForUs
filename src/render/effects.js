@@ -1,7 +1,7 @@
 // Short-lived visuals: tracers, muzzle flash, impact sparks and bullet holes.
 // Everything is pooled — no allocation during a firefight.
 
-import * as THREE from '../../vendor/three.module.js?v=ec0046cf';
+import * as THREE from '../../vendor/three.module.js?v=fc214c40';
 
 const TRACER_POOL = 24;
 const DECAL_POOL = 96;
@@ -58,6 +58,7 @@ export function createEffects(scene) {
   const muzzle = new THREE.PointLight(0xffcf8a, 0, 7, 2);
   scene.add(muzzle);
   let muzzleLife = 0;
+  let muzzlePower = 1;
 
   function spawnTracer(from, to) {
     const slot = tracers.find((t) => t.life <= 0) ?? tracers[0];
@@ -107,9 +108,13 @@ export function createEffects(scene) {
     s.life = 0.09;
   }
 
-  function flash(pos) {
+  // `power` scales both how bright the light is and how long it hangs around:
+  // a muzzle blip is a frame or two, a flashbang burns for a third of a second
+  // and lights the whole room through the doorway it went off in.
+  function flash(pos, power = 1) {
     muzzle.position.set(pos.x, pos.y, pos.z);
-    muzzleLife = 0.045;
+    muzzlePower = power;
+    muzzleLife = 0.045 * power * power;
   }
 
   function update(dt) {
@@ -126,7 +131,8 @@ export function createEffects(scene) {
     }
     if (muzzleLife > 0) {
       muzzleLife -= dt;
-      muzzle.intensity = Math.max(0, (muzzleLife / 0.045) * MUZZLE_CANDELA);
+      const span = 0.045 * muzzlePower * muzzlePower;
+      muzzle.intensity = Math.max(0, (muzzleLife / span) * MUZZLE_CANDELA * muzzlePower);
     }
   }
 

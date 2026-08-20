@@ -7,13 +7,15 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-} from './constants.js?v=ec0046cf';
+  GADGETS, DEFAULT_GADGET, BLIND,
+} from './constants.js?v=fc214c40';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=ec0046cf';
+} from './math.js?v=fc214c40';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
-} from './world.js?v=ec0046cf';
+  hasLineOfSight,
+} from './world.js?v=fc214c40';
 
 const GRAVITY = 18;
 
@@ -24,7 +26,7 @@ export function createInput() {
     run: false, sneak: false, crouch: false, jump: false,
     lean: 0,
     fire: false, aim: false, reload: false,
-    use: false, kick: false, toggleLight: false,
+    use: false, kick: false, toggleLight: false, gadget: false,
   };
 }
 
@@ -59,6 +61,13 @@ function createPlayer(id, team, spawn, name) {
       reloading: 0,
       reloadTotal: 0,
     },
+    // What they carry besides the gun. Each side has its own list, so the
+    // default depends on which door you came in through.
+    gadget: DEFAULT_GADGET[team],
+    gadgetLeft: GADGETS[DEFAULT_GADGET[team]].count,
+    gadgetCooldown: 0,
+    // 0 is seeing normally, 1 is a white screen. Only a flash sets it.
+    blind: 0,
     kickCooldown: 0,
     useCooldown: 0,
     jumpCooldown: 0,
@@ -83,6 +92,9 @@ export function createState(world, seed = 12345) {
       // longer be shut. The panel itself stays on its hinges and still stops
       // bullets — a kicked door is cover you can no longer close.
       forced: !!d.startsForced,
+      // A device fitted to this door: a wedge holding it, a charge counting
+      // down on it, a tripwire or an alarm waiting for it to move.
+      device: null,
       // Glass does not swing open when it loses: the pane falls out and the
       // doorway is simply gone.
       broken: false,
@@ -100,6 +112,9 @@ export function createState(world, seed = 12345) {
     players: {},
     doors,
     lights,
+    // Things in the air, and clouds that have already landed.
+    throwables: [],
+    smokes: [],
     events: [],
     seed,
     rngCalls: 0,
@@ -447,11 +462,23 @@ function pushDoor(world, state, p, target, speed, loudness) {
     emit(state, { type: 'doorLocked', doorId: found.door.id });
     return true;
   }
+  // A wedge holds the handle, and rattling it is not quiet: the defender who
+  // fitted it hears exactly which door someone just tried.
+  if (ds.device?.kind === 'wedge') {
+    emit(state, { type: 'doorWedged', doorId: found.door.id, by: p.id });
+    makeNoise(state, doorNoisePos(found.door), DOOR.loudnessOpen * 2, 'wedge', p.id);
+    return true;
+  }
+  triggerDoorDevice(world, state, found.door, p);
   ds.target = target;
   ds.speed = speed;
-  makeNoise(state, { x: found.door.pos.x, y: (found.door.pos.y ?? 0) + 1, z: found.door.pos.z }, loudness, 'door', p.id);
+  makeNoise(state, doorNoisePos(found.door), loudness, 'door', p.id);
   emit(state, { type: 'doorMove', doorId: found.door.id, target });
   return true;
+}
+
+function doorNoisePos(door) {
+  return { x: door.pos.x, y: (door.pos.y ?? 0) + 1, z: door.pos.z };
 }
 
 // One kick takes any door, locked or not. It flies open on its hinges — loudly,
@@ -462,7 +489,17 @@ function kickDoor(world, state, p) {
   const ds = found.state;
 
   emit(state, { type: 'doorKick', doorId: found.door.id, by: p.id });
-  makeNoise(state, { x: found.door.pos.x, y: (found.door.pos.y ?? 0) + 1, z: found.door.pos.z }, DOOR.loudnessKick, 'kick', p.id);
+  makeNoise(state, doorNoisePos(found.door), DOOR.loudnessKick, 'kick', p.id);
+
+  // A boot finds whatever the defenders left on the door. A wedge eats the
+  // kick whole — that is the trade it makes: the door survives this one, and
+  // the man in the doorway has to wind up and do it again, loudly, twice.
+  if (ds.device?.kind === 'wedge') {
+    ds.device = null;
+    emit(state, { type: 'deviceBroken', doorId: found.door.id, kind: 'wedge' });
+    return true;
+  }
+  triggerDoorDevice(world, state, found.door, p);
 
   // A door with nothing left to break just gets shoved the rest of the way.
   if (ds.forced || ds.broken) {
@@ -477,6 +514,242 @@ function kickDoor(world, state, p) {
   return true;
 }
 
+// ── Equipment ─────────────────────────────────────────────────────────────
+//
+// Two ways to deliver a device and one place that decides which: a grenade is
+// lobbed and left to bounce, everything else is fitted to the door you are
+// looking at. Both spend the same allowance, so a player is always choosing
+// between a doorway they can shape and one they can only rush.
+
+// Picking a device, on the same terms as picking a gun: only during staging,
+// only something your own side carries.
+export function setGadget(state, id, gadgetId) {
+  const p = state.players[id];
+  const def = GADGETS[gadgetId];
+  if (!p || !def || def.team !== p.team) return false;
+  if (state.phase !== 'select' && state.phase !== 'prep') return false;
+
+  p.gadget = gadgetId;
+  p.gadgetLeft = def.count;
+  return true;
+}
+
+const THROW_SPEED = 11;
+const THROW_LIFT = 2.2; // underarm, so it arcs rather than flying flat
+const BOUNCE = 0.36;
+const THROW_RADIUS = 0.09;
+
+function useGadget(world, state, p) {
+  const def = GADGETS[p.gadget];
+  if (!def || p.gadgetLeft <= 0 || p.gadgetCooldown > 0) return false;
+
+  if (def.kind === 'door') {
+    const found = doorInReach(world, state, p, 1.9);
+    // One device to a door: a doorway that is already wedged, wired or wired
+    // to blow does not take a second.
+    if (!found || found.state.device) return false;
+    found.state.device = { kind: p.gadget, by: p.id, team: p.team, fuse: def.fuse ?? 0 };
+    p.gadgetLeft--;
+    p.gadgetCooldown = 0.8;
+    makeNoise(state, doorNoisePos(found.door), 4, 'device', p.id);
+    emit(state, { type: 'devicePlaced', doorId: found.door.id, kind: p.gadget, by: p.id });
+    return true;
+  }
+
+  const eye = eyePosition(p);
+  const dir = aimDirection(p);
+  state.throwables.push({
+    kind: p.gadget,
+    by: p.id,
+    team: p.team,
+    pos: { x: eye.x + dir.x * 0.4, y: eye.y - 0.1 + dir.y * 0.4, z: eye.z + dir.z * 0.4 },
+    vel: {
+      x: dir.x * THROW_SPEED + p.vel.x,
+      y: dir.y * THROW_SPEED + THROW_LIFT,
+      z: dir.z * THROW_SPEED + p.vel.z,
+    },
+    fuse: def.fuse,
+  });
+  p.gadgetLeft--;
+  p.gadgetCooldown = 0.7;
+  emit(state, { type: 'throw', kind: p.gadget, by: p.id });
+  return true;
+}
+
+// Grenades in flight. A thrown object is a point with a radius: step it, and
+// if the step would take it through something, put it on the surface and
+// bounce what is left of its speed off the normal.
+function stepThrowables(world, state, dt) {
+  for (let i = state.throwables.length - 1; i >= 0; i--) {
+    const t = state.throwables[i];
+    t.vel.y -= GRAVITY * dt;
+
+    let move = { x: t.vel.x * dt, y: t.vel.y * dt, z: t.vel.z * dt };
+    let dist = Math.hypot(move.x, move.y, move.z);
+    for (let bounce = 0; bounce < 3 && dist > 1e-5; bounce++) {
+      const dir = { x: move.x / dist, y: move.y / dist, z: move.z / dist };
+      const hit = raycastGeometry(world, state, t.pos, dir, dist + THROW_RADIUS)[0];
+      if (!hit) break;
+
+      const travel = Math.max(0, hit.t - THROW_RADIUS);
+      t.pos = addScaled(t.pos, dir, travel);
+      const n = hit.normal;
+      const along = t.vel.x * n.x + t.vel.y * n.y + t.vel.z * n.z;
+      t.vel = {
+        x: (t.vel.x - 2 * along * n.x) * BOUNCE,
+        y: (t.vel.y - 2 * along * n.y) * BOUNCE,
+        z: (t.vel.z - 2 * along * n.z) * BOUNCE,
+      };
+      if (bounce === 0) {
+        makeNoise(state, t.pos, 8, 'bounce', t.by);
+        emit(state, { type: 'bounce', pos: { ...t.pos }, kind: t.kind });
+      }
+      dist = Math.max(0, dist - travel) * BOUNCE;
+      move = { x: dir.x * dist, y: dir.y * dist, z: dir.z * dist };
+    }
+    t.pos = { x: t.pos.x + move.x, y: t.pos.y + move.y, z: t.pos.z + move.z };
+
+    t.fuse -= dt;
+    if (t.fuse > 0) continue;
+
+    state.throwables.splice(i, 1);
+    if (t.kind === 'smoke') popSmoke(state, t);
+    else popFlash(world, state, t);
+  }
+}
+
+function popSmoke(state, t) {
+  const def = GADGETS.smoke;
+  state.smokes.push({
+    pos: { ...t.pos },
+    radius: def.radius,
+    grown: 0,
+    growTime: def.growTime,
+    left: def.duration,
+  });
+  makeNoise(state, t.pos, def.loudness, 'smoke', t.by);
+  emit(state, { type: 'smoke', pos: { ...t.pos }, by: t.by });
+}
+
+// A flash does not care how far the blast reaches, it cares who was looking.
+// Line of sight is the whole rule — which is also why a cloud of your own
+// smoke will save you from your own grenade.
+function popFlash(world, state, t) {
+  const def = GADGETS.flash;
+  makeNoise(state, t.pos, def.loudness, 'flash', t.by);
+  emit(state, { type: 'flash', pos: { ...t.pos }, by: t.by });
+
+  for (const p of Object.values(state.players)) {
+    if (!p.alive) continue;
+    const eye = eyePosition(p);
+    const dist = Math.hypot(eye.x - t.pos.x, eye.y - t.pos.y, eye.z - t.pos.z);
+    if (dist > def.radius) continue;
+    if (!hasLineOfSight(world, state, eye, t.pos)) continue;
+
+    // Facing it costs everything; catching it at the edge of vision costs
+    // about a third. Distance does the rest.
+    const to = {
+      x: (t.pos.x - eye.x) / (dist || 1),
+      y: (t.pos.y - eye.y) / (dist || 1),
+      z: (t.pos.z - eye.z) / (dist || 1),
+    };
+    const look = aimDirection(p);
+    const facing = Math.max(0, to.x * look.x + to.y * look.y + to.z * look.z);
+    const near = 1 - Math.min(1, dist / def.radius);
+    const amount = Math.min(1, (0.35 + 0.65 * facing) * (0.35 + 0.75 * near));
+    p.blind = Math.max(p.blind, amount);
+    emit(state, { type: 'blinded', id: p.id, amount });
+  }
+}
+
+// A blast: everything within reach that can see the centre of it. Held to the
+// same ceiling as a bullet, so no device ever kills outright either.
+function blast(world, state, pos, damage, radius, by) {
+  for (const p of Object.values(state.players)) {
+    if (!p.alive) continue;
+    const chest = { x: p.pos.x, y: p.pos.y + playerHeight(p) * 0.6, z: p.pos.z };
+    const dist = Math.hypot(chest.x - pos.x, chest.y - pos.y, chest.z - pos.z);
+    if (dist > radius) continue;
+    if (!hasLineOfSight(world, state, chest, pos)) continue;
+
+    const falloff = 1 - (dist / radius) * 0.6;
+    const dmg = Math.min(DAMAGE.maxPerHit, damage * falloff);
+    if (state.phase === 'select' || state.phase === 'prep') continue;
+    p.health -= dmg;
+    const shooter = state.players[by];
+    emit(state, { type: 'hit', targetId: p.id, by, zone: 'torso', damage: dmg });
+    if (p.health <= 0 && p.alive) {
+      p.alive = false;
+      p.health = 0;
+      p.deaths++;
+      if (shooter && shooter !== p) shooter.kills++;
+      emit(state, { type: 'death', id: p.id, by, zone: 'blast' });
+    }
+  }
+}
+
+// Something moved the door: a tripwire goes off, an alarm starts screaming,
+// and anything else on the door carries on waiting.
+function triggerDoorDevice(world, state, door, p) {
+  const ds = state.doors[door.id];
+  const device = ds.device;
+  if (!device) return;
+  // Your own side's devices know you: a defender does not walk into their own
+  // tripwire, and does not set off their own alarm.
+  if (p && device.team === p.team) return;
+
+  if (device.kind === 'trap') {
+    const def = GADGETS.trap;
+    ds.device = null;
+    const at = doorNoisePos(door);
+    makeNoise(state, at, def.loudness, 'blast', device.by);
+    emit(state, { type: 'deviceBlast', pos: at, kind: 'trap', doorId: door.id });
+    blast(world, state, at, def.damage, def.blastRadius, device.by);
+  } else if (device.kind === 'alarm') {
+    const def = GADGETS.alarm;
+    makeNoise(state, doorNoisePos(door), def.loudness, 'alarm', device.by);
+    emit(state, { type: 'alarm', doorId: door.id, by: device.by });
+  }
+}
+
+// Charges count down on their doors; everything else on a door just waits.
+function stepDoorDevices(world, state, dt) {
+  for (const door of world.doors) {
+    const ds = state.doors[door.id];
+    const device = ds.device;
+    if (!device || device.kind !== 'charge') continue;
+
+    device.fuse -= dt;
+    if (device.fuse > 0) continue;
+
+    const def = GADGETS.charge;
+    ds.device = null;
+    // The door does not swing, it stops existing: a breached doorway is a
+    // hole, and no amount of kicking puts it back on its hinges.
+    ds.broken = true;
+    ds.forced = true;
+    ds.locked = false;
+    ds.open = 1;
+    ds.target = 1;
+    const at = doorNoisePos(door);
+    makeNoise(state, at, def.loudness, 'blast', device.by);
+    emit(state, { type: 'deviceBlast', pos: at, kind: 'charge', doorId: door.id });
+    emit(state, { type: 'doorBroken', doorId: door.id, by: device.by });
+    blast(world, state, at, def.damage, def.blastRadius, device.by);
+  }
+}
+
+function stepSmokes(state, dt) {
+  for (let i = state.smokes.length - 1; i >= 0; i--) {
+    const c = state.smokes[i];
+    c.grown = Math.min(1, c.grown + dt / c.growTime);
+    c.left -= dt;
+    // The last couple of seconds thin out rather than vanishing on a frame.
+    if (c.left < 2) c.grown = Math.max(0, c.left / 2);
+    if (c.left <= 0) state.smokes.splice(i, 1);
+  }
+}
+
 // ── Per-player step ───────────────────────────────────────────────────────
 
 export function aimDirection(p) {
@@ -489,6 +762,10 @@ function stepPlayer(world, state, p, input, dt) {
   // Aim comes from the client (mouse); recoil is added by the simulation.
   p.look.yaw = input.yaw;
   p.look.pitch = clamp(input.pitch, -LOOK.pitchLimit, LOOK.pitchLimit);
+
+  // A flash burns off on its own clock, and being dead does not make it
+  // last longer: the next round starts with clear eyes either way.
+  if (p.blind > 0) p.blind = Math.max(0, p.blind - BLIND.fade * dt);
 
   const weapon = WEAPONS[p.weapon.id];
   // While the trigger is down the pattern owns the sights. Letting recovery
@@ -627,6 +904,13 @@ function stepPlayer(world, state, p, input, dt) {
   if (input.kick && p.kickCooldown <= 0) {
     if (kickDoor(world, state, p)) p.kickCooldown = 0.9;
   }
+
+  // Equipment. Held down it throws once, like a self-loader: a grenade is a
+  // decision, not something you lean on.
+  p.gadgetCooldown = Math.max(0, p.gadgetCooldown - dt);
+  const wantsGadget = input.gadget && !p.gadgetDown;
+  p.gadgetDown = !!input.gadget;
+  if (wantsGadget) useGadget(world, state, p);
 
   // ── Staging phase ──
   holdInZone(world, state, p, startedAt);
@@ -915,6 +1199,9 @@ export function stepSim(world, state, inputs, dt = DT) {
   }
 
   stepDoors(world, state, dt);
+  stepThrowables(world, state, dt);
+  stepDoorDevices(world, state, dt);
+  stepSmokes(state, dt);
   stepRound(state, dt);
 
   return state;
@@ -950,9 +1237,19 @@ export function resetRound(world, state) {
     p.weapon.reloading = 0;
     p.weapon.cooldown = 0;
     p.triggerDown = false;
+    // Same rule for the device: the pick survives the round, the kit does not.
+    const gadgetId = GADGETS[p.gadget]?.team === p.team ? p.gadget : DEFAULT_GADGET[p.team];
+    p.gadget = gadgetId;
+    p.gadgetLeft = GADGETS[gadgetId].count;
+    p.gadgetCooldown = 0;
+    p.gadgetDown = false;
+    p.blind = 0;
   }
+  state.throwables.length = 0;
+  state.smokes.length = 0;
   for (const d of world.doors) {
     const ds = state.doors[d.id];
+    ds.device = null;
     ds.open = d.startsForced ? 1 : 0;
     ds.target = d.startsForced ? 1 : 0;
     ds.speed = DOOR.openSpeed;
