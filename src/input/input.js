@@ -1,10 +1,10 @@
 // Keyboard and mouse -> a plain input object for the simulation.
 // Nothing here knows about the game rules; it only reports intent.
 
-import { createInput } from '../sim/sim.js?v=47c057f5';
-import { LOOK } from '../sim/constants.js?v=47c057f5';
-import { clamp } from '../sim/math.js?v=47c057f5';
-import { storageGet, storageSet } from '../util/storage.js?v=47c057f5';
+import { createInput } from '../sim/sim.js?v=728373ac';
+import { LOOK } from '../sim/constants.js?v=728373ac';
+import { clamp } from '../sim/math.js?v=728373ac';
+import { storageGet, storageSet } from '../util/storage.js?v=728373ac';
 
 export const DEFAULT_BINDINGS = {
   forward: 'KeyW',
@@ -46,6 +46,8 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
   const settings = loadSettings();
 
   const look = { yaw: 0, pitch: 0 };
+  // 1 unless a scope is up. The renderer owns the number and hands it over.
+  let zoom = 1;
   let mouseDown = 0; // bitmask
   // Edge-triggered actions: consumed once by the next input frame.
   const pending = { use: false, kick: false, flashlight: false, reload: false, jump: false, gadget: false };
@@ -87,8 +89,13 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
   }
   function onMouseMove(e) {
     if (!locked) return;
-    look.yaw -= e.movementX * settings.sensitivity;
-    const dy = e.movementY * settings.sensitivity * (settings.invertY ? 1 : -1);
+    // Magnified glass magnifies the twitch too: the same hand movement covers
+    // as many pixels but a fraction of the room, so the mouse is slowed by
+    // exactly the factor the sight is enlarging by. Without this a scope is
+    // unusable at the very range it exists for.
+    const gain = settings.sensitivity / zoom;
+    look.yaw -= e.movementX * gain;
+    const dy = e.movementY * gain * (settings.invertY ? 1 : -1);
     look.pitch = clamp(look.pitch + dy, -LOOK.pitchLimit, LOOK.pitchLimit);
     // Keep yaw in a sane range so it never loses float precision over a session.
     if (look.yaw > Math.PI) look.yaw -= Math.PI * 2;
@@ -148,6 +155,11 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
     },
     isDown(action) {
       return keys.has(bindings[action]);
+    },
+    // Told by the runtime every frame, because only the viewmodel knows which
+    // sight is fitted and how far into the aim the player is.
+    setZoom(z) {
+      zoom = Math.max(1, z || 1);
     },
     setLook(yaw, pitch) {
       look.yaw = yaw;

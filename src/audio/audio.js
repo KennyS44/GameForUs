@@ -147,21 +147,50 @@ export function createAudio() {
     tail.connect(tailFilter).connect(tailGain).connect(out);
   }
 
-  function footstep(pos, loudness) {
+  // A boot on parquet is not a boot on tile. Each floor gets its own band and
+  // its own tail: hollow and woody over the boards, a hard click off the
+  // porcelain in the wet rooms, a flat scuff on bare concrete, next to nothing
+  // on a rug. Two men in different rooms sound like two men in different
+  // rooms, which is the entire point of listening.
+  const FLOORS = {
+    floor:    { freq: 300, q: 1.0, dur: 0.11, vol: 1.00, tail: 0.055 },
+    tile:     { freq: 1250, q: 2.6, dur: 0.07, vol: 1.05, tail: 0.02 },
+    concrete: { freq: 520, q: 1.4, dur: 0.08, vol: 0.92, tail: 0.03 },
+    wood:     { freq: 340, q: 1.1, dur: 0.10, vol: 0.98, tail: 0.05 },
+    metal:    { freq: 1700, q: 3.0, dur: 0.12, vol: 1.0, tail: 0.06 },
+    fabric:   { freq: 190, q: 0.8, dur: 0.09, vol: 0.6, tail: 0.0 },
+    drywall:  { freq: 400, q: 1.2, dur: 0.09, vol: 0.9, tail: 0.03 },
+  };
+
+  function footstep(pos, loudness, surface = 'floor') {
     if (!ensure() || !enabled) return;
+    const f = FLOORS[surface] ?? FLOORS.floor;
     const t = ctx.currentTime;
     const out = panner(pos, 1.2, 26);
-    const src = noiseSource(0.11, 0.7 + Math.random() * 0.25);
+    const src = noiseSource(f.dur, 0.7 + Math.random() * 0.25);
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.value = 260 + Math.random() * 140;
-    filter.Q.value = 1.1;
+    filter.frequency.value = f.freq * (0.88 + Math.random() * 0.24);
+    filter.Q.value = f.q;
     const gain = ctx.createGain();
-    const vol = Math.min(0.34, 0.05 + loudness * 0.011);
+    const vol = Math.min(0.34, 0.05 + loudness * 0.011) * f.vol;
     gain.gain.setValueAtTime(0, t);
     gain.gain.linearRampToValueAtTime(vol, t + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0008, t + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.0008, t + f.dur);
     src.connect(filter).connect(gain).connect(out);
+
+    // The ring the hard floors leave behind, and the soft ones do not.
+    if (f.tail > 0) {
+      const ring = ctx.createOscillator();
+      ring.type = 'triangle';
+      ring.frequency.value = f.freq * 2.1;
+      const rg = ctx.createGain();
+      rg.gain.setValueAtTime(vol * 0.22, t + 0.004);
+      rg.gain.exponentialRampToValueAtTime(0.0006, t + f.tail + 0.02);
+      ring.connect(rg).connect(out);
+      ring.start(t);
+      ring.stop(t + f.tail + 0.05);
+    }
   }
 
   function impact(pos, material) {

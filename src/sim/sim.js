@@ -8,14 +8,14 @@
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
   GADGETS, DEFAULT_GADGET, BLIND,
-} from './constants.js?v=47c057f5';
+} from './constants.js?v=728373ac';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=47c057f5';
+} from './math.js?v=728373ac';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=47c057f5';
+} from './world.js?v=728373ac';
 
 const GRAVITY = 18;
 
@@ -178,6 +178,15 @@ function emit(state, ev) {
 
 function makeNoise(state, pos, radius, kind, by) {
   emit(state, { type: 'noise', pos: { ...pos }, radius, kind, by });
+}
+
+// What is under this player's boots. A short ray down from the ankles: the
+// answer is a material name, and it costs one raycast per footfall, which is
+// twice a second at a run.
+function surfaceUnder(world, state, p) {
+  const from = { x: p.pos.x, y: p.pos.y + 0.12, z: p.pos.z };
+  const hit = raycastGeometry(world, state, from, { x: 0, y: -1, z: 0 }, 0.4)[0];
+  return hit ? hit.material.name : 'floor';
 }
 
 // ── Player hitboxes ───────────────────────────────────────────────────────
@@ -952,7 +961,10 @@ function stepPlayer(world, state, p, input, dt) {
     p.airborne = false;
     if (fallSpeed < -2) {
       makeNoise(state, p.pos, NOISE.land, 'land', p.id);
-      emit(state, { type: 'land', pos: { ...p.pos }, by: p.id, loud: NOISE.land });
+      emit(state, {
+        type: 'land', pos: { ...p.pos }, by: p.id, loud: NOISE.land,
+        surface: surfaceUnder(world, state, p),
+      });
     }
   }
 
@@ -965,7 +977,12 @@ function stepPlayer(world, state, p, input, dt) {
       p.lastNoise = 0;
       const loud = input.sneak ? NOISE.sneak : input.crouch ? NOISE.crouch : input.run ? NOISE.run : NOISE.walk;
       makeNoise(state, p.pos, loud, 'step', p.id);
-      emit(state, { type: 'step', pos: { ...p.pos }, by: p.id, loud });
+      // Which floor it was: parquet, tile and bare concrete do not sound
+      // alike, and in a game where you fight by ear the floor is information.
+      emit(state, {
+        type: 'step', pos: { ...p.pos }, by: p.id, loud,
+        surface: surfaceUnder(world, state, p),
+      });
     }
   }
 

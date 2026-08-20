@@ -1,18 +1,18 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=47c057f5';
+import * as THREE from '../vendor/three.module.js?v=728373ac';
 import {
   buildScene, syncDoors, syncLights, makeAvatar, poseAvatar, setAvatarWeapon,
   createEquipmentView,
-} from './render/scene.js?v=47c057f5';
-import { createEffects } from './render/effects.js?v=47c057f5';
-import { createView } from './render/view.js?v=47c057f5';
-import { createHud } from './ui/hud.js?v=47c057f5';
-import { DT } from './sim/constants.js?v=47c057f5';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=47c057f5';
-import { raycastGeometry } from './sim/world.js?v=47c057f5';
-import { distXZ } from './sim/math.js?v=47c057f5';
+} from './render/scene.js?v=728373ac';
+import { createEffects } from './render/effects.js?v=728373ac';
+import { createView } from './render/view.js?v=728373ac';
+import { createHud } from './ui/hud.js?v=728373ac';
+import { DT } from './sim/constants.js?v=728373ac';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=728373ac';
+import { raycastGeometry } from './sim/world.js?v=728373ac';
+import { distXZ } from './sim/math.js?v=728373ac';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -136,7 +136,7 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
         }
         case 'step':
         case 'land':
-          if (ev.by !== me.id) audio.footstep(ev.pos, ev.loud);
+          if (ev.by !== me.id) audio.footstep(ev.pos, ev.loud, ev.surface);
           break;
         case 'reload':
           audio.click('reload');
@@ -299,6 +299,8 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
     if (me) {
       const moving = Math.hypot(me.vel.x, me.vel.z) > 0.4;
       view.update(me, dtReal, moving, wallAhead(me));
+      // Whatever the sight is magnifying, the mouse is divided by.
+      input.setZoom(view.zoom);
       audio.setListener(view.camera.position, forwardOf(view.camera));
       hud.update(session.state, me, dtReal);
       updatePrompt();

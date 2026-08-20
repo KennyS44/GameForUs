@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=47c057f5';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=47c057f5';
-import { PLAYER } from '../sim/constants.js?v=47c057f5';
-import { buildWeaponModel } from './weapons.js?v=47c057f5';
+import * as THREE from '../../vendor/three.module.js?v=728373ac';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=728373ac';
+import { PLAYER } from '../sim/constants.js?v=728373ac';
+import { buildWeaponModel } from './weapons.js?v=728373ac';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;

@@ -10,7 +10,7 @@
 // is the silhouette — a bullpup with the magazine on its back is not the same
 // shape as a sawn-off, and that difference is the whole point of the roster.
 
-import * as THREE from '../../vendor/three.module.js?v=47c057f5';
+import * as THREE from '../../vendor/three.module.js?v=728373ac';
 
 const MM = 0.001;
 
@@ -36,8 +36,10 @@ const MATS = {
   glass: new THREE.MeshStandardMaterial({
     color: 0x2a3a44, roughness: 0.2, metalness: 0.3, emissive: 0x0a1016,
   }),
+  // A glove is a shade lighter than the weapon, or a hand on a black rifle is
+  // not a hand, it is more rifle.
   glove: new THREE.MeshStandardMaterial({
-    color: 0x2b2e35, roughness: 1.0, emissive: 0x0d0f14,
+    color: 0x39404a, roughness: 1.0, emissive: 0x101319,
   }),
   // The sleeve above the glove. A gun with nothing behind it hangs in mid-air;
   // what stops that is a forearm running off the bottom of the screen.
@@ -434,7 +436,7 @@ const BUILDS = {
 // at true size fills the screen. Long guns are compressed toward the reference
 // SMG rather than shrunk to match it, so an AMR still reads as an armful.
 function viewScale(oal) {
-  return Math.min(1.5, Math.max(0.95, 1.4 * Math.sqrt(680 / oal)));
+  return Math.min(1.12, Math.max(0.72, 1.05 * Math.sqrt(680 / oal)));
 }
 
 // Build the viewmodel for one weapon id.
@@ -463,61 +465,139 @@ export function buildWeaponModel(id, { hands = true } = {}) {
   sight.position.set(0, def.sight[1] * MM, z(def.sight[0]));
   group.add(sight);
 
-  return { group, muzzle, sight, scale };
+  // Glass magnifies; a red dot does not. The figure travels with the model
+  // because the model is what knows which one is fitted.
+  return {
+    group, muzzle, sight, scale,
+    arms: group.userData.arms ?? null,
+    zoom: def.optic === 'scope' ? 2.4 : 1,
+  };
 }
 
 // ── Hands ──────────────────────────────────────────────────────────────────
 //
-// A weapon on its own hangs in mid-air. What fixes that is not a bigger gun,
-// it is the pair of arms holding it: a fist wrapped round the grip with a
-// forearm running back and down out of frame, and a support hand over the
-// forend with its own arm going the other way. Both are children of the
-// weapon, so they follow every kick, sway and reload it makes.
-// How far in front of the grip the support hand may sit. A man's arm is only
-// so long: an AMR's forend is a metre and a half out, and a hand drawn there
-// would belong to nobody.
-const REACH = 0.44;
+// A weapon on its own hangs in mid-air, and a pair of tubes under it is not
+// much better. What holds a gun is a hand: a palm on the side of the grip,
+// four fingers curled round the front of it, a thumb over the top, a wrist
+// that carries on into a forearm, and a cuff where the sleeve ends. Every one
+// of those is a box, and together they are the difference between a weapon
+// being held and a weapon floating.
+//
+// Both hands are built from the same parts in the same proportions and only
+// their place along the weapon changes, which comes from the blueprint: the
+// firing hand at `grip`, the support hand at `support`. Every weapon in the
+// roster is therefore held the same way by the same pair of hands.
+//
+// A man's arm is only so long. An AMR's forend is a metre and a half out, and
+// a hand drawn there would belong to nobody, so the support hand never goes
+// past REACH — on the long guns it rides the handguard instead of the bipod.
+const REACH = 0.42;
+
+// The cross-section of the weapon where a hand goes: how wide it is, how tall,
+// and where the middle of it sits. A hand placed on the centreline disappears
+// inside the receiver and a hand placed at a guessed offset floats beside a
+// narrow one, so this is measured off the blueprint, part by part, and the
+// hand is then built around what it finds.
+function holdAt(def, x) {
+  let best = null;
+  for (const part of def.parts) {
+    const [kind] = part;
+    const inside = x >= Math.min(part[1], part[2]) && x <= Math.max(part[1], part[2]);
+    if (!inside) continue;
+    if (kind === 'slab') {
+      const area = Math.abs(part[4] - part[3]) * part[5];
+      if (!best || area > best.area) {
+        best = { area, hw: (part[5] * MM) / 2, hy: (Math.abs(part[4] - part[3]) * MM) / 2,
+          yc: ((part[3] + part[4]) / 2) * MM };
+      }
+    } else if (kind === 'rod') {
+      const area = Math.PI * part[3] * part[3];
+      if (!best || area > best.area) {
+        best = { area, hw: part[3] * MM, hy: part[3] * MM, yc: (part[5] ?? 0) * MM };
+      }
+    }
+  }
+  return best ?? { hw: 0.022, hy: 0.03, yc: 0 };
+}
+
+// One hand, built around the section it is holding.
+//
+// The palm goes flat against one side of it, the four fingers wrap underneath
+// and out the far side, and the thumb comes back over the top. `side` is which
+// side the palm is on: +1 for the firing hand, -1 for the support hand
+// reaching across. Everything else follows the section, so the same hand fits
+// a 40 mm grip and a 60 mm handguard without a number being typed twice.
+function hand(parent, side, sec, { curl = 0.5 } = {}) {
+  const h = new THREE.Group();
+  parent.add(h);
+  const { hw, hy, yc } = sec;
+
+  const palm = new THREE.Mesh(new THREE.BoxGeometry(0.028, Math.min(0.085, hy * 1.7), 0.058), MATS.glove);
+  palm.position.set(side * (hw + 0.014), yc, 0.004);
+  h.add(palm);
+
+  // Fingers: across the underside, from the palm and out the other side, each
+  // one a little shorter and a little more curled than the one in front.
+  const reach = hw * 2 + 0.028;
+  for (let i = 0; i < 4; i++) {
+    const finger = new THREE.Mesh(new THREE.BoxGeometry(reach, 0.018, 0.05 - i * 0.005), MATS.glove);
+    finger.position.set(side * 0.002, yc - hy - 0.008, -0.024 + i * 0.019);
+    finger.rotation.z = side * (0.10 + i * 0.02);
+    h.add(finger);
+  }
+
+  // Thumb: over the top, lying along the weapon.
+  const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.018, 0.052), MATS.glove);
+  thumb.position.set(-side * (hw * 0.35), yc + hy + 0.007, -0.004);
+  thumb.rotation.set(0.12, 0, -side * 0.2);
+  h.add(thumb);
+
+  // Wrist and cuff: behind the palm, where the glove gives way to the sleeve.
+  const wrist = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.05, 0.05), MATS.glove);
+  wrist.position.set(side * (hw + 0.016), yc - 0.012, 0.052);
+  h.add(wrist);
+
+  const cuff = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.058, 0.03), MATS.webbing);
+  cuff.position.set(side * (hw + 0.018), yc - 0.016, 0.08);
+  h.add(cuff);
+
+  return { group: h, wrist: { x: side * (hw + 0.018), y: yc - 0.02, z: 0.09 } };
+}
 
 function addHands(group, def, z) {
-  const firingZ = z(def.grip + 26);
+  // Both forearms live in a group of their own: at the hip they hang below the
+  // weapon where they belong, and when the sights come up the view folds them
+  // down out of frame — which is where a real pair of arms goes when the
+  // weapon comes to the eye, and what stops them flanking the receiver like a
+  // pair of railings.
+  const arms = new THREE.Group();
+  group.add(arms);
+  group.userData.arms = arms;
+  const firingZ = z(def.grip + 22);
   const supportZ = Math.max(z(def.support), -REACH);
 
-  // Firing hand: fist on the grip, thumb over the top, wrist and forearm
-  // trailing back toward the shooter's shoulder.
-  const fist = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.082, 0.062), MATS.glove);
-  fist.position.set(0.004, -0.078, firingZ);
-  fist.rotation.x = 0.28;
-  group.add(fist);
+  // The firing hand sits on the grip, tipped back the way a wrist sits behind
+  // a pistol grip, with the forearm running down and out of frame behind it.
+  // The firing hand rides the grip, which on every build here is the raked
+  // slab under the receiver, so the section is taken a little way down it.
+  const gripSec = holdAt(def, def.grip + 22);
+  const firing = hand(group, 1, { ...gripSec, yc: gripSec.yc + gripSec.hy * 0.45 }, { curl: 0.66 });
+  firing.group.position.set(0, 0, firingZ);
+  firing.group.rotation.set(0.22, 0.05, 0.03);
+  limbAlong(arms, MATS.sleeve,
+    { x: firing.wrist.x, y: gripSec.yc + gripSec.hy * 0.45 - 0.025, z: firingZ + 0.072 },
+    { x: 0.26, y: -0.60, z: 0.76 }, 0.20, 0.034);
 
-  const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.028, 0.05), MATS.glove);
-  thumb.position.set(-0.022, -0.044, firingZ - 0.008);
-  thumb.rotation.x = 0.5;
-  group.add(thumb);
-
-  // The forearm runs from the wrist down and back, and it has to leave the
-  // frame rather than end inside it: an arm that stops in mid-air reads worse
-  // than no arm at all. Both lengths below are set by where the bottom of the
-  // screen is, not by anatomy.
-  limbAlong(group, MATS.sleeve, { x: 0.02, y: -0.09, z: firingZ + 0.02 },
-    { x: 0.20, y: -0.58, z: 0.79 }, 0.34, 0.027);
-
-  // Support hand: fingers curled over the forend, forearm dropping away on
-  // the other side so the two arms make a triangle rather than a pair of
-  // blocks stuck to the gun.
-  const grasp = new THREE.Mesh(new THREE.BoxGeometry(0.058, 0.062, 0.088), MATS.glove);
-  grasp.position.set(0.002, -0.034, supportZ);
-  group.add(grasp);
-
-  const fingers = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.026, 0.075), MATS.glove);
-  fingers.position.set(0.006, -0.062, supportZ + 0.004);
-  fingers.rotation.z = -0.12;
-  group.add(fingers);
-
-  // The other arm comes across from the far side, which is what makes the two
-  // read as a man holding a weapon rather than as two posts under it. It has
-  // further to travel, because the hand it starts from is further out.
-  limbAlong(group, MATS.sleeve, { x: 0.0, y: -0.05, z: supportZ + 0.02 },
-    { x: -0.22, y: -0.44, z: 0.87 }, 0.58, 0.025);
+  // The support hand comes over the top of the handguard from the far side,
+  // fingers wrapped down the front of it, and its arm crosses back the other
+  // way — which is what makes the two read as one man rather than two posts.
+  const supportSec = holdAt(def, Math.max(def.support, def.grip - REACH / MM));
+  const support = hand(group, -1, supportSec, { curl: 0.82 });
+  support.group.position.set(0, 0, supportZ);
+  support.group.rotation.set(0.06, -0.06, -0.10);
+  limbAlong(arms, MATS.sleeve,
+    { x: support.wrist.x, y: supportSec.yc - 0.042, z: supportZ + 0.074 },
+    { x: -0.30, y: -0.50, z: 0.81 }, 0.30, 0.032);
 }
 
 // A capsule laid along a direction, starting at `from`. Easier to reason about
