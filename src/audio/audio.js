@@ -41,6 +41,8 @@ export function createAudio() {
     const data = noiseBuffer.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
 
+    buildReverb();
+
     ctx.listener.upX ? setListenerOrientation(0, 0, -1) : null;
     return ctx;
   }
@@ -79,8 +81,79 @@ export function createAudio() {
     }
   }
 
+  // ── The room a sound is in ────────────────────────────────────────────────
+  //
+  // Every sound in this game used to arrive dry, which meant a shot in a tiled
+  // bathroom and the same shot out in the open courtyard were the same shot.
+  // In a game whose whole instruction is "listen", that is a piece of missing
+  // information, not a missing decoration: how a noise rings tells you what
+  // kind of space made it, and whether there is a wall between you and it.
+  //
+  // Three tails, and the runtime crossfades between them from the size of the
+  // room the listener is standing in:
+  //
+  //   tight — a bathroom, a stairwell, a corridor. Short and hard.
+  //   room  — a bedroom, an office. What most of the flat sounds like.
+  //   hall  — the living court and the terrace, open to the sky.
+  //
+  // Each is a convolver fed with noise that decays: no impulse-response files
+  // to ship, and a quarter of a second of arithmetic at start-up.
+  const SPACES = [
+    { name: 'tight', seconds: 0.32, decay: 4.2, tone: 3400 },
+    { name: 'room', seconds: 0.75, decay: 3.0, tone: 2400 },
+    { name: 'hall', seconds: 1.7, decay: 2.2, tone: 1500 },
+  ];
+  let reverbIn = null;
+  const reverbs = [];
+
+  function buildReverb() {
+    reverbIn = ctx.createGain();
+    reverbIn.gain.value = 0.5;
+    for (const s of SPACES) {
+      const len = Math.max(1, Math.floor(ctx.sampleRate * s.seconds));
+      const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+          // Noise under an envelope that falls away: the shape of a room
+          // giving a sound back, one reflection at a time.
+          data[i] = (Math.random() * 2 - 1) * (1 - i / len) ** s.decay;
+        }
+      }
+      const conv = ctx.createConvolver();
+      conv.buffer = buf;
+      // Reflections lose their top end on the way back off plaster, which is
+      // what stops a tail sounding like a cymbal.
+      const tone = ctx.createBiquadFilter();
+      tone.type = 'lowpass';
+      tone.frequency.value = s.tone;
+      const level = ctx.createGain();
+      level.gain.value = s.name === 'room' ? 1 : 0;
+      reverbIn.connect(tone).connect(conv).connect(level).connect(master);
+      reverbs.push(level);
+    }
+  }
+
+  // Which space the listener is in, handed over by the runtime — it is the one
+  // that knows where the walls are. `wet` is how much of it comes back at all:
+  // a carpeted bedroom returns less than a bare stairwell.
+  function setSpace({ tight = 0, room = 1, hall = 0, wet = 0.5 } = {}) {
+    if (!reverbs.length) return;
+    const t = ctx.currentTime;
+    const to = [tight, room, hall];
+    for (let i = 0; i < reverbs.length; i++) {
+      reverbs[i].gain.setTargetAtTime(to[i], t, 0.25);
+    }
+    reverbIn.gain.setTargetAtTime(wet, t, 0.25);
+  }
+
   // A panner that fades with distance, so far-off shots are hints not events.
-  function panner(pos, refDistance, maxDistance) {
+  //
+  // `muffle` is how much building is between the sound and the ear, from 0 for
+  // a clear line to 1 for several walls. A wall does not turn a noise down so
+  // much as take the edge off it: the crack goes and the thump stays, which is
+  // exactly why a shot through drywall sounds further away than it is.
+  function panner(pos, refDistance, maxDistance, muffle = 0) {
     const p = ctx.createPanner();
     p.panningModel = 'HRTF';
     p.distanceModel = 'inverse';
@@ -95,7 +168,28 @@ export function createAudio() {
       p.setPosition(pos.x, pos.y, pos.z);
     }
     p.connect(master);
-    return p;
+    if (reverbIn) p.connect(reverbIn);
+    if (muffle <= 0.01) return p;
+
+    const wall = ctx.createBiquadFilter();
+    wall.type = 'lowpass';
+    // One wall takes it to about 1.5 kHz; three and there is nothing left but
+    // the low end you feel through the floor.
+    wall.frequency.value = Math.max(260, 14000 * (1 - muffle) ** 2.2);
+    const drop = ctx.createGain();
+    drop.gain.value = 1 - muffle * 0.45;
+    wall.connect(drop).connect(p);
+    return wall;
+  }
+
+  // Something happening at your own body rather than out in the flat: not
+  // panned, not attenuated, and never behind a wall — but the room still
+  // answers it, because your boots ring off the tiles the same as anyone's.
+  function ownVoice() {
+    const g = ctx.createGain();
+    g.connect(master);
+    if (reverbIn) g.connect(reverbIn);
+    return g;
   }
 
   function noiseSource(duration, playbackRate = 1) {
@@ -110,12 +204,12 @@ export function createAudio() {
 
   // ── Sounds ──────────────────────────────────────────────────────────────
 
-  function gunshot(pos, distance) {
+  function gunshot(pos, distance, muffle = 0) {
     if (!ensure() || !enabled) return;
     const t = ctx.currentTime;
     // Sound takes time to arrive — a distant shot lands a beat late.
     const delay = Math.min(distance / SPEED_OF_SOUND, 0.25);
-    const out = panner(pos, 3, 60);
+    const out = panner(pos, 3, 60, muffle);
 
     // Crack: bright, very short.
     const crack = noiseSource(0.09);
@@ -167,18 +261,24 @@ export function createAudio() {
     drywall:  { freq: 400, q: 1.2, dur: 0.09, vol: 0.9, tail: 0.03 },
   };
 
-  function footstep(pos, loudness, surface = 'floor') {
+  // `own` is your own boot. It does not get panned and it does not get a wall
+  // put in front of it: your feet are not somewhere across the room from your
+  // ears, they are under you. Hearing them matters — a man who cannot hear
+  // himself has no way to learn what running costs, and this game charges for
+  // it. So they arrive dry, quiet and straight down the middle, and the room
+  // answers them the same way it answers everything else.
+  function footstep(pos, loudness, surface = 'floor', { own = false, muffle = 0 } = {}) {
     if (!ensure() || !enabled) return;
     const f = FLOORS[surface] ?? FLOORS.floor;
     const t = ctx.currentTime;
-    const out = panner(pos, 1.2, 26);
+    const out = own ? ownVoice() : panner(pos, 1.2, 26, muffle);
     const src = noiseSource(f.dur, 0.7 + Math.random() * 0.25);
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.value = f.freq * (0.88 + Math.random() * 0.24);
     filter.Q.value = f.q;
     const gain = ctx.createGain();
-    const vol = Math.min(0.34, 0.05 + loudness * 0.011) * f.vol;
+    const vol = Math.min(0.34, 0.05 + loudness * 0.011) * f.vol * (own ? 0.62 : 1);
     gain.gain.setValueAtTime(0, t);
     gain.gain.linearRampToValueAtTime(vol, t + 0.006);
     gain.gain.exponentialRampToValueAtTime(0.0008, t + f.dur);
@@ -223,10 +323,10 @@ export function createAudio() {
     src.connect(filter).connect(gain).connect(out);
   }
 
-  function doorSound(pos, kind) {
+  function doorSound(pos, kind, muffle = 0) {
     if (!ensure() || !enabled) return;
     const t = ctx.currentTime;
-    const out = panner(pos, 2, 34);
+    const out = panner(pos, 2, 34, muffle);
 
     if (kind === 'kick' || kind === 'break') {
       const boom = ctx.createOscillator();
@@ -284,10 +384,10 @@ export function createAudio() {
   // Anything that goes off with a bang: the flashbang's crack, a charge, a
   // tripwire, and the soft thump of a smoke can popping. One shape, three
   // settings — a low body, a bright crack on top, and a tail of noise.
-  function blast(pos, kind = 'blast') {
+  function blast(pos, kind = 'blast', muffle = 0) {
     if (!ensure() || !enabled) return;
     const t = ctx.currentTime;
-    const out = panner(pos, 3, kind === 'smoke' ? 20 : 60);
+    const out = panner(pos, 3, kind === 'smoke' ? 20 : 60, muffle);
     const soft = kind === 'smoke';
 
     const body = ctx.createOscillator();
@@ -397,6 +497,7 @@ export function createAudio() {
   return {
     resume,
     setListener,
+    setSpace,
     gunshot,
     footstep,
     impact,

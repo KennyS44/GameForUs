@@ -1,18 +1,18 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=aa2e2025';
+import * as THREE from '../vendor/three.module.js?v=d45fd116';
 import {
   buildScene, syncDoors, syncLights, syncSmokeFog, makeAvatar, poseAvatar,
   setAvatarWeapon, createEquipmentView,
-} from './render/scene.js?v=aa2e2025';
-import { createEffects } from './render/effects.js?v=aa2e2025';
-import { createView } from './render/view.js?v=aa2e2025';
-import { createHud } from './ui/hud.js?v=aa2e2025';
-import { DT, NVG } from './sim/constants.js?v=aa2e2025';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=aa2e2025';
-import { raycastGeometry } from './sim/world.js?v=aa2e2025';
-import { distXZ } from './sim/math.js?v=aa2e2025';
+} from './render/scene.js?v=d45fd116';
+import { createEffects } from './render/effects.js?v=d45fd116';
+import { createView } from './render/view.js?v=d45fd116';
+import { createHud } from './ui/hud.js?v=d45fd116';
+import { DT, NVG } from './sim/constants.js?v=d45fd116';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=d45fd116';
+import { raycastGeometry } from './sim/world.js?v=d45fd116';
+import { distXZ } from './sim/math.js?v=d45fd116';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -88,6 +88,36 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
   // Where a door makes its noise: chest height on its own storey.
   const doorEar = (door) => ({ x: door.pos.x, y: (door.pos.y ?? 0) + 1, z: door.pos.z });
 
+  // ── How much building is between a noise and the ear ──
+  //
+  // The simulation already answers this for bullets, so the same raycast
+  // answers it for sound: count the solid surfaces on the straight line from
+  // where the noise happened to where the listener's head is. Glass is not one
+  // of them — you can hear through a pane about as well as you can see through
+  // it — and neither is the far side of a wall the ray leaves, so a single
+  // partition counts once rather than twice.
+  //
+  // Two walls is the practical ceiling. Past that a noise is a rumour anyway.
+  function muffleTo(pos) {
+    const me = session.me;
+    if (!me) return 0;
+    const ear = eyePosition(me);
+    const dx = pos.x - ear.x;
+    const dy = pos.y - ear.y;
+    const dz = pos.z - ear.z;
+    const len = Math.hypot(dx, dy, dz);
+    if (len < 0.2) return 0;
+    const hits = raycastGeometry(
+      session.world, session.state, ear,
+      { x: dx / len, y: dy / len, z: dz / len }, len - 0.05,
+    );
+    let solid = 0;
+    for (const h of hits) if (!h.material.seeThrough) solid++;
+    // Each surface is one face of a wall, so a partition crossed shows up
+    // twice; halving turns faces back into walls.
+    return Math.min(1, (solid / 2) * 0.5);
+  }
+
   function handleEvents(events) {
     const me = session.me;
     if (!me) return;
@@ -107,7 +137,7 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
             effects.flash(from);
             view.flash();
           }
-          audio.gunshot(ev.pos, distXZ(ev.pos, me.pos));
+          audio.gunshot(ev.pos, distXZ(ev.pos, me.pos), mine ? 0 : muffleTo(ev.pos));
           break;
         }
         case 'impact':
@@ -136,7 +166,12 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
         }
         case 'step':
         case 'land':
-          if (ev.by !== me.id) audio.footstep(ev.pos, ev.loud, ev.surface);
+          // Your own boots included. A game that charges you for running has to
+          // let you hear what running sounds like, and until now the one player
+          // who could not hear your footsteps was you.
+          audio.footstep(ev.pos, ev.loud, ev.surface, ev.by === me.id
+            ? { own: true }
+            : { muffle: muffleTo(ev.pos) });
           break;
         case 'reload':
           audio.click('reload');
@@ -147,7 +182,7 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
         case 'doorKick':
         case 'doorBreak': {
           const door = session.world.doors.find((d) => d.id === ev.doorId);
-          if (door) audio.doorSound(doorEar(door), ev.type === 'doorBreak' ? 'break' : 'kick');
+          if (door) audio.doorSound(doorEar(door), ev.type === 'doorBreak' ? 'break' : 'kick', muffleTo(doorEar(door)));
           break;
         }
         case 'doorShatter': {
@@ -157,7 +192,7 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
         }
         case 'doorMove': {
           const door = session.world.doors.find((d) => d.id === ev.doorId);
-          if (door) audio.doorSound(doorEar(door), 'creak');
+          if (door) audio.doorSound(doorEar(door), 'creak', muffleTo(doorEar(door)));
           break;
         }
         case 'lightBreak':
@@ -177,7 +212,7 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
         }
         case 'doorWedged': {
           const door = session.world.doors.find((d) => d.id === ev.doorId);
-          if (door) audio.doorSound(doorEar(door), 'wedged');
+          if (door) audio.doorSound(doorEar(door), 'wedged', muffleTo(doorEar(door)));
           break;
         }
         case 'alarm': {
@@ -187,14 +222,14 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
         }
         case 'flash':
           effects.flash(ev.pos, 3.4);
-          audio.blast(ev.pos, 'flash');
+          audio.blast(ev.pos, 'flash', muffleTo(ev.pos));
           break;
         case 'deviceBlast':
           effects.flash(ev.pos, 2.6);
-          audio.blast(ev.pos, 'blast');
+          audio.blast(ev.pos, 'blast', muffleTo(ev.pos));
           break;
         case 'smoke':
-          audio.blast(ev.pos, 'smoke');
+          audio.blast(ev.pos, 'smoke', muffleTo(ev.pos));
           break;
         case 'power':
           audio.breaker(ev.pos, ev.on);
@@ -224,7 +259,7 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
 
   // ── Avatars for everyone but us ─────────────────────────────────────────
 
-  function syncAvatars() {
+  function syncAvatars(dt) {
     const me = session.me;
     for (const p of Object.values(session.state.players)) {
       if (p.id === me?.id) continue;
@@ -238,7 +273,7 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
       // know about the round you walked into.
       av.visible = true;
       setAvatarWeapon(av, p.weapon?.id);
-      poseAvatar(av, p);
+      poseAvatar(av, p, dt);
     }
     for (const [id, av] of avatars) {
       if (!session.state.players[id]) {
@@ -283,6 +318,61 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
       : `<kbd>F</kbd> ${verb} · <kbd>Tab</kbd> тихий шаг · <kbd>V</kbd> ногой`);
   }
 
+  // ── What the room around the listener sounds like ─────────────────────────
+  //
+  // Six rays out of the head — four along the floor plan, one up, one down —
+  // and the average of what they hit is the size of the space you are standing
+  // in. A bathroom answers at two metres, a bedroom at four, the living court
+  // at twenty because the ray going up never comes back at all.
+  //
+  // That average picks the tail: tight, room, or the open court. It is measured
+  // four times a second rather than every frame, because a man does not change
+  // rooms sixty times a second and six raycasts are not free.
+  const EAR_RAYS = [
+    { x: 1, y: 0, z: 0 }, { x: -1, y: 0, z: 0 },
+    { x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: -1 },
+    { x: 0, y: 1, z: 0 }, { x: 0, y: -1, z: 0 },
+  ];
+  const EAR_REACH = 22;
+  // What a surface does to a sound that hits it. This, not the size of the
+  // room, is why a bathroom rings and a bedroom does not: the two are much the
+  // same number of metres across, and one is porcelain while the other is
+  // plaster, carpet and a bed.
+  const HARDNESS = {
+    tile: 1.0, concrete: 0.95, glass: 0.9, metal: 1.0,
+    floor: 0.55, wood: 0.45, drywall: 0.3, fabric: 0.0,
+  };
+  let earTimer = 0;
+
+  function listenToRoom(player, dt) {
+    earTimer -= dt;
+    if (earTimer > 0) return;
+    earTimer = 0.25;
+
+    const ear = eyePosition(player);
+    let sum = 0;
+    // How much of what is around is hard. Tile and concrete throw a sound back;
+    // a bedroom full of cloth swallows it, and that difference is audible.
+    let hard = 0;
+    for (const dir of EAR_RAYS) {
+      const hit = raycastGeometry(session.world, session.state, ear, dir, EAR_REACH)[0];
+      sum += hit ? hit.t : EAR_REACH;
+      hard += hit ? (HARDNESS[hit.material.name] ?? 0.5) : 0;
+    }
+    const size = sum / EAR_RAYS.length;
+
+    // Crossfade across the three tails by size, and let the hard surfaces
+    // decide how much of it comes back.
+    const toRoom = Math.max(0, Math.min(1, (size - 2.2) / 2.6));
+    const toHall = Math.max(0, Math.min(1, (size - 6.0) / 5.0));
+    audio.setSpace({
+      tight: (1 - toRoom),
+      room: toRoom * (1 - toHall),
+      hall: toHall,
+      wet: 0.22 + (hard / EAR_RAYS.length) * 0.5,
+    });
+  }
+
   // ── Main loop ───────────────────────────────────────────────────────────
 
   function frame(now) {
@@ -320,6 +410,7 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
       // ...and if that glass is a scope, the screen becomes the eyepiece.
       hud.setScope(view.scoped);
       audio.setListener(view.camera.position, forwardOf(view.camera));
+      listenToRoom(me, dtReal);
       hud.update(session.state, me, dtReal);
       updatePrompt();
     }
@@ -334,7 +425,7 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
     // is why a lamp through night vision is painful and a flare is worse.
     renderer.toneMappingExposure = me?.nvg ? NVG.exposure : 1.0;
     equipment.sync(session.state, session.world, view.camera);
-    syncAvatars();
+    syncAvatars(dtReal);
     effects.update(dtReal);
 
     const wantScoreboard = input.isDown('scoreboard');

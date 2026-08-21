@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=aa2e2025';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=aa2e2025';
-import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=aa2e2025';
-import { buildWeaponModel } from './weapons.js?v=aa2e2025';
+import * as THREE from '../../vendor/three.module.js?v=d45fd116';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=d45fd116';
+import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=d45fd116';
+import { buildWeaponModel } from './weapons.js?v=d45fd116';
 
 // How much light there is in a room with every lamp in it switched off. Kept
 // here rather than inline because three different places have to agree on it:
@@ -914,16 +914,27 @@ export function makeAvatar(team) {
   const group = new THREE.Group();
 
   // ── Legs: floor to 45% of height ──
+  //
+  // Two joints each, hip and knee. A leg that only swings from the hip is a
+  // pendulum, and a pendulum reads as a shop dummy being slid across the floor
+  // — the knee is what makes it a step, folding as the trailing leg comes
+  // through and straightening again to land.
   const legsRig = new THREE.Group();
   group.add(legsRig);
+  const legs = [];
   for (const side of [-1, 1]) {
     const leg = new THREE.Group();
     leg.position.set(side * 0.105, 0.78, 0);
     legsRig.add(leg);
     limb(leg, m.cloth, 0.075, 0.24, 0, -0.16, 0, 0);        // thigh
     box(leg, m.webbing, 0.135, 0.10, 0.14, 0, -0.30, 0.02);  // knee pad
-    limb(leg, m.cloth, 0.06, 0.24, 0, -0.46, 0.01, 0);      // shin
-    box(leg, m.webbing, 0.115, 0.09, 0.27, 0, -0.72, -0.03); // boot
+
+    const shin = new THREE.Group();
+    shin.position.set(0, -0.30, 0);
+    leg.add(shin);
+    limb(shin, m.cloth, 0.06, 0.24, 0, -0.16, 0.01, 0);       // shin
+    box(shin, m.webbing, 0.115, 0.09, 0.27, 0, -0.42, -0.03); // boot
+    legs.push({ leg, shin });
   }
   // The hips belong to the legs, not to the chest: a man leaning out of a
   // doorway swings his shoulders over them and leaves his belt where it was.
@@ -989,7 +1000,12 @@ export function makeAvatar(team) {
   box(hold, m.webbing, 0.055, 0.085, 0.07, 0, 0.01, 0.02);
   box(hold, m.webbing, 0.06, 0.07, 0.09, -0.055, 0.055, -0.20);
 
-  group.userData = { team, chest, head, arms, hold, legsRig, weaponId: null, weapon: null };
+  group.userData = {
+    team, chest, head, arms, hold, legsRig, legs,
+    weaponId: null, weapon: null,
+    // What the walk cycle needs to keep its place between frames.
+    stride: 0, prev: null, kick: 0, shots: 0, aim: 0,
+  };
   return group;
 }
 
@@ -1014,11 +1030,12 @@ export function setAvatarWeapon(av, weaponId) {
 //
 // Height, lean and where they are looking all come straight out of the
 // simulation, in the same proportions it uses to decide what a bullet hit.
-export function poseAvatar(av, p) {
+export function poseAvatar(av, p, dt = 1 / 60) {
   const u = av.userData;
   if (!p.alive) return poseBody(av, p);
   u.down = null;
   av.rotation.set(0, p.look.yaw, 0);
+  walk(u, p, dt);
 
   const height = PLAYER.heightCrouch + (PLAYER.heightStand - PLAYER.heightCrouch) * p.stance;
   av.position.set(p.pos.x, p.pos.y, p.pos.z);
@@ -1042,11 +1059,78 @@ export function poseAvatar(av, p) {
 
   const pitch = clampPitch(p.look.pitch ?? 0);
   u.head.rotation.x = pitch * 0.7;
-  u.arms.rotation.x = pitch;
+
+  // Where the weapon is being carried, which is a thing you can read across a
+  // room. Down at the hip it hangs; on the sights it comes up under the chin
+  // and the shoulders square onto whatever he is looking at. Firing knocks it
+  // back a little, once per round, and it settles.
+  u.aim += ((p.aimAmount ?? 0) - u.aim) * Math.min(1, dt * 10);
+  const shots = p.burstShots ?? 0;
+  if (shots > u.shots) u.kick = Math.min(0.35, u.kick + 0.22);
+  u.shots = shots;
+  u.kick *= Math.max(0, 1 - dt * 9);
+
+  u.arms.rotation.x = pitch - (1 - u.aim) * 0.42 + u.kick;
+  u.arms.rotation.y = (1 - u.aim) * 0.16;
+  u.arms.position.z = u.kick * 0.05;
 
   // Crouching folds the knees forward rather than sinking the man into the
   // floor: same envelope, better shape.
   u.legsRig.rotation.x = (1 - p.stance) * 0.12;
+}
+
+// ── The walk ───────────────────────────────────────────────────────────────
+//
+// Everybody in this flat used to slide. The rig had legs and the legs never
+// moved: a man crossing a doorway travelled like a chess piece, and since the
+// whole game is deciding what to do about a shape in a doorway, that shape had
+// to start telling the truth about what it was doing.
+//
+// The cycle is driven by ground covered rather than by a clock, so the feet
+// belong to the floor: stop moving and the legs stop where they are, walk into
+// a wall and they stop too, because the simulation stopped moving him. Nothing
+// is sent over the wire for it — every client works it out from the positions
+// it already has, and two clients watching the same man see the same stride.
+const STRIDE = 0.78;   // metres of floor per half-cycle
+const SWING = 0.62;    // radians the hip opens at a full run
+
+function walk(u, p, dt) {
+  const here = p.pos;
+  const moved = u.prev
+    ? Math.hypot(here.x - u.prev.x, here.z - u.prev.z)
+    : 0;
+  u.prev = { x: here.x, z: here.z };
+
+  // A teleport — a new round, a respawn — is not a sprint.
+  const step = moved > 1.5 ? 0 : moved;
+  u.stride += (step / STRIDE) * Math.PI;
+
+  // How hard he is going, from the simulation's own velocity rather than from
+  // the frame: it is the same number the noise is made from, so what you see
+  // and what you hear agree.
+  const speed = Math.hypot(p.vel?.x ?? 0, p.vel?.z ?? 0);
+  const effort = Math.max(0, Math.min(1, speed / PLAYER.speedRun));
+  // Below a crawl the legs close up rather than freezing mid-stride.
+  if (effort < 0.04) u.stride += (0 - Math.sin(u.stride)) * dt * 4;
+
+  const swing = SWING * effort;
+  const phase = u.stride;
+  for (let i = 0; i < u.legs.length; i++) {
+    const side = i === 0 ? 1 : -1;
+    const a = Math.sin(phase) * side;
+    u.legs[i].leg.rotation.x = a * swing;
+    // The knee only ever bends one way, and it bends on the way through —
+    // hardest just after the foot leaves the floor behind him.
+    u.legs[i].shin.rotation.x = -Math.max(0, -a) * swing * 1.9;
+  }
+
+  // A man walking rises and falls on his own legs and rolls a little with
+  // each stride. Small numbers: this is what stops the walk reading as a
+  // puppet on rails, and it is meant to be felt rather than watched.
+  const bounce = Math.abs(Math.sin(phase)) * effort * 0.022;
+  u.chest.position.y = 0.79 - bounce;
+  u.legsRig.position.y = -bounce * 0.35;
+  u.chest.rotation.y = Math.sin(phase) * effort * 0.09;
 }
 
 // A man who is hit goes down where he was standing and stays there.
@@ -1072,8 +1156,20 @@ export function poseBody(av, p) {
     u.chest.rotation.z = 0;
     u.head.position.x = 0;
     u.head.rotation.set(0.25, 0, u.down.roll * 0.5);
-    u.arms.rotation.x = -0.35;
+    u.arms.rotation.set(-0.35, 0, 0);
+    u.arms.position.z = 0;
     u.legsRig.rotation.x = 0.12;
+    u.legsRig.position.y = 0;
+    u.chest.position.y = 0.79;
+    u.chest.rotation.y = 0;
+    // Legs let go where they were: one folded under, one out.
+    u.legs[0].leg.rotation.x = 0.22;
+    u.legs[0].shin.rotation.x = -0.5;
+    u.legs[1].leg.rotation.x = -0.1;
+    u.legs[1].shin.rotation.x = -0.16;
+    u.kick = 0;
+    u.aim = 0;
+    u.prev = null;
   }
   const d = u.down;
   // Face down, feet where they were, and lifted just clear of the floor so a
