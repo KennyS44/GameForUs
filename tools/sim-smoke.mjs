@@ -16,6 +16,8 @@ import {
   TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES, DAMAGE, GADGETS,
   FLARE,
 } from '../src/sim/constants.js';
+import { nearestNode, findPath, smoothPath } from '../src/sim/nav.js';
+import { createBotBrain } from '../src/sim/bot.js';
 import { createHostSession, createLocalSession } from '../src/net/session.js';
 
 let failures = 0;
@@ -1449,6 +1451,243 @@ console.log('\nA door never pushes anyone through a wall:');
 
   restartRound();
   setLoadout(state, 'a1', DEFAULT_WEAPON);
+}
+
+// ── Bots that walk the flat ───────────────────────────────────────────────
+//
+// The three claims worth holding onto: there is a route between any two places
+// a man can stand, a bot uses it, and what a bot knows it could actually have
+// found out. Everything here runs the simulation and looks at what came out —
+// there is no way to assert "feels alive", but "left the room it spawned in"
+// and "did not spend the round leaning on a wall" are checkable.
+{
+  console.log('\nBots:');
+
+  const nav = world.nav;
+  check('the building has a map of where a man can stand', nav && nav.liveCount > 2000,
+    `${nav?.liveCount} standing places`);
+
+  // Both storeys, and the stairs between them, or half the flat is unreachable.
+  let ground = 0;
+  let upper = 0;
+  for (let n = 0; n < nav.count; n++) {
+    if (!nav.live[n]) continue;
+    if (nav.y[n] < 0.5) ground++;
+    else if (nav.y[n] > 3.0) upper++;
+  }
+  check('both storeys are in it', ground > 800 && upper > 800, `${ground} down, ${upper} up`);
+
+  {
+    const from = nearestNode(nav, { ...APARTMENT.spawns.attackers[0], y: 0 });
+    const d = APARTMENT.spawns.defenders[0];
+    const to = nearestNode(nav, { x: d.x, y: d.y, z: d.z });
+    const path = findPath(nav, from, to);
+    check('there is a way from the front door to the defenders\' room', !!path,
+      `${path?.length} steps`);
+    const climbs = path?.some((n) => nav.y[n] > 1 && nav.y[n] < 3);
+    check('and it goes up the stairs rather than through the ceiling', !!climbs);
+
+    // Every step of the raw route is one cell of walking, and straightening it
+    // keeps both ends where they were.
+    let worst = 0;
+    for (let i = 1; i < path.length; i++) {
+      worst = Math.max(worst, Math.hypot(nav.x[path[i]] - nav.x[path[i - 1]],
+        nav.z[path[i]] - nav.z[path[i - 1]]));
+    }
+    check('no step of it is a leap', worst < nav.cell * 1.5, `${worst.toFixed(2)} m`);
+    const smooth = smoothPath(nav, path);
+    check('straightening it keeps both ends', smooth[0] === path[0]
+      && smooth[smooth.length - 1] === path[path.length - 1]);
+    check('and makes it far fewer corners', smooth.length < path.length / 3,
+      `${smooth.length} of ${path.length}`);
+  }
+
+  // ── A round with nobody to shoot at ──
+  //
+  // Four bots, one man who never moves and never makes a sound. That is the
+  // case bots used to fail completely: nothing to react to, so nothing done.
+  function runRound(seconds, noisy) {
+    const w = buildWorld(APARTMENT);
+    const s = createState(w, 909);
+    addPlayer(w, s, 'man', 'attackers', 'Man');
+    const ids = [];
+    for (let i = 0; i < 4; i++) {
+      const id = `b${i}`;
+      addPlayer(w, s, id, 'defenders', id);
+      setGadget(s, id, ['trap', 'flare', 'wedge', 'alarm'][i]);
+      ids.push(id);
+    }
+    const brain = createBotBrain(77);
+    const man = s.players.man;
+    const seen = new Map(ids.map((id) => [id, new Set()]));
+    const still = new Map(ids.map((id) => [id, 0]));
+    const was = new Map();
+    const input = createInput();
+    for (let i = 0; i < seconds * TICK_RATE; i++) {
+      input.moveZ = noisy ? (Math.sin(s.time * 0.4) > 0 ? 1 : -1) : 0;
+      input.run = noisy;
+      const inputs = { man: input };
+      for (const id of ids) inputs[id] = brain.think(w, s, s.players[id], 1 / TICK_RATE);
+      stepSim(w, s, inputs, 1 / TICK_RATE);
+      // The man is a training dummy: he never dies, so the round never ends.
+      man.health = PLAYER.maxHealth;
+      man.alive = true;
+      if (s.phase === 'live' && s.phaseTime < 30) s.phaseTime = 400;
+      for (const id of ids) {
+        const p = s.players[id];
+        p.alive = true;
+        p.health = PLAYER.maxHealth;
+        seen.get(id).add(`${Math.round(p.pos.x / 3)}:${Math.round(p.pos.y / 3)}:${Math.round(p.pos.z / 3)}`);
+        const prev = was.get(id);
+        const moved = prev ? Math.hypot(p.pos.x - prev.x, p.pos.z - prev.z) : 9;
+        // Walking on the spot for a solid stretch is the failure this is here
+        // to catch: rocking between two waypoints covers ground and arrives
+        // nowhere, so what is counted is progress, not distance.
+        if (i % 30 === 0) {
+          still.set(id, moved < 0.25 ? still.get(id) + 0.5 : 0);
+          was.set(id, { x: p.pos.x, z: p.pos.z });
+        }
+      }
+    }
+    return { world: w, state: s, ids, brain, seen, still, man };
+  }
+
+  {
+    const quiet = runRound(110, false);
+    const rooms = quiet.ids.map((id) => quiet.seen.get(id).size);
+    check('with nothing to react to, every bot still leaves the room it woke in',
+      Math.min(...rooms) > 6, `rooms visited: ${rooms.join(', ')}`);
+    check('and between them they walk most of the building',
+      new Set(quiet.ids.flatMap((id) => [...quiet.seen.get(id)])).size > 30,
+      `${new Set(quiet.ids.flatMap((id) => [...quiet.seen.get(id)])).size} parts`);
+    const worst = Math.max(...quiet.ids.map((id) => quiet.still.get(id)));
+    check('none of them spends the round leaning on a wall', worst < 30,
+      `${worst.toFixed(0)} s without progress`);
+
+    // A quiet enemy is the thing that makes a side restless.
+    const squad = quiet.brain.squads.get('defenders');
+    check('a silent enemy makes the side go looking', squad.pressure > 0.5,
+      squad.pressure.toFixed(2));
+  }
+
+  {
+    // ...and a loud one makes them stop looking and start watching.
+    const loud = runRound(110, true);
+    const squad = loud.brain.squads.get('defenders');
+    check('a noisy one gives them something to hold instead', squad.pressure < 0.4,
+      squad.pressure.toFixed(2));
+    check('and they have him placed roughly right', squad.contacts.length > 0
+      && Math.hypot(squad.contacts[squad.contacts.length - 1].pos.x - loud.man.pos.x,
+        squad.contacts[squad.contacts.length - 1].pos.z - loud.man.pos.z) < 12,
+      `${squad.contacts.length} contacts`);
+    const near = loud.ids
+      .map((id) => Math.hypot(loud.state.players[id].pos.x - loud.man.pos.x,
+        loud.state.players[id].pos.z - loud.man.pos.z));
+    check('somebody has come to find out what the noise was', Math.min(...near) < 12,
+      `nearest ${Math.min(...near).toFixed(0)} m`);
+  }
+
+  // ── Shooting the cloud ──
+  //
+  // A man who walks behind smoke in front of a bot that was already looking at
+  // him gets shot at. A cloud nobody was seen going into does not.
+  function duel(withContact) {
+    const w = buildWorld(APARTMENT);
+    const s = createState(w, 31);
+    addPlayer(w, s, 'man', 'attackers', 'Man');
+    addPlayer(w, s, 'bot', 'defenders', 'Bot');
+    s.phase = 'live';
+    s.phaseTime = 300;
+    const man = s.players.man;
+    const bot = s.players.bot;
+    // Facing each other across the defenders' room, four metres apart.
+    man.pos = { x: 0.2, y: 3.3, z: -13.6 };
+    bot.pos = { x: 0.2, y: 3.3, z: -16.6 };
+    bot.look = { yaw: Math.PI, pitch: 0 };
+    const brain = createBotBrain(5);
+    const input = createInput();
+    let before = 0;
+    let after = 0;
+    let popped = false;
+    for (let i = 0; i < 8 * TICK_RATE; i++) {
+      // Hide the man from the start when the point is that nobody saw him.
+      if (!withContact) man.alive = i < 1;
+      const bi = brain.think(w, s, bot, 1 / TICK_RATE);
+      if (bi.fire) { if (popped) after++; else before++; }
+      stepSim(w, s, { man: input, bot: bi }, 1 / TICK_RATE);
+      man.health = PLAYER.maxHealth;
+      if (withContact) man.alive = true;
+      if (!popped && s.time > 2) {
+        s.smokes.push({
+          pos: { x: 0.2, y: 4.3, z: -15.1 }, radius: 3.5, grown: 1, growTime: 2.5, left: 16,
+        });
+        popped = true;
+      }
+    }
+    return { before, after, ammo: bot.weapon.ammo };
+  }
+
+  {
+    const saw = duel(true);
+    check('a bot shoots a man it can see', saw.before > 4, `${saw.before} shots`);
+    check('and keeps shooting when he steps behind smoke', saw.after > 4,
+      `${saw.after} shots into the cloud`);
+    check('but gives up on the guess before it empties itself', saw.ammo > 6,
+      `${saw.ammo} rounds left`);
+
+    const blind = duel(false);
+    check('a cloud nobody was seen going into is not worth a round',
+      blind.after === 0, `${blind.after} shots`);
+  }
+
+  // ── Ears that are only ears ──
+  //
+  // The same faint noise, over and over, from the same place. Some of them are
+  // missed, and the ones that land are placed in the wrong part of the room —
+  // otherwise hearing would just be seeing with extra steps.
+  {
+    const w = buildWorld(APARTMENT);
+    const s = createState(w, 5);
+    addPlayer(w, s, 'man', 'attackers', 'Man');
+    addPlayer(w, s, 'bot', 'defenders', 'Bot');
+    s.phase = 'live';
+    s.phaseTime = 300;
+    const man = s.players.man;
+    const bot = s.players.bot;
+    man.pos = { x: 0.2, y: 3.3, z: -13.6 };
+    bot.pos = { x: 0.2, y: 3.3, z: -16.6 };
+    man.alive = false; // heard, never seen
+    const brain = createBotBrain(3);
+    let heard = 0;
+    let missed = 0;
+    let worstError = 0;
+    let totalError = 0;
+    const b = () => brain.memory.get('bot');
+    for (let i = 0; i < 200; i++) {
+      const known = b()?.sound?.at ?? -1;
+      // A footstep at the far edge of what carries.
+      s.events.push({ type: 'noise', pos: { ...man.pos }, radius: 9, kind: 'step', by: 'man' });
+      brain.think(w, s, bot, 1 / TICK_RATE);
+      s.events.length = 0;
+      s.time += 1.5; // well apart, so each is judged on its own
+      const now = b().sound;
+      if (now && now.at !== known) {
+        heard++;
+        const err = Math.hypot(now.pos.x - man.pos.x, now.pos.z - man.pos.z);
+        worstError = Math.max(worstError, err);
+        totalError += err;
+      } else {
+        missed++;
+      }
+    }
+    check('a faint footstep is sometimes missed altogether', missed > 10 && heard > 40,
+      `${heard} heard, ${missed} missed`);
+    const mean = totalError / Math.max(1, heard);
+    check('and the ones that land are placed by the room, not by the metre',
+      mean > 0.8 && mean < 4, `${mean.toFixed(1)} m out on average`);
+    check('never so far out that it points at another flat', worstError < 8,
+      `worst ${worstError.toFixed(1)} m`);
+  }
 }
 
 // ── Choosing a weapon ─────────────────────────────────────────────────────

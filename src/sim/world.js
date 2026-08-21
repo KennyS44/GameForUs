@@ -2,8 +2,9 @@
 // geometry, and bullet raycasts that respect material penetration.
 // Pure — no engine types cross this boundary.
 
-import { rayBox, boxOverlaps, clamp } from './math.js?v=d45fd116';
-import { DOOR } from './constants.js?v=d45fd116';
+import { rayBox, boxOverlaps, clamp } from './math.js?v=f8bff953';
+import { DOOR } from './constants.js?v=f8bff953';
+import { buildNav } from './nav.js?v=f8bff953';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -129,7 +130,7 @@ export function buildWorld(map) {
     };
   });
 
-  return {
+  const world = {
     map,
     boxes: map.geometry,
     doors,
@@ -139,6 +140,11 @@ export function buildWorld(map) {
     switches: map.switches ?? [],
     bounds: map.bounds,
   };
+  // Every standing place in the building and how they join up. Bots need it,
+  // it depends on nothing but the boxes, and it costs a twentieth of a second
+  // once — so it is built with the world rather than in the middle of a round.
+  world.nav = buildNav(world);
+  return world;
 }
 
 // ── Door frames ───────────────────────────────────────────────────────────

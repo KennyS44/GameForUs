@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=d45fd116';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=d45fd116';
-import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=d45fd116';
-import { buildWeaponModel } from './weapons.js?v=d45fd116';
+import * as THREE from '../../vendor/three.module.js?v=f8bff953';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=f8bff953';
+import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=f8bff953';
+import { buildWeaponModel } from './weapons.js?v=f8bff953';
 
 // How much light there is in a room with every lamp in it switched off. Kept
 // here rather than inline because three different places have to agree on it:
