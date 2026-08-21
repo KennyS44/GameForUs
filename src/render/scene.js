@@ -1,10 +1,15 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=728373ac';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=728373ac';
-import { PLAYER } from '../sim/constants.js?v=728373ac';
-import { buildWeaponModel } from './weapons.js?v=728373ac';
+import * as THREE from '../../vendor/three.module.js?v=41124dad';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=41124dad';
+import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=41124dad';
+import { buildWeaponModel } from './weapons.js?v=41124dad';
+
+// How much light there is in a room with every lamp in it switched off. Kept
+// here rather than inline because three different places have to agree on it:
+// the light that is built, the breaker that dims it and the tube that lifts it.
+const AMBIENT = 0.25;
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -192,8 +197,12 @@ export function buildScene(world) {
   scene.background = new THREE.Color(0x05060a);
   scene.fog = new THREE.Fog(0x05060a, 11, 42);
 
-  // Barely-there ambient. Everything else comes from lamps and torches.
-  scene.add(new THREE.HemisphereLight(0x30364a, 0x0a0a0c, 0.25));
+  // Barely-there ambient. Everything else comes from lamps and torches — and
+  // this is also the one dial night vision turns: a tube does not add light to
+  // a room, it makes the light already in it count for more, which is exactly
+  // what raising the ambient does.
+  const ambient = new THREE.HemisphereLight(0x30364a, 0x0a0a0c, AMBIENT);
+  scene.add(ambient);
 
   const matCache = new Map();
   const getMat = (def) => {
@@ -274,7 +283,49 @@ export function buildScene(world) {
     });
   }
 
-  return { scene, doorMeshes, lightObjects, staticGroup };
+  // ── The consumer unit ──
+  // The box itself is map geometry like any other, because it is something you
+  // walk into. What is added here is what tells you it is a consumer unit and
+  // not a dark rectangle: a grey door, a handle, and a pilot lamp that is
+  // green while the flat has power and dead the moment it does not.
+  const pilots = [];
+  for (const sw of world.switches ?? []) {
+    const yaw = Math.atan2(sw.face.x, sw.face.z);
+    // Out from the wall, and sideways along the face of the cabinet.
+    const at = (out, side, up) => ({
+      x: sw.pos.x + sw.face.x * out + Math.cos(yaw) * side,
+      y: sw.pos.y + up,
+      z: sw.pos.z + sw.face.z * out - Math.sin(yaw) * side,
+    });
+
+    const door = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.66, 0.02),
+      new THREE.MeshStandardMaterial({ color: 0x6d737c, roughness: 0.5, metalness: 0.6 }),
+    );
+    const dp = at(0.09, 0, 0);
+    door.position.set(dp.x, dp.y, dp.z);
+    door.rotation.y = yaw;
+    scene.add(door);
+
+    const handle = new THREE.Mesh(
+      new THREE.BoxGeometry(0.03, 0.16, 0.03),
+      new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.35, metalness: 0.8 }),
+    );
+    const hp = at(0.115, -0.2, 0);
+    handle.position.set(hp.x, hp.y, hp.z);
+    scene.add(handle);
+
+    const lamp = new THREE.Mesh(
+      new THREE.SphereGeometry(0.024, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0x4fe08a, toneMapped: false }),
+    );
+    const lp = at(0.12, 0.18, 0.24);
+    lamp.position.set(lp.x, lp.y, lp.z);
+    scene.add(lamp);
+    pilots.push(lamp);
+  }
+
+  return { scene, world, doorMeshes, lightObjects, staticGroup, ambient, pilots };
 }
 
 // ── Per-frame sync ────────────────────────────────────────────────────────
@@ -301,17 +352,35 @@ export function syncDoors(view, state) {
 // lit whose own bulb you have just shot out. A lamp therefore only lights the
 // storey it belongs to. Climbing the stairs crosses the two over rather than
 // snapping, because the stairwell really is open to both.
-export function syncLights(view, state, viewerY = 0) {
+//
+// `nvg` is whether the man behind the camera has the tube down. It does not
+// change a single lamp — it changes how much the darkness between them counts.
+export function syncLights(view, state, viewerY = 0, nvg = false) {
   const upper = Math.max(0, Math.min(1, (viewerY - 0.8) / 1.7));
+  const mains = state.power !== false;
   for (const [id, entry] of view.lightObjects) {
     const broken = state.lights[id]?.broken;
+    // One cabinet on the terrace feeds all of them. A lamp marked `mains:
+    // false` would be daylight or moonlight and would stay — there are none
+    // today, which is the point: cutting the power cuts everything.
+    const fed = mains || entry.def.mains === false;
     const share = entry.storey === 'both' ? 1 : entry.storey === 'upper' ? upper : 1 - upper;
     // Dimmed rather than hidden: switching a light off changes how many the
     // shader is compiled for, and rebuilding shaders mid-round stutters.
-    entry.light.intensity = broken ? 0 : entry.power * share;
+    entry.light.intensity = broken || !fed ? 0 : entry.power * share;
     entry.bulb.visible = !broken;
-    if (broken) entry.bulb.material.color.setHex(0x1a1a1a);
+    entry.bulb.material.color.setHex(broken ? 0x1a1a1a : fed ? entry.def.color : 0x14161a);
   }
+  for (const lamp of view.pilots) lamp.material.color.setHex(mains ? 0x4fe08a : 0x2a1012);
+
+  // With the mains gone there is still a city outside the glass and a sky over
+  // the court. It is enough to tell a doorway from a wall at three metres and
+  // nothing like enough to fight by — which is what makes the tube worth the
+  // key it is on.
+  const base = mains ? AMBIENT : AMBIENT * POWER.moonlight;
+  view.ambient.intensity = nvg ? NVG.ambient : base;
+  view.ambient.color.setHex(nvg ? 0x8ad6a0 : 0x30364a);
+  view.ambient.groundColor.setHex(nvg ? 0x11291a : 0x0a0a0c);
 }
 
 // ── Equipment in the world ────────────────────────────────────────────────
@@ -326,6 +395,126 @@ const DEVICE_COLOR = {
   trap: 0xc23b3b,
   alarm: 0x4a7fc2,
 };
+
+// ── Smoke ─────────────────────────────────────────────────────────────────
+
+const SMOKE_TINT = new THREE.Color(0x9aa0a9);
+const PUFFS = 13;
+
+// One soft disc, drawn once into a canvas: white in the middle, nothing at the
+// rim. Everything about the shape of a cloud comes from stacking these.
+let puffTex = null;
+function puffTexture() {
+  if (puffTex) return puffTex;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const g = canvas.getContext('2d');
+  const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.42, 'rgba(255,255,255,0.78)');
+  grad.addColorStop(0.78, 'rgba(255,255,255,0.22)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  puffTex = new THREE.CanvasTexture(canvas);
+  puffTex.colorSpace = THREE.SRGBColorSpace;
+  return puffTex;
+}
+
+// Where the puffs sit inside a cloud of radius 1. Worked out once from a fixed
+// seed rather than at random: every cloud in every round is the same shape, so
+// there is nothing here that one machine can draw differently from another.
+const PUFF_LAYOUT = (() => {
+  let s = 20260821;
+  const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const out = [];
+  for (let i = 0; i < PUFFS; i++) {
+    const u = rnd() * 2 - 1;
+    const th = rnd() * Math.PI * 2;
+    // Cube root spreads them through the volume instead of onto the shell, so
+    // the middle of a cloud is the thick part and the edge is where it frays.
+    const r = 0.62 * Math.cbrt(rnd());
+    const ring = Math.sqrt(1 - u * u);
+    out.push({
+      // Flatter than it is wide: smoke pools along a floor, it does not stack.
+      x: r * ring * Math.cos(th), y: r * u * 0.66, z: r * ring * Math.sin(th),
+      size: 1.0 + rnd() * 0.45,
+      spin: rnd() * Math.PI * 2,
+      rate: (rnd() - 0.5) * 0.42,
+    });
+  }
+  return out;
+})();
+
+function makeCloud(scene, geo, mat) {
+  const group = new THREE.Group();
+  const material = mat.clone();
+  const puffs = PUFF_LAYOUT.map((p) => {
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.set(p.x, p.y, p.z);
+    mesh.scale.setScalar(p.size);
+    mesh.userData.spin = p.spin;
+    mesh.userData.rate = p.rate;
+    group.add(mesh);
+    return mesh;
+  });
+  scene.add(group);
+  return { group, puffs, material };
+}
+
+// How much light is falling on a point, on a scale where 1 is a well-lit room.
+// Cheap enough to run per cloud per frame, and it is the only thing that makes
+// smoke look like it belongs to the room it is standing in.
+function litness(state, world, pos) {
+  let sum = 0.09; // the sky over the court, and nothing else
+  for (const l of world.lights) {
+    if (state.lights?.[l.id]?.broken) continue;
+    if (state.power === false && l.mains !== false) continue;
+    const d = Math.hypot(pos.x - l.pos.x, pos.y - l.pos.y, pos.z - l.pos.z);
+    if (d > l.radius) continue;
+    sum += l.intensity * (1 - d / l.radius) * 0.42;
+  }
+  for (const t of state.throwables ?? []) {
+    if (t.kind !== 'flare') continue;
+    const d = Math.hypot(pos.x - t.pos.x, pos.y - t.pos.y, pos.z - t.pos.z);
+    if (d < FLARE.radius) sum += 0.8 * (1 - d / FLARE.radius);
+  }
+  return Math.max(0.1, Math.min(1.15, sum));
+}
+
+// The inside of a cloud, which no amount of geometry can draw: from in there
+// the smoke is not an object in front of you, it is the air itself. So the
+// scene's own fog closes to arm's length and takes the room with it.
+//
+// The weapon is drawn in its own pass with its own camera, so your hands stay
+// where they are — which is exactly right. In smoke you can see your rifle and
+// nothing past it.
+const CLEAR_FOG = { near: 11, far: 42, color: new THREE.Color(0x05060a) };
+const SMOKE_FOG = { near: 0.12, far: 1.7, color: new THREE.Color(0x8f959e) };
+
+export function syncSmokeFog(view, state, camPos) {
+  let inside = 0;
+  for (const c of state.smokes ?? []) {
+    const r = c.radius * c.grown;
+    if (r <= 0.05) continue;
+    const d = Math.hypot(camPos.x - c.pos.x, camPos.y - (c.pos.y + 0.55), camPos.z - c.pos.z);
+    // Full thickness a metre past the edge, so walking into a cloud closes in
+    // over a stride rather than snapping shut on one frame.
+    inside = Math.max(inside, Math.min(1, (r - d) / 1.0));
+  }
+  inside = Math.max(0, inside);
+  // A cloud is as dark as the room it is in, and so is the inside of it.
+  const lit = inside > 0 ? litness(state, view.world, camPos) : 1;
+  const fog = view.scene.fog;
+  fog.near = CLEAR_FOG.near + (SMOKE_FOG.near - CLEAR_FOG.near) * inside;
+  fog.far = CLEAR_FOG.far + (SMOKE_FOG.far - CLEAR_FOG.far) * inside;
+  fog.color.copy(CLEAR_FOG.color).lerp(
+    SMOKE_FOG.color.clone().multiplyScalar(Math.min(1, lit)), inside,
+  );
+  view.scene.background.copy(fog.color);
+}
 
 export function createEquipmentView(scene) {
   // The door pivots belong to the scene view and are handed in once it exists,
@@ -344,12 +533,41 @@ export function createEquipmentView(scene) {
   const smokeCanMat = new THREE.MeshStandardMaterial({
     color: 0x2f5136, roughness: 0.8, metalness: 0.2, emissive: 0x0d1410,
   });
-  // One sphere, drawn big and soft. Depth-write off so two clouds overlapping
-  // do not cut a hard edge into each other.
-  const cloudGeo = new THREE.SphereGeometry(1, 16, 12);
-  const cloudMat = new THREE.MeshStandardMaterial({
-    color: 0xb9bcc2, roughness: 1, metalness: 0,
-    transparent: true, opacity: 0.92, depthWrite: false, emissive: 0x14161b,
+  // A burning flare is its own light source, so it is drawn unlit and simply
+  // bright — a lamp does not need lighting.
+  const flareMat = new THREE.MeshBasicMaterial({ color: 0xff8a3a, toneMapped: false });
+
+  // The light the flares throw. Pooled and alive from the first frame at zero
+  // intensity for the same reason the impact sparks are: a point light that
+  // appears mid-round changes the set of lights every material in the scene is
+  // compiled against, and Three rebuilds all of them on the spot.
+  const FLARE_LIGHTS = 6;
+  const flareLights = [];
+  for (let i = 0; i < FLARE_LIGHTS; i++) {
+    const light = new THREE.PointLight(0xff7a30, 0, FLARE.radius, 2);
+    scene.add(light);
+    flareLights.push(light);
+  }
+  // A cloud is not a ball.
+  //
+  // It used to be one: a single sphere at 92% opacity. From outside that reads
+  // as a grey balloon with a hard rim, and from inside it reads as nothing at
+  // all — a sphere is drawn from the front only, so walking into your own
+  // smoke deleted it and left you with a clear view of a room that could not
+  // see you back. That is not cover, that is a wall hack.
+  //
+  // So: a dozen soft billboards through the volume, and — since the geometry
+  // can only ever be the outside of the cloud — a wall of fog for the inside,
+  // handled by `syncSmokeFog` below. Between the two there is no angle from
+  // which the smoke is not in the way.
+  const cloudGeo = new THREE.PlaneGeometry(1, 1);
+  const cloudMat = new THREE.MeshBasicMaterial({
+    map: puffTexture(),
+    color: 0x9aa0a9,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false,
+    side: THREE.DoubleSide,
   });
   const deviceGeo = new THREE.BoxGeometry(0.14, 0.1, 0.06);
   // The wire. Unlit on purpose: a thread you can only find with the torch on
@@ -392,7 +610,7 @@ export function createEquipmentView(scene) {
     devices.delete(key);
   }
 
-  function sync(state, world) {
+  function sync(state, world, camera) {
     // Grenades in flight.
     const flying = state.throwables ?? [];
     while (thrown.length < flying.length) {
@@ -404,24 +622,53 @@ export function createEquipmentView(scene) {
       const t = flying[i];
       thrown[i].visible = !!t;
       if (!t) continue;
-      thrown[i].material = t.kind === 'smoke' ? smokeCanMat : flashMat;
+      thrown[i].material = t.kind === 'smoke' ? smokeCanMat
+        : t.kind === 'flare' ? flareMat : flashMat;
+      // A lit flare is a coal, not a grenade: small and far too bright to look
+      // straight at, which is exactly the problem it makes for night vision.
+      thrown[i].scale.setScalar(t.kind === 'flare' ? 0.55 : 1);
       thrown[i].position.set(t.pos.x, t.pos.y, t.pos.z);
+    }
+
+    // The pool of flare lights, handed out to whatever is burning. More flares
+    // than lights would mean a stick that glows and lights nothing — with two
+    // per defender and six lights that takes a whole side spending everything
+    // at once, and even then the extra ones are still visible.
+    const burning = flying.filter((t) => t.kind === 'flare');
+    for (let i = 0; i < flareLights.length; i++) {
+      const t = burning[i];
+      if (!t) {
+        flareLights[i].intensity = 0;
+        continue;
+      }
+      flareLights[i].position.set(t.pos.x, t.pos.y + 0.05, t.pos.z);
+      // The last three seconds gutter out rather than switching off.
+      flareLights[i].intensity = FLARE.intensity * Math.min(1, t.fuse / 3);
     }
 
     // Clouds.
     const smokes = state.smokes ?? [];
-    while (clouds.length < smokes.length) {
-      const mesh = new THREE.Mesh(cloudGeo, cloudMat.clone());
-      scene.add(mesh);
-      clouds.push(mesh);
-    }
+    while (clouds.length < smokes.length) clouds.push(makeCloud(scene, cloudGeo, cloudMat));
     for (let i = 0; i < clouds.length; i++) {
       const c = smokes[i];
-      clouds[i].visible = !!c;
+      const cloud = clouds[i];
+      cloud.group.visible = !!c;
       if (!c) continue;
-      clouds[i].position.set(c.pos.x, c.pos.y + 0.5, c.pos.z);
-      clouds[i].scale.setScalar(Math.max(0.05, c.radius * c.grown));
-      clouds[i].material.opacity = 0.92 * Math.min(1, c.grown * 1.6);
+      cloud.group.position.set(c.pos.x, c.pos.y + 0.55, c.pos.z);
+      cloud.group.scale.setScalar(Math.max(0.05, c.radius * c.grown));
+      cloud.material.opacity = 0.52 * Math.min(1, c.grown * 1.6);
+      // Smoke has no light of its own. It is as bright as the room it is
+      // standing in — which means a cloud in a lit hallway is a white wall,
+      // and the same cloud after somebody throws the breaker is a black one.
+      cloud.material.color.copy(SMOKE_TINT).multiplyScalar(litness(state, world, c.pos));
+      // Billboards face the camera; the slow spin is what keeps them from
+      // reading as a stack of flat cards.
+      if (camera) {
+        for (const puff of cloud.puffs) {
+          puff.quaternion.copy(camera.quaternion);
+          puff.rotateZ(puff.userData.spin + state.time * puff.userData.rate);
+        }
+      }
     }
 
     // Devices ride the door panel, so they swing with it.

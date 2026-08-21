@@ -4,13 +4,17 @@
 // The bot plays the way the map wants to be played: it holds an angle, reacts
 // to sound, and pushes only when it has a reason to.
 
-import { createInput, eyePosition, aimDirection } from './sim.js?v=728373ac';
-import { hasLineOfSight } from './world.js?v=728373ac';
-import { distXZ, clamp } from './math.js?v=728373ac';
-import { BLIND, GADGETS } from './constants.js?v=728373ac';
+import { createInput, eyePosition, aimDirection, litByFlare, burningFlares } from './sim.js?v=41124dad';
+import { hasLineOfSight } from './world.js?v=41124dad';
+import { distXZ, clamp } from './math.js?v=41124dad';
+import { BLIND, GADGETS, SPECIAL, FLARE } from './constants.js?v=41124dad';
 
 // Indoors nobody picks a figure out of the gloom across the whole map.
 const MAX_SIGHT = 24;
+// And with the mains off, nobody picks one out at all past a few metres —
+// unless they are wearing a tube, or the man is standing in a flare's light.
+const DARK_SIGHT = 5;
+const NVG_SIGHT = 15;
 
 export function createBotBrain(seed = 7) {
   const memory = new Map(); // botId -> brain state
@@ -67,6 +71,13 @@ export function createBotBrain(seed = 7) {
       if (errand) return input;
     }
 
+    // ── The dark ──
+    //
+    // With the power cut a bot does exactly what a player does: an attacker
+    // pulls the tube down, and a defender who cannot see puts a flare on the
+    // floor rather than standing in the black hoping.
+    handleDarkness(world, state, bot, b, input);
+
     // ── Perceive ──
     const eye = eyePosition(bot);
     let visible = null;
@@ -87,7 +98,7 @@ export function createBotBrain(seed = 7) {
       const len = Math.hypot(dx, dy, dz) || 1;
       const facing = (dir.x * dx + dir.y * dy + dir.z * dz) / len;
       if (facing < 0.42) continue; // roughly a 130° field of view, like a person
-      if (len > MAX_SIGHT) continue;
+      if (len > sightRange(state, bot, theirEye)) continue;
       if (len < bestDist) {
         bestDist = len;
         visible = { player: p, eye: theirEye, dist: len };
@@ -210,6 +221,43 @@ export function createBotBrain(seed = 7) {
   }
 
   return { think, memory };
+}
+
+// How far this bot can make out a man standing at `at`. With the lights on it
+// is the length of a room; with them off it is arm's length, and the two ways
+// out of that are the two special items — a tube on your own head, or a flare
+// burning where the other man is standing.
+function sightRange(state, bot, at) {
+  if (state.power !== false) return MAX_SIGHT;
+  if (bot.nvg) return NVG_SIGHT;
+  if (litByFlare(state, at)) return MAX_SIGHT * 0.6;
+  return DARK_SIGHT;
+}
+
+// What a bot does about the lights going out. Nothing clever: the tube costs
+// nothing to wear, so an attacker puts it on and leaves it on; a defender
+// lights a flare when there is none burning nearby and it still has one.
+const FLARE_SPACING = 6; // no point stacking two in the same doorway
+
+function handleDarkness(world, state, bot, b, input) {
+  if (state.power !== false) return;
+  const own = SPECIAL[bot.team];
+  if (!own) return;
+
+  if (own.id === 'nvg') {
+    if (!bot.nvg) input.special = true;
+    return;
+  }
+
+  if (bot.specialLeft <= 0 || bot.specialCooldown > 0) return;
+  // Only where it would help. A bot that drops one at its feet every few
+  // seconds turns the defence into a runway.
+  for (const t of burningFlares(state)) {
+    if (distXZ(t.pos, bot.pos) < FLARE_SPACING) return;
+  }
+  if (state.time - (b.lastFlare ?? -99) < FLARE.burn * 0.5) return;
+  b.lastFlare = state.time;
+  input.special = true;
 }
 
 // Walk to a doorway and fit whatever is being carried to it. Returns false

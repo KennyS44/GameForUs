@@ -386,6 +386,10 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 /* A device card has no blueprint above it, so it needs its own floor to sit
    at the same height as a weapon card in the row above. */
 .kit-card { min-height: 132px; }
+/* The side's own item. Shown for the same reason the others are, and dimmed
+   because there is nothing here to decide. */
+.kit-card.fixed { cursor: default; opacity: 0.72; }
+.kit-card.fixed:hover { border-color: var(--line); }
 .loadout-status {
   font-family: var(--mono);
   font-size: 14px;
@@ -413,6 +417,56 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
   opacity: 0;
   transition: opacity 0.12s linear;
 }
+/* Night vision. The renderer does the seeing — it lifts the ambient and opens
+   the exposure — and this does the wearing: a green wash and a hard round edge
+   where the tube ends. Two gradients, no textures, no cost. */
+.nvg {
+  position: fixed;
+  inset: 0;
+  z-index: 22;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(70, 255, 150, 0.16) 0%,
+      rgba(40, 200, 110, 0.1) 45%, rgba(0, 0, 0, 0) 62%),
+    linear-gradient(rgba(30, 190, 105, 0.08), rgba(30, 190, 105, 0.08));
+  opacity: 0;
+  transition: opacity 0.18s var(--ease);
+}
+.nvg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* The eyepiece. One circle rather than two: two drawn on a flat screen read
+     as a cartoon, and one reads as looking down a tube. */
+  background: radial-gradient(circle at 50% 50%,
+    rgba(0, 0, 0, 0) 42%, rgba(0, 0, 0, 0.5) 60%, rgba(0, 0, 0, 0.92) 78%);
+  mix-blend-mode: multiply;
+}
+.nvg[hidden] { display: none; }
+.nvg.on { opacity: 1; }
+
+/* Something the whole flat found out at once — the lights going, mostly. */
+.banner {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  padding: var(--s-2) var(--s-4);
+  font-size: 16px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: rgba(10, 11, 14, 0.82);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.32s var(--ease);
+}
+.banner[hidden] { display: none; }
+.banner.on { opacity: 1; }
+
 .gadget {
   display: inline-flex;
   align-items: baseline;
@@ -422,6 +476,9 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
   color: var(--text-dim);
 }
 .gadget.empty { opacity: 0.4; }
+/* The tube, while it is down: the one HUD element that is lit rather than dim. */
+.gadget.special.live .gadget-name,
+.gadget.special.live .gadget-left { color: #6ee7a0; }
 .gadget-key {
   border: 1px solid var(--line);
   border-radius: 4px;

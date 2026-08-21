@@ -1,10 +1,10 @@
 // Keyboard and mouse -> a plain input object for the simulation.
 // Nothing here knows about the game rules; it only reports intent.
 
-import { createInput } from '../sim/sim.js?v=728373ac';
-import { LOOK } from '../sim/constants.js?v=728373ac';
-import { clamp } from '../sim/math.js?v=728373ac';
-import { storageGet, storageSet } from '../util/storage.js?v=728373ac';
+import { createInput } from '../sim/sim.js?v=41124dad';
+import { LOOK } from '../sim/constants.js?v=41124dad';
+import { clamp } from '../sim/math.js?v=41124dad';
+import { storageGet, storageSet } from '../util/storage.js?v=41124dad';
 
 export const DEFAULT_BINDINGS = {
   forward: 'KeyW',
@@ -20,6 +20,8 @@ export const DEFAULT_BINDINGS = {
   use: 'KeyF',
   kick: 'KeyV',
   gadget: 'KeyG',
+  // The side's own item: the tube for the attackers, a flare for the defenders.
+  special: 'KeyN',
   flashlight: 'KeyT',
   reload: 'KeyR',
   scoreboard: 'KeyB',
@@ -50,7 +52,10 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
   let zoom = 1;
   let mouseDown = 0; // bitmask
   // Edge-triggered actions: consumed once by the next input frame.
-  const pending = { use: false, kick: false, flashlight: false, reload: false, jump: false, gadget: false };
+  const pending = {
+    use: false, kick: false, flashlight: false, reload: false, jump: false,
+    gadget: false, special: false,
+  };
   // Sneaking is a mode you switch on, not a key you hold down: creeping across
   // a flat takes long enough that holding a key the whole way is just a chore.
   let sneaking = false;
@@ -75,6 +80,7 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
     if (e.code === bindings.use) pending.use = true;
     if (e.code === bindings.kick) pending.kick = true;
     if (e.code === bindings.gadget) pending.gadget = true;
+    if (e.code === bindings.special) pending.special = true;
     if (e.code === bindings.flashlight) pending.flashlight = true;
     if (e.code === bindings.reload) pending.reload = true;
     if (e.code === bindings.jump) pending.jump = true;
@@ -201,8 +207,9 @@ export function createInputSource(canvas, bindings = DEFAULT_BINDINGS) {
       i.toggleLight = pending.flashlight;
       i.reload = pending.reload;
       i.gadget = pending.gadget;
+      i.special = pending.special;
       pending.use = pending.kick = pending.flashlight = pending.reload = pending.jump = false;
-      pending.gadget = false;
+      pending.gadget = pending.special = false;
       return i;
     },
 

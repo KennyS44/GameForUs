@@ -17,6 +17,7 @@
   .blocker.furniture { fill: #e8e0d2; stroke: #b3a892; stroke-width: 1; }
   .hole { fill: none; stroke: #2f6f4f; stroke-width: 2.5; stroke-dasharray: 5 4; }
   .opening { fill: #d7e6dc; stroke: #2f6f4f; stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .switch { fill: #f2d24b; stroke: #7a5f05; stroke-width: 2; }
   .hole.under { stroke: #7fa39a; stroke-width: 1.5; }
   .note { font: 10px system-ui, sans-serif; fill: #4d6a5c; text-anchor: middle; }
   .shaft { fill: #eceef3; stroke: #c9cdd6; stroke-width: 1; }
@@ -49,7 +50,7 @@
 </defs>
 <rect class="bg" width="951.2" height="914.2"/>
 <text x="64" y="34" class="title">Пентхаус: второй этаж (y = 3.3)</text>
-<text x="64" y="54" class="subtitle">Зелёным — то, что открыто небу; штриховкой — проём вниз; бежевым — мебель.</text>
+<text x="64" y="54" class="subtitle">Зелёным — то, что открыто небу; штриховкой — проём вниз; бежевым — мебель. Жёлтым — электрощит.</text>
 <text x="64" y="872.2" class="legend">Сетка 2 м. Оси в метрах: +X вправо, +Z вниз. Под названием комнаты — размер и её id в коде.</text>
 <text x="64" y="890.2" class="legend">Оранжевым — двери: сплошная створка закрыта, пунктир — куда открывается, точка — петля. Синие точки — спавн штурма, красные — обороны.</text>
 <text x="64" y="908.2" class="legend">Стены: тёмные — бетон (не простреливается), серые — гипсокартон (простреливается), голубые — стекло (бьётся с двух попаданий).</text>
@@ -212,6 +213,8 @@
 <rect x="875.2" y="653.6" width="31.2" height="52" class="blocker furniture"/>
 <rect x="659.4" y="245.4" width="36.4" height="10.4" class="opening"/>
 <text x="677.6" y="270.6" class="note">Открытый проход, без двери</text>
+<rect x="109.3" y="372.1" width="16" height="16" class="switch"/>
+<text x="117.3" y="366.1" class="note">Электрощит</text>
 <circle cx="872.6" cy="150.5" r="19.5" class="hole cut"/>
 <text x="872.6" y="185" class="note">Пролом в полу ⌀1.5 — падение в санузел, обратно не забраться</text>
 <path d="M 170.6 380.9 L 196.6 380.9" class="door-shut"/>

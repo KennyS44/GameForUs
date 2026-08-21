@@ -5,12 +5,12 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=728373ac';
+import { buildWorld } from '../sim/world.js?v=41124dad';
 import {
   createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout, setGadget,
-} from '../sim/sim.js?v=728373ac';
-import { createBotBrain } from '../sim/bot.js?v=728373ac';
-import { DT } from '../sim/constants.js?v=728373ac';
+} from '../sim/sim.js?v=41124dad';
+import { createBotBrain } from '../sim/bot.js?v=41124dad';
+import { DT } from '../sim/constants.js?v=41124dad';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 
@@ -133,6 +133,10 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
         aimAmount: p.aimAmount, grounded: p.grounded,
         weapon: p.weapon, loadout: p.loadout, kills: p.kills, deaths: p.deaths,
         gadget: p.gadget, gadgetLeft: p.gadgetLeft, blind: p.blind,
+        // Night vision is worn where everyone can see it, and how many flares
+        // a man has left is his own HUD's business — both travel anyway, so a
+        // guest's screen agrees with the host's about who is wearing what.
+        special: p.special, specialLeft: p.specialLeft, nvg: p.nvg,
         // Carried so a client replaying its pending inputs continues the
         // recoil climb and the jump timer from the host's numbers rather than
         // its own guess.
@@ -156,6 +160,10 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
       time: state.time,
       phase: state.phase,
       phaseTime: state.phaseTime,
+      // One switch for the whole building, so it belongs in the snapshot next
+      // to the doors: a guest whose lights are still on is playing a different
+      // round from everyone else.
+      power: state.power,
       players, doors, lights,
       // Grenades in the air and clouds on the floor are world state like any
       // other: a guest has to see the same smoke the host does.
@@ -256,6 +264,7 @@ export function createClientSession({ map, transport, myId, seed = 1337 }) {
     state.phaseTime = snap.phaseTime;
     state.doors = snap.doors;
     state.lights = snap.lights;
+    state.power = snap.power !== false;
     state.throwables = snap.throwables ?? [];
     state.smokes = snap.smokes ?? [];
     Object.assign(pings, snap.pings ?? {});

@@ -10,8 +10,8 @@
 <meta name="description" content="Хардкорный тактический шутер в тёмном двухэтажном пентхаусе: свет, звук и двери решают больше, чем реакция.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <!-- Written by tools/stamp-version.mjs; the page checks it against version.txt. -->
-<meta name="gameforus-version" content="728373ac">
-<link rel="stylesheet" href="styles.css?v=728373ac">
+<meta name="gameforus-version" content="41124dad">
+<link rel="stylesheet" href="styles.css?v=41124dad">
 </head>
 <body>
 
@@ -27,6 +27,9 @@
   </div>
 
   <div class="hitmarker" id="hitmarker" aria-hidden="true"></div>
+  <!-- Night vision. A green wash and a hard round edge to the tube: the
+       screen stops being a window and starts being one eyepiece. -->
+  <div class="nvg" id="nvg" aria-hidden="true"></div>
   <!-- A flashbang in the eyes: full white, then a long fade back. -->
   <div class="blindfold" id="blindfold" aria-hidden="true"></div>
   <div class="vignette" id="vignette" aria-hidden="true"></div>
@@ -43,6 +46,9 @@
 
 
   <div class="prompt" id="prompt" hidden></div>
+  <!-- Things the whole flat learns at once, the lights going being the one
+       that matters: shown briefly across the middle and then gone. -->
+  <div class="banner" id="banner" hidden></div>
 
   <div class="bottombar">
     <div class="vitals">
@@ -64,6 +70,14 @@
         <span class="gadget-key">G</span>
         <span class="gadget-name" id="gadget-name">Светошумовая</span>
         <span class="gadget-left" id="gadget-left">2</span>
+      </span>
+      <!-- The side's own item: the tube for the attackers, flares for the
+           defenders. Not chosen at the loadout screen — you get what your
+           side carries. -->
+      <span class="gadget special" id="special-slot">
+        <span class="gadget-key">N</span>
+        <span class="gadget-name" id="special-name">ПНВ</span>
+        <span class="gadget-left" id="special-left">—</span>
       </span>
     </div>
   </div>
@@ -140,6 +154,8 @@
         <div><dt>F в тихом шаге</dt><dd>приоткрыть тихо</dd></div>
         <div><dt>V</dt><dd>выбить дверь ногой</dd></div>
         <div><dt>G</dt><dd>снаряжение: бросить или поставить на дверь</dd></div>
+        <div><dt>N</dt><dd>спецпредмет: ПНВ у штурма, фаер у обороны</dd></div>
+        <div><dt>F у щитка</dt><dd>вырубить свет во всём здании (терраса)</dd></div>
         <div><dt>T</dt><dd>фонарь</dd></div>
         <div><dt>B</dt><dd>таблица счёта</dd></div>
       </dl>
@@ -204,7 +220,9 @@
       <p class="hint">
         Пока идёт отсчёт, обе стороны стоят на месте. Дальше — полминуты
         подготовки: оборона расходится по квартире, штурм ждёт на площадке.
-        Снаряжение ставится и бросается клавишей <b>G</b>.
+        Снаряжение ставится и бросается клавишей <b>G</b>, спецпредмет —
+        клавишей <b>N</b>. На террасе есть электрощит: <b>F</b> у него гасит
+        свет во всём здании, обеим сторонам сразу.
       </p>
       <p class="loadout-source">
         С одного попадания не убивает ничто, кроме AMR-50 — и той нужна прямая
@@ -410,6 +428,6 @@
   window.addEventListener('load', function () { window.setTimeout(offerUpdate, 1200); });
 })();
 </script>
-<script type="module" src="src/main.js?v=728373ac"></script>
+<script type="module" src="src/main.js?v=41124dad"></script>
 </body>
 </html>

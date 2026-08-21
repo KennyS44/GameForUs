@@ -10,10 +10,11 @@ import { APARTMENT } from '../src/maps/apartment.js';
 import { buildWorld, hasLineOfSight, doorAngle } from '../src/sim/world.js';
 import {
   createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout,
-  setGadget, rangeScale, hitDamage,
+  setGadget, rangeScale, hitDamage, litByFlare,
 } from '../src/sim/sim.js';
 import {
   TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES, DAMAGE, GADGETS,
+  SPECIAL, FLARE,
 } from '../src/sim/constants.js';
 import { createHostSession, createLocalSession } from '../src/net/session.js';
 
@@ -1283,6 +1284,107 @@ console.log('\nA door never pushes anyone through a wall:');
 
     for (let i = 0; i < TICK_RATE * 20; i++) stepSim(world, state, { a1: createInput(), d1: createInput() });
     check('it thins out and goes', state.smokes.length === 0 && hasLineOfSight(world, state, from, to));
+  }
+
+  // ── The mains, and the two answers to them.
+  //
+  // Everything here hangs together: the breaker is only worth throwing because
+  // the attackers can see without it, the tube is only beatable because a
+  // flare exists, and a flare is only worth spending because the flat is dark.
+  // So the checks walk that whole chain in order.
+  {
+    console.log('\nThe lights, the tube and the flare:');
+    restartRound();
+    state.phase = 'live';
+    state.phaseTime = 300;
+    const a = state.players.a1;
+    const d = state.players.d1;
+    check('the flat starts with its lights on', state.power === true);
+
+    // Standing on the terrace, in front of the cabinet, looking at it.
+    const atPanel = () => {
+      a.pos = { x: -14.55, y: 3.3, z: -8.4 };
+      a.look = { yaw: Math.PI, pitch: 0 };
+      a.useCooldown = 0;
+    };
+    // ...and standing in the same room with your back to it.
+    atPanel();
+    a.look = { yaw: 0, pitch: 0 };
+    stepSim(world, state, { a1: { ...createInput(), use: true, yaw: 0 }, d1: createInput() });
+    check('facing away from it does nothing', state.power === true);
+
+    atPanel();
+    stepSim(world, state, {
+      a1: { ...createInput(), use: true, yaw: Math.PI }, d1: createInput(),
+    });
+    check('reaching it and pressing F kills the power', state.power === false);
+    const bang = state.events.find((e) => e.type === 'power');
+    check('and it is not a quiet thing to do', !!bang && bang.on === false,
+      JSON.stringify(bang));
+
+    d.pos = { x: 0, y: 0, z: 4 };
+    d.useCooldown = 0;
+    stepSim(world, state, { a1: createInput(), d1: { ...createInput(), use: true } });
+    check('nobody works it from another floor', state.power === false);
+
+    // ── The tube.
+    a.specialCooldown = 0;
+    a.useCooldown = 0;
+    stepSim(world, state, { a1: { ...createInput(), special: true }, d1: createInput() });
+    check('the attacker has night vision on the key', a.nvg === true);
+    a.useCooldown = 0;
+    stepSim(world, state, { a1: { ...createInput(), toggleLight: true }, d1: createInput() });
+    check('and the torch pushes it back up', a.nvg === false && a.flashlight === true);
+    a.specialCooldown = 0;
+    stepSim(world, state, { a1: { ...createInput(), special: true }, d1: createInput() });
+    check('pulling it down again puts the torch out', a.nvg === true && a.flashlight === false);
+
+    // ── The flare.
+    const flares = () => state.throwables.filter((t) => t.kind === 'flare');
+    d.pos = { x: -9, y: 0, z: -7 };
+    d.look = { yaw: -Math.PI / 2, pitch: 0 };
+    d.specialCooldown = 0;
+    const had = d.specialLeft;
+    stepSim(world, state, {
+      a1: createInput(), d1: { ...createInput(), special: true, yaw: -Math.PI / 2 },
+    });
+    check('the defender lights a flare on the same key', flares().length === 1);
+    check('and it comes out of a pocket that empties', d.specialLeft === had - 1,
+      `${d.specialLeft} of ${had}`);
+
+    for (let i = 0; i < TICK_RATE * 2; i++) {
+      stepSim(world, state, { a1: createInput(), d1: createInput() });
+    }
+    const burning = flares()[0];
+    check('it lands and lies there burning', !!burning && burning.fuse > FLARE.burn - 3,
+      burning ? `${burning.fuse.toFixed(1)} s left` : 'gone');
+    check('the floor around it counts as lit', litByFlare(state, burning.pos));
+    check('and the next room does not',
+      !litByFlare(state, { x: burning.pos.x + FLARE.radius + 2, y: 1, z: burning.pos.z }));
+
+    // ── And the one beats the other.
+    a.pos = { x: burning.pos.x + 2, y: 0, z: burning.pos.z };
+    a.blind = 0;
+    stepSim(world, state, { a1: createInput(), d1: createInput() });
+    check('a tube pointed at a burning flare washes out', a.blind > 0.2,
+      a.blind.toFixed(2));
+    a.pos = { x: 6, y: 0, z: 4 };
+    a.blind = 0;
+    stepSim(world, state, { a1: createInput(), d1: createInput() });
+    check('and walking away from it clears', a.blind === 0, a.blind.toFixed(2));
+
+    // ── A flare is spent, not stored.
+    burning.fuse = 0.01;
+    stepSim(world, state, { a1: createInput(), d1: createInput() });
+    check('a flare that has burned through is gone', flares().length === 0);
+
+    // ── And a new round turns the lights back on.
+    resetRound(world, state);
+    check('a new round restores the power', state.power === true);
+    check('takes the tube off', state.players.a1.nvg === false);
+    check('and hands the flares back',
+      state.players.d1.specialLeft === SPECIAL.defenders.count,
+      `${state.players.d1.specialLeft}`);
   }
 
   // ── Bots stage themselves, or the solo player never meets any of this.

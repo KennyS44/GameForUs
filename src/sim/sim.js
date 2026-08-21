@@ -7,15 +7,15 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-  GADGETS, DEFAULT_GADGET, BLIND,
-} from './constants.js?v=728373ac';
+  GADGETS, DEFAULT_GADGET, BLIND, SPECIAL, NVG, FLARE, POWER,
+} from './constants.js?v=41124dad';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=728373ac';
+} from './math.js?v=41124dad';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=728373ac';
+} from './world.js?v=41124dad';
 
 const GRAVITY = 18;
 
@@ -27,6 +27,8 @@ export function createInput() {
     lean: 0,
     fire: false, aim: false, reload: false,
     use: false, kick: false, toggleLight: false, gadget: false,
+    // The side's own special item: the attackers' tube, the defenders' flare.
+    special: false,
   };
 }
 
@@ -66,6 +68,15 @@ function createPlayer(id, team, spawn, name) {
     gadget: DEFAULT_GADGET[team],
     gadgetLeft: GADGETS[DEFAULT_GADGET[team]].count,
     gadgetCooldown: 0,
+    // The special item is not a choice — each side has exactly one, and it is
+    // the reason cutting the power is a plan rather than a nuisance.
+    special: SPECIAL[team].id,
+    specialLeft: SPECIAL[team].count ?? 0,
+    specialCooldown: 0,
+    specialDown: false,
+    // Night vision: attackers only, and only while they hold it down over
+    // their eyes. A torch and a tube are not worn at the same time.
+    nvg: false,
     // 0 is seeing normally, 1 is a white screen. Only a flash sets it.
     blind: 0,
     kickCooldown: 0,
@@ -116,7 +127,11 @@ export function createState(world, seed = 12345) {
     players: {},
     doors,
     lights,
-    // Things in the air, and clouds that have already landed.
+    // The mains, as one switch for the whole building. Every lamp reads it,
+    // so throwing the breaker on the terrace is felt in every room at once.
+    power: true,
+    // Things in the air, and clouds that have already landed. A burning flare
+    // lives here too: it is thrown like a grenade and simply never goes off.
     throwables: [],
     smokes: [],
     events: [],
@@ -642,6 +657,119 @@ function useGadget(world, state, p) {
   return true;
 }
 
+// ── The mains ─────────────────────────────────────────────────────────────
+//
+// The consumer unit is not a door, so it does not go through `doorInReach`:
+// it is a flat panel on a wall, and reaching it means standing in front of it
+// and looking at it. Both tests matter — without the facing test a man on the
+// far side of the terrace wall could reach through and put the flat out.
+
+export function switchInReach(world, state, p, range = POWER.reach) {
+  const eye = eyePosition(p);
+  const dir = aimDirection(p);
+  for (const sw of world.switches ?? []) {
+    const dx = sw.pos.x - eye.x;
+    const dy = sw.pos.y - eye.y;
+    const dz = sw.pos.z - eye.z;
+    const d = Math.hypot(dx, dy, dz);
+    if (d > range) continue;
+    // In front of the cabinet, not behind the wall it is bolted to.
+    if ((eye.x - sw.pos.x) * sw.face.x + (eye.z - sw.pos.z) * sw.face.z <= 0) continue;
+    if ((dir.x * dx + dir.y * dy + dir.z * dz) / (d || 1) < 0.7) continue;
+    return { sw, distance: d };
+  }
+  return null;
+}
+
+function throwBreaker(world, state, p) {
+  const found = switchInReach(world, state, p);
+  if (!found) return false;
+  state.power = !state.power;
+  // A breaker that size goes over with a bang, and it is the loudest decision
+  // either side makes: everyone now knows both that the lights went and who
+  // was standing on the terrace when they did.
+  makeNoise(state, found.sw.pos, POWER.loudness, 'power', p.id);
+  emit(state, { type: 'power', on: state.power, pos: { ...found.sw.pos }, by: p.id });
+  return true;
+}
+
+// ── The special item ──────────────────────────────────────────────────────
+//
+// One key, two entirely different things, because the sides are not symmetric:
+// the attackers put a tube over their eyes and the defenders set fire to a
+// stick. Both are answers to the same question — what do you do about a flat
+// with no power in it — and each is the other's counter.
+function useSpecial(world, state, p) {
+  const def = SPECIAL[p.team];
+  if (!def || p.specialCooldown > 0) return false;
+
+  if (def.id === 'nvg') {
+    p.nvg = !p.nvg;
+    // A torch and a tube are not worn at the same time: one of them exists to
+    // make the other pointless.
+    if (p.nvg) p.flashlight = false;
+    p.specialCooldown = NVG.toggleTime;
+    emit(state, { type: 'nvg', on: p.nvg, by: p.id });
+    return true;
+  }
+
+  if (p.specialLeft <= 0) return false;
+  const eye = eyePosition(p);
+  const dir = aimDirection(p);
+  // Rolled along the floor rather than lobbed at the ceiling: a flare is
+  // placed where you want the light, and it stays where it stops.
+  state.throwables.push({
+    kind: 'flare',
+    by: p.id,
+    team: p.team,
+    pos: { x: eye.x + dir.x * 0.4, y: eye.y - 0.3 + dir.y * 0.4, z: eye.z + dir.z * 0.4 },
+    vel: {
+      x: dir.x * FLARE.throwSpeed + p.vel.x,
+      y: dir.y * FLARE.throwSpeed + 0.6,
+      z: dir.z * FLARE.throwSpeed + p.vel.z,
+    },
+    fuse: FLARE.burn,
+  });
+  p.specialLeft--;
+  p.specialCooldown = 0.7;
+  makeNoise(state, eye, FLARE.loudness, 'flare', p.id);
+  emit(state, { type: 'flare', pos: { ...eye }, by: p.id });
+  return true;
+}
+
+// Everything currently burning on the floor. The renderer hangs a light on
+// each of these, the bots treat them as the only reason they can see anything
+// with the power off, and a tube pointed at one is a tube full of white.
+export function burningFlares(state) {
+  return state.throwables.filter((t) => t.kind === 'flare');
+}
+
+// Is this point inside a flare's pool of light? Used where a lamp would
+// otherwise be the answer: what a bot can make out once the mains are off.
+export function litByFlare(state, pos) {
+  for (const t of burningFlares(state)) {
+    const d = Math.hypot(pos.x - t.pos.x, pos.y - t.pos.y, pos.z - t.pos.z);
+    if (d <= FLARE.radius) return true;
+  }
+  return false;
+}
+
+// A tube that multiplies what little light there is multiplies a road flare
+// by the same amount. Standing in one's light with night vision down is the
+// counter to night vision — it costs nothing to walk out of, and everything
+// to stand in.
+function stepNightVision(world, state, p) {
+  if (!p.nvg || !p.alive) return;
+  const eye = eyePosition(p);
+  for (const t of burningFlares(state)) {
+    const d = Math.hypot(eye.x - t.pos.x, eye.y - t.pos.y, eye.z - t.pos.z);
+    if (d > NVG.flareRange) continue;
+    if (!hasLineOfSight(world, state, eye, t.pos)) continue;
+    p.blind = Math.max(p.blind, NVG.flareBlind * (1 - d / NVG.flareRange));
+    return;
+  }
+}
+
 // Grenades in flight. A thrown object is a point with a radius: step it, and
 // if the step would take it through something, put it on the surface and
 // bounce what is left of its speed off the normal.
@@ -680,6 +808,9 @@ function stepThrowables(world, state, dt) {
 
     state.throwables.splice(i, 1);
     if (t.kind === 'smoke') popSmoke(state, t);
+    // A flare does not go off at the end of its fuse — it simply finishes
+    // burning, and the room it was lighting goes back to whatever it was.
+    else if (t.kind === 'flare') emit(state, { type: 'flareOut', pos: { ...t.pos }, by: t.by });
     else popFlash(world, state, t);
   }
 }
@@ -722,7 +853,11 @@ function popFlash(world, state, t) {
     const look = aimDirection(p);
     const facing = Math.max(0, to.x * look.x + to.y * look.y + to.z * look.z);
     const near = 1 - Math.min(1, dist / def.radius);
-    const amount = Math.min(1, (0.35 + 0.65 * facing) * (0.35 + 0.75 * near));
+    // A flash into an image intensifier is a flash multiplied by whatever the
+    // tube was multiplying: the one thing night vision cannot do is refuse
+    // light. Wearing it through a doorway is a real risk, not a free upgrade.
+    const gain = p.nvg ? NVG.flashScale : 1;
+    const amount = Math.min(1, (0.35 + 0.65 * facing) * (0.35 + 0.75 * near) * gain);
     // Blindness is counted in seconds, not in screen-white: the gadget says
     // five, so a man who took it square is out of the fight for five, the
     // first of them with nothing on the screen but white. Anything less and
@@ -989,15 +1124,28 @@ function stepPlayer(world, state, p, input, dt) {
   // ── Flashlight ──
   if (input.toggleLight && p.useCooldown <= 0) {
     p.flashlight = !p.flashlight;
+    // Same rule from the other side: raising the torch pushes the tube up.
+    if (p.flashlight) p.nvg = false;
     p.useCooldown = 0.25;
   }
+
+  // ── The special item ──
+  p.specialCooldown = Math.max(0, p.specialCooldown - dt);
+  const wantsSpecial = input.special && !p.specialDown;
+  p.specialDown = !!input.special;
+  if (wantsSpecial) useSpecial(world, state, p);
+  stepNightVision(world, state, p);
 
   // ── Doors ──
   p.useCooldown = Math.max(0, p.useCooldown - dt);
   p.kickCooldown = Math.max(0, p.kickCooldown - dt);
 
   if (input.use && p.useCooldown <= 0) {
-    const found = doorInReach(world, state, p, 1.9);
+    // The breaker first: it is the only other thing on the map you can reach
+    // out and work, and no doorway is ever within arm's reach of it.
+    const thrown = throwBreaker(world, state, p);
+    if (thrown) p.useCooldown = POWER.cooldown;
+    const found = thrown ? null : doorInReach(world, state, p, 1.9);
     if (found) {
       // A kicked-in door has no latch left, so it can only be pushed further
       // open — you cannot shut it again to hide behind it.
@@ -1354,8 +1502,18 @@ export function resetRound(world, state) {
     p.gadgetLeft = GADGETS[gadgetId].count;
     p.gadgetCooldown = 0;
     p.gadgetDown = false;
+    // The special item is not chosen, so there is nothing to remember: each
+    // side gets its own back, unlit and switched off.
+    p.special = SPECIAL[p.team].id;
+    p.specialLeft = SPECIAL[p.team].count ?? 0;
+    p.specialCooldown = 0;
+    p.specialDown = false;
+    p.nvg = false;
     p.blind = 0;
   }
+  // Someone always leaves the flat dark. The next round starts with the lights
+  // on, or the decision to cut them would only ever be made once.
+  state.power = true;
   state.throwables.length = 0;
   state.smokes.length = 0;
   for (const d of world.doors) {
@@ -1378,6 +1536,16 @@ export function resetRound(world, state) {
 
 // What is this player looking at within arm's reach? Drives the HUD prompt.
 export function lookTarget(world, state, p, range = 1.9) {
+  const sw = switchInReach(world, state, p);
+  if (sw) {
+    return {
+      kind: 'switch',
+      id: sw.sw.id,
+      name: sw.sw.name,
+      on: state.power !== false,
+      distance: sw.distance,
+    };
+  }
   const found = doorInReach(world, state, p, range);
   if (!found) return null;
   return {

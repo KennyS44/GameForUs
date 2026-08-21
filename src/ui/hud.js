@@ -1,6 +1,6 @@
 // HUD: reads simulation state, writes DOM. Never the other way round.
 
-import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=728373ac';
+import { WEAPONS, GADGETS, SPECIAL, PLAYER } from '../sim/constants.js?v=41124dad';
 
 const $ = (id) => document.getElementById(id);
 
@@ -26,6 +26,11 @@ export function createHud() {
     gadgetSlot: $('gadget-slot'),
     gadgetName: $('gadget-name'),
     gadgetLeft: $('gadget-left'),
+    specialSlot: $('special-slot'),
+    specialName: $('special-name'),
+    specialLeft: $('special-left'),
+    nvg: $('nvg'),
+    banner: $('banner'),
     blindfold: $('blindfold'),
     clickToPlay: $('click-to-play'),
     deadNotice: $('dead-notice'),
@@ -36,6 +41,20 @@ export function createHud() {
 
   let lastHealth = PLAYER.maxHealth;
   let vignetteTimer = 0;
+  let bannerTimer = 0;
+
+  // One line across the middle for something everyone in the flat just found
+  // out. It fades rather than blinks: the news is that the room changed, not
+  // that a message arrived.
+  function banner(text) {
+    el.banner.textContent = text;
+    el.banner.hidden = false;
+    // Force a reflow so a second banner restarts the fade instead of sitting
+    // at full opacity from the first one.
+    void el.banner.offsetWidth;
+    el.banner.classList.add('on');
+    bannerTimer = 2.6;
+  }
 
   // A flash lands between two HUD updates, so paint the white immediately
   // rather than waiting for the next frame to read the simulation.
@@ -89,6 +108,24 @@ export function createHud() {
       el.gadgetName.textContent = kit.name;
       el.gadgetLeft.textContent = me.gadgetLeft ?? 0;
       el.gadgetSlot.classList.toggle('empty', (me.gadgetLeft ?? 0) <= 0);
+    }
+
+    // ── The special item ──
+    // Not a choice, so it does not need a picker — but it does need to be on
+    // the screen, because half of it is a mode you can forget you are in.
+    const special = SPECIAL[me.team];
+    if (special) {
+      const tube = special.id === 'nvg';
+      el.specialName.textContent = special.name;
+      el.specialLeft.textContent = tube ? (me.nvg ? 'ВКЛ' : 'ВЫКЛ') : (me.specialLeft ?? 0);
+      el.specialSlot.classList.toggle('live', tube ? !!me.nvg : (me.specialLeft ?? 0) > 0);
+      el.specialSlot.classList.toggle('empty', tube ? !me.nvg : (me.specialLeft ?? 0) <= 0);
+    }
+    el.nvg.classList.toggle('on', !!me.nvg);
+
+    if (bannerTimer > 0) {
+      bannerTimer -= dt;
+      if (bannerTimer <= 0) el.banner.classList.remove('on');
     }
 
     // Being flashed is the simulation's business, so the screen just reads it.
@@ -192,7 +229,7 @@ export function createHud() {
   }
 
   return {
-    show, blindFlash, update, setPrompt, setClickToPlay, hitMark, killFeed,
+    show, blindFlash, banner, update, setPrompt, setClickToPlay, hitMark, killFeed,
     scoreboard, setDeathInfo, el,
   };
 }

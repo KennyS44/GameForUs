@@ -486,6 +486,32 @@ const holes = [
     note: 'Пролом в полу ⌀1.5 — падение в санузел, обратно не забраться' },
 ];
 
+// ── The mains ─────────────────────────────────────────────────────────────
+//
+// The consumer unit for the whole flat, where a consumer unit actually lives:
+// outside, on the terrace wall, a couple of metres west of the corridor doors.
+// Outdoors is what makes it a fight — it is reachable from the stairs without
+// crossing the flat, and it is in the open once you are there.
+//
+// The cabinet is set two centimetres into the wall so no two faces are drawn
+// on the same plane, and it stands at chest height, which is where the handle
+// of one is.
+const BREAKER = { x: -14.55, y: F2 + 1.4, z: -7.52 };
+const mains = [
+  box(BREAKER.x - 0.3, BREAKER.y - 0.4, -7.60, BREAKER.x + 0.3, BREAKER.y + 0.4, -7.44, M.metal),
+];
+
+const switches = [
+  {
+    id: 'mains',
+    name: 'Электрощит',
+    pos: { ...BREAKER },
+    // The face you can reach it from: out onto the terrace, away from the wall.
+    face: { x: 0, z: -1 },
+    floor: 1,
+  },
+];
+
 // Ways through that are not doors, called out on the plan.
 const openings = [
   { id: 'foyer-breach', floor: 0, x: -3, z: 3.5, w: 1.2, note: 'Пролом в стене: прихожая ↔ гардеробная' },
@@ -605,11 +631,12 @@ export const APARTMENT = {
   upperFloorY: F2,
   geometry: [
     ...shell, ...courtStair, ...groundWalls, ...upperWalls, ...eastStair,
-    ...blockers, ...furniture, ...tiledFloors,
+    ...blockers, ...furniture, ...tiledFloors, ...mains,
   ],
   rooms,
   doors,
   lights,
+  switches,
   holes,
   openings,
   // The volumes the flights occupy. Kept in the data so map-check can prove

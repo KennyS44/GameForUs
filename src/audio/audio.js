@@ -6,6 +6,11 @@
 
 const SPEED_OF_SOUND = 343;
 
+// How far the consumer unit carries. It matches POWER.loudness in the
+// simulation, which is what the bots hear it at — the ears and the eardrums
+// should agree about how big a noise it is.
+const POWER_CARRY = 40;
+
 export function createAudio() {
   let ctx = null;
   let master = null;
@@ -340,6 +345,55 @@ export function createAudio() {
     osc.stop(t + 0.07);
   }
 
+  // The consumer unit going over: a hard mechanical clack and, under it, the
+  // building's hum stopping. It carries, and it is meant to — cutting the
+  // power tells everyone in the flat both that it happened and roughly where
+  // the man who did it was standing.
+  function breaker(pos, on) {
+    if (!ensure() || !enabled) return;
+    const t = ctx.currentTime;
+    const out = panner(pos, 3, POWER_CARRY);
+
+    const clack = noiseSource(0.09, 1.0);
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 1400;
+    band.Q.value = 0.9;
+    const cg = ctx.createGain();
+    cg.gain.setValueAtTime(0.5, t);
+    cg.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    clack.connect(band).connect(cg).connect(out);
+
+    // The hum: it drops away when the mains go and comes back when they return.
+    const hum = ctx.createOscillator();
+    hum.type = 'sawtooth';
+    hum.frequency.setValueAtTime(50, t);
+    const hg = ctx.createGain();
+    hg.gain.setValueAtTime(on ? 0.001 : 0.07, t);
+    hg.gain.exponentialRampToValueAtTime(on ? 0.05 : 0.001, t + 0.35);
+    hg.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+    hum.connect(hg).connect(out);
+    hum.start(t);
+    hum.stop(t + 0.75);
+  }
+
+  // A flare catching: a scrape, then the hiss of it burning.
+  function flare(pos) {
+    if (!ensure() || !enabled) return;
+    const t = ctx.currentTime;
+    const out = panner(pos, 2, 22);
+    const src = noiseSource(1.1, 1.0);
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.setValueAtTime(900, t);
+    f.frequency.exponentialRampToValueAtTime(3200, t + 0.9);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.02, t + 1.0);
+    src.connect(f).connect(g).connect(out);
+  }
+
   return {
     resume,
     setListener,
@@ -350,6 +404,8 @@ export function createAudio() {
     click,
     blast,
     alarm,
+    breaker,
+    flare,
     hitMarker,
     setEnabled(v) {
       enabled = v;

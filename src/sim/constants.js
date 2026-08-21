@@ -470,6 +470,73 @@ export const LIGHT = {
   loudnessBreak: 12,
 };
 
+// ── The mains ─────────────────────────────────────────────────────────────
+//
+// One cabinet on the terrace feeds every lamp in the flat. Throwing it is the
+// biggest single decision on the map: it costs both sides their eyes at once,
+// and it is worth it only to the side carrying something that sees in the
+// dark. Which is why the attackers carry night vision and the defenders carry
+// something that burns.
+//
+// It is not a secret, either. A breaker that size goes over with a bang the
+// whole storey hears, so cutting the power announces where you were standing.
+export const POWER = {
+  reach: 2.0, // how close you have to be to reach the handle
+  loudness: 40, // metres the clunk carries — the whole flat, on purpose
+  cooldown: 1.2, // seconds before it can be thrown again, either way
+  // What is left when the mains go: the sky over the court and the city
+  // outside the glass. It multiplies the room's ambient rather than replacing
+  // it — the lamps are all out by then, so this is the whole of the light.
+  // Enough to tell a doorway from a wall at three metres, and not nearly
+  // enough to fight by.
+  moonlight: 3.0,
+};
+
+// ── The special item ──────────────────────────────────────────────────────
+//
+// One per side, carried on top of the gun and the device, on its own key. It
+// exists because of the breaker: with the lights on neither of these is worth
+// much, and with the lights out the round is about nothing else.
+//
+// The trade between them is deliberate. Night vision sees everywhere and is
+// beaten by a single burning stick; a flare lights one room and cannot be
+// taken back once it is lit.
+export const SPECIAL = {
+  attackers: {
+    id: 'nvg',
+    name: 'ПНВ',
+    blurb: 'Видно в темноте. Любой яркий свет засвечивает трубку.',
+  },
+  defenders: {
+    id: 'flare',
+    name: 'Фаер',
+    count: 2,
+    blurb: 'Горит 45 с, освещает комнату и слепит ПНВ.',
+  },
+};
+
+export const NVG = {
+  // How much the tube lifts the darkness. Not a floodlight: shapes, doorways
+  // and a man moving, all in one flat green with no depth to it.
+  ambient: 2.2,
+  exposure: 1.55,
+  toggleTime: 0.35,
+  // A flash in the tube is worse than a flash in the naked eye.
+  flashScale: 1.7,
+  // Standing in a flare's light with the tube down: how far the wash-out
+  // reaches, and how blind it leaves you while you are in it.
+  flareRange: 9,
+  flareBlind: 0.55,
+};
+
+export const FLARE = {
+  burn: 45, // seconds it lasts
+  radius: 7, // metres its light reaches
+  intensity: 5.5, // candela, same scale as a room bulb
+  loudness: 6, // it hisses; it does not bang
+  throwSpeed: 7.5, // rolled along the floor rather than lobbed at the ceiling
+};
+
 export const FLASHLIGHT = {
   range: 18,
   angle: 0.42,

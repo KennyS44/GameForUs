@@ -1,18 +1,18 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=728373ac';
+import * as THREE from '../vendor/three.module.js?v=41124dad';
 import {
-  buildScene, syncDoors, syncLights, makeAvatar, poseAvatar, setAvatarWeapon,
-  createEquipmentView,
-} from './render/scene.js?v=728373ac';
-import { createEffects } from './render/effects.js?v=728373ac';
-import { createView } from './render/view.js?v=728373ac';
-import { createHud } from './ui/hud.js?v=728373ac';
-import { DT } from './sim/constants.js?v=728373ac';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=728373ac';
-import { raycastGeometry } from './sim/world.js?v=728373ac';
-import { distXZ } from './sim/math.js?v=728373ac';
+  buildScene, syncDoors, syncLights, syncSmokeFog, makeAvatar, poseAvatar,
+  setAvatarWeapon, createEquipmentView,
+} from './render/scene.js?v=41124dad';
+import { createEffects } from './render/effects.js?v=41124dad';
+import { createView } from './render/view.js?v=41124dad';
+import { createHud } from './ui/hud.js?v=41124dad';
+import { DT, NVG } from './sim/constants.js?v=41124dad';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=41124dad';
+import { raycastGeometry } from './sim/world.js?v=41124dad';
+import { distXZ } from './sim/math.js?v=41124dad';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -196,6 +196,16 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
         case 'smoke':
           audio.blast(ev.pos, 'smoke');
           break;
+        case 'power':
+          audio.breaker(ev.pos, ev.on);
+          hud.banner(ev.on ? 'Электричество восстановлено' : 'Электричество отключено');
+          break;
+        case 'flare':
+          audio.flare(ev.pos);
+          break;
+        case 'nvg':
+          if (ev.by === me.id) audio.click('device');
+          break;
         case 'blinded':
           // Only our own eyes are ours to white out.
           if (ev.id === me.id) hud.blindFlash(ev.amount);
@@ -249,6 +259,12 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
     const target = lookTarget(session.world, session.state, me);
     if (!target) {
       hud.setPrompt(null);
+      return;
+    }
+    if (target.kind === 'switch') {
+      hud.setPrompt(target.on
+        ? `${target.name} · <kbd>F</kbd> вырубить свет во всём здании`
+        : `${target.name} · <kbd>F</kbd> включить свет`);
       return;
     }
     if (target.locked) {
@@ -308,8 +324,14 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
     hud.setClickToPlay(!input.locked);
 
     syncDoors(built, session.state);
-    syncLights(built, session.state, me ? me.pos.y : 0);
-    equipment.sync(session.state, session.world);
+    syncLights(built, session.state, me ? me.pos.y : 0, !!me?.nvg);
+    // Smoke you are standing in is not an object in front of the camera, it is
+    // the air the camera is in — so it is the scene's fog that draws it.
+    syncSmokeFog(built, session.state, view.camera.position);
+    // A tube also opens the iris: everything already lit reads brighter, which
+    // is why a lamp through night vision is painful and a flare is worse.
+    renderer.toneMappingExposure = me?.nvg ? NVG.exposure : 1.0;
+    equipment.sync(session.state, session.world, view.camera);
     syncAvatars();
     effects.update(dtReal);
 

@@ -8,7 +8,7 @@
 // mind as often as you like, press "В бой" when you mean it, and if the clock
 // runs out first the highlighted set is taken as your answer.
 
-import { WEAPONS, WEAPON_CLASSES, GADGETS } from '../sim/constants.js?v=728373ac';
+import { WEAPONS, WEAPON_CLASSES, GADGETS, SPECIAL } from '../sim/constants.js?v=41124dad';
 
 const $ = (id) => document.getElementById(id);
 
@@ -109,6 +109,23 @@ export function createLoadout({ onConfirm }) {
       });
       el.kitRow.appendChild(card);
       kitCards.set(id, card);
+    }
+
+    // And the one thing that is not a choice. It goes at the end of the row,
+    // greyed and unclickable, because a player needs to know it is in his
+    // pocket long before he needs to know he cannot swap it.
+    const own = SPECIAL[forTeam];
+    if (own) {
+      const card = document.createElement('div');
+      card.className = 'weapon-card kit-card fixed';
+      card.innerHTML =
+        '<span class="weapon-head">'
+        + `<span class="weapon-code">${own.name}</span>`
+        + `<span class="weapon-mode">${own.count ? `${own.count} шт` : 'ВКЛ/ВЫКЛ'}</span>`
+        + '</span>'
+        + `<span class="weapon-blurb">${own.blurb}</span>`
+        + '<span class="weapon-stats"><span class="stat">клавиша N, у всей стороны</span></span>';
+      el.kitRow.appendChild(card);
     }
   }
 

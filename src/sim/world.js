@@ -2,8 +2,8 @@
 // geometry, and bullet raycasts that respect material penetration.
 // Pure — no engine types cross this boundary.
 
-import { rayBox, boxOverlaps, clamp } from './math.js?v=728373ac';
-import { DOOR } from './constants.js?v=728373ac';
+import { rayBox, boxOverlaps, clamp } from './math.js?v=41124dad';
+import { DOOR } from './constants.js?v=41124dad';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -134,6 +134,9 @@ export function buildWorld(map) {
     boxes: map.geometry,
     doors,
     lights: map.lights,
+    // Things you can throw that are bolted to the building rather than
+    // carried: today that is the one consumer unit on the terrace.
+    switches: map.switches ?? [],
     bounds: map.bounds,
   };
 }

@@ -220,6 +220,21 @@ function holes(floor) {
   return out.join('\n');
 }
 
+// The consumer unit. Not a way through and not a room — but it is the one
+// thing on the plan that changes every other thing on it, so it is marked.
+function switches(floor) {
+  return (APARTMENT.switches ?? [])
+    .filter((s) => (s.floor ?? 0) === floor)
+    .map((s) => {
+      const x = px(s.pos.x);
+      const y = pz(s.pos.z);
+      // Above the marker: below it is the wall the doorway labels sit under.
+      return `<rect x="${n(x - 8)}" y="${n(y - 8)}" width="16" height="16" class="switch"/>
+<text x="${n(x)}" y="${n(y) - 14}" class="note">${esc(s.name)}</text>`;
+    })
+    .join('\n');
+}
+
 // Ways through a wall that are not doors: a punched hole, an open passage.
 function openings(floor) {
   return (APARTMENT.openings ?? [])
@@ -267,6 +282,7 @@ const STYLE = `
   .blocker.furniture { fill: #e8e0d2; stroke: #b3a892; stroke-width: 1; }
   .hole { fill: none; stroke: #2f6f4f; stroke-width: 2.5; stroke-dasharray: 5 4; }
   .opening { fill: #d7e6dc; stroke: #2f6f4f; stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .switch { fill: #f2d24b; stroke: #7a5f05; stroke-width: 2; }
   .hole.under { stroke: #7fa39a; stroke-width: 1.5; }
   .note { font: 10px system-ui, sans-serif; fill: #4d6a5c; text-anchor: middle; }
   .shaft { fill: #eceef3; stroke: #c9cdd6; stroke-width: 1; }
@@ -313,6 +329,7 @@ ${stairs(floor)}
 ${walls(floor)}
 ${blockers(floor)}
 ${openings(floor)}
+${switches(floor)}
 ${holes(floor)}
 ${doors(floor)}
 ${spawns(floor)}
@@ -326,7 +343,7 @@ const tag = APARTMENT.draft ? ' — ПРОЕКТ, в игру не внесён'
 const ground = plan(0, `${APARTMENT.name}: первый этаж (y = 0)${tag}`,
   'Вход снизу по плану: площадка за входной дверью — спавн штурма. Бежевым — мебель.');
 const upper = plan(1, `${APARTMENT.name}: второй этаж (y = ${F2})${tag}`,
-  'Зелёным — то, что открыто небу; штриховкой — проём вниз; бежевым — мебель.');
+  'Зелёным — то, что открыто небу; штриховкой — проём вниз; бежевым — мебель. Жёлтым — электрощит.');
 writeFileSync(join(ROOT, `docs/${outName}-ground.svg`), ground);
 writeFileSync(join(ROOT, `docs/${outName}-upper.svg`), upper);
 console.log(`docs/${outName}-{ground,upper}.svg — ${n(W)} × ${n(H)} px, ${APARTMENT.rooms.length} rooms, ${world.doors.length} doors`);
