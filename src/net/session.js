@@ -5,12 +5,12 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=41124dad';
+import { buildWorld } from '../sim/world.js?v=dae1d203';
 import {
   createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout, setGadget,
-} from '../sim/sim.js?v=41124dad';
-import { createBotBrain } from '../sim/bot.js?v=41124dad';
-import { DT } from '../sim/constants.js?v=41124dad';
+} from '../sim/sim.js?v=dae1d203';
+import { createBotBrain } from '../sim/bot.js?v=dae1d203';
+import { DT } from '../sim/constants.js?v=dae1d203';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 
@@ -25,9 +25,10 @@ export function createLocalSession({ map, name = 'Игрок', bots = 1, seed = 
   // Defenders do not all carry the same gun: walking into a room and being met
   // by buckshot rather than by a rifle is half of what the roster is for.
   const botGuns = ['ar-556-piston', 'sg-12-pump', 'smg-45-inline', 'ar-545-piston', 'dmr-762'];
-  // Nor the same kit: the first one wires a doorway, the rest hold theirs shut
-  // and shout about it. Staging is when they go and fit it.
-  const botKit = ['trap', 'wedge', 'alarm', 'wedge', 'alarm'];
+  // Nor the same kit: the first one wires a doorway, the second carries flares
+  // for the dark, the rest hold theirs shut and shout about it. Staging is
+  // when the ones with something to fit go and fit it.
+  const botKit = ['trap', 'flare', 'wedge', 'alarm', 'wedge'];
   for (let i = 0; i < bots; i++) {
     const id = `bot${i}`;
     addPlayer(world, state, id, 'defenders', `Бот ${i + 1}`);
@@ -133,10 +134,9 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
         aimAmount: p.aimAmount, grounded: p.grounded,
         weapon: p.weapon, loadout: p.loadout, kills: p.kills, deaths: p.deaths,
         gadget: p.gadget, gadgetLeft: p.gadgetLeft, blind: p.blind,
-        // Night vision is worn where everyone can see it, and how many flares
-        // a man has left is his own HUD's business — both travel anyway, so a
-        // guest's screen agrees with the host's about who is wearing what.
-        special: p.special, specialLeft: p.specialLeft, nvg: p.nvg,
+        // Night vision is worn where everyone can see it, so it travels with
+        // everything else a guest's screen has to agree with the host about.
+        nvg: p.nvg,
         // Carried so a client replaying its pending inputs continues the
         // recoil climb and the jump timer from the host's numbers rather than
         // its own guess.

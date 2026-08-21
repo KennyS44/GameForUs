@@ -1,6 +1,6 @@
 // HUD: reads simulation state, writes DOM. Never the other way round.
 
-import { WEAPONS, GADGETS, SPECIAL, PLAYER } from '../sim/constants.js?v=41124dad';
+import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=dae1d203';
 
 const $ = (id) => document.getElementById(id);
 
@@ -26,10 +26,8 @@ export function createHud() {
     gadgetSlot: $('gadget-slot'),
     gadgetName: $('gadget-name'),
     gadgetLeft: $('gadget-left'),
-    specialSlot: $('special-slot'),
-    specialName: $('special-name'),
-    specialLeft: $('special-left'),
     nvg: $('nvg'),
+    scope: $('scope'),
     banner: $('banner'),
     blindfold: $('blindfold'),
     clickToPlay: $('click-to-play'),
@@ -64,6 +62,12 @@ export function createHud() {
 
   function show(on) {
     el.hud.hidden = !on;
+  }
+
+  // How far into a scope's own sight picture the view is. Driven every frame
+  // by the renderer, because only the viewmodel knows which glass is fitted.
+  function setScope(amount) {
+    el.scope.style.opacity = amount > 0.002 ? String(Math.min(1, amount)) : '0';
   }
 
   function update(state, me, dt) {
@@ -103,24 +107,18 @@ export function createHud() {
     el.flashlightFlag.hidden = !me.flashlight;
 
     // ── Equipment ──
+    // One slot, whatever is in it. A device you spend counts down; a device
+    // you wear says whether it is on, because that is the only thing about it
+    // you can forget.
     const kit = GADGETS[me.gadget];
     if (kit) {
+      const worn = kit.kind === 'toggle';
       el.gadgetName.textContent = kit.name;
-      el.gadgetLeft.textContent = me.gadgetLeft ?? 0;
-      el.gadgetSlot.classList.toggle('empty', (me.gadgetLeft ?? 0) <= 0);
+      el.gadgetLeft.textContent = worn ? (me.nvg ? 'ВКЛ' : 'ВЫКЛ') : (me.gadgetLeft ?? 0);
+      el.gadgetSlot.classList.toggle('empty', worn ? !me.nvg : (me.gadgetLeft ?? 0) <= 0);
+      el.gadgetSlot.classList.toggle('live', worn && !!me.nvg);
     }
 
-    // ── The special item ──
-    // Not a choice, so it does not need a picker — but it does need to be on
-    // the screen, because half of it is a mode you can forget you are in.
-    const special = SPECIAL[me.team];
-    if (special) {
-      const tube = special.id === 'nvg';
-      el.specialName.textContent = special.name;
-      el.specialLeft.textContent = tube ? (me.nvg ? 'ВКЛ' : 'ВЫКЛ') : (me.specialLeft ?? 0);
-      el.specialSlot.classList.toggle('live', tube ? !!me.nvg : (me.specialLeft ?? 0) > 0);
-      el.specialSlot.classList.toggle('empty', tube ? !me.nvg : (me.specialLeft ?? 0) <= 0);
-    }
     el.nvg.classList.toggle('on', !!me.nvg);
 
     if (bannerTimer > 0) {
@@ -229,7 +227,7 @@ export function createHud() {
   }
 
   return {
-    show, blindFlash, banner, update, setPrompt, setClickToPlay, hitMark, killFeed,
+    show, blindFlash, banner, setScope, update, setPrompt, setClickToPlay, hitMark, killFeed,
     scoreboard, setDeathInfo, el,
   };
 }

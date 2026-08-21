@@ -8,9 +8,17 @@
 // mind as often as you like, press "В бой" when you mean it, and if the clock
 // runs out first the highlighted set is taken as your answer.
 
-import { WEAPONS, WEAPON_CLASSES, GADGETS, SPECIAL } from '../sim/constants.js?v=41124dad';
+import { WEAPONS, WEAPON_CLASSES, GADGETS } from '../sim/constants.js?v=dae1d203';
 
 const $ = (id) => document.getElementById(id);
+
+// How each kind of device is worked, in the words the card needs. One key for
+// all of them: what you picked decides what pressing it does.
+const KIT_USE = {
+  throw: 'бросок на G',
+  door: 'ставится на дверь, G',
+  toggle: 'включается на G',
+};
 
 // The three figures that decide a fight, in the units a player thinks in.
 // Buckshot is quoted as the whole pattern — eight pellets of eleven is what
@@ -97,35 +105,16 @@ export function createLoadout({ onConfirm }) {
       card.innerHTML =
         '<span class="weapon-head">'
         + `<span class="weapon-code">${def.name}</span>`
-        + `<span class="weapon-mode">${def.count} шт</span>`
+        + `<span class="weapon-mode">${def.kind === 'toggle' ? 'ВКЛ/ВЫКЛ' : `${def.count} шт`}</span>`
         + '</span>'
         + `<span class="weapon-blurb">${def.blurb}</span>`
-        + `<span class="weapon-stats"><span class="stat">${
-          def.kind === 'throw' ? 'бросок на G' : 'ставится на дверь, G'
-        }</span></span>`;
+        + `<span class="weapon-stats"><span class="stat">${KIT_USE[def.kind]}</span></span>`;
       card.addEventListener('click', () => {
         pending.gadget = id;
         paint();
       });
       el.kitRow.appendChild(card);
       kitCards.set(id, card);
-    }
-
-    // And the one thing that is not a choice. It goes at the end of the row,
-    // greyed and unclickable, because a player needs to know it is in his
-    // pocket long before he needs to know he cannot swap it.
-    const own = SPECIAL[forTeam];
-    if (own) {
-      const card = document.createElement('div');
-      card.className = 'weapon-card kit-card fixed';
-      card.innerHTML =
-        '<span class="weapon-head">'
-        + `<span class="weapon-code">${own.name}</span>`
-        + `<span class="weapon-mode">${own.count ? `${own.count} шт` : 'ВКЛ/ВЫКЛ'}</span>`
-        + '</span>'
-        + `<span class="weapon-blurb">${own.blurb}</span>`
-        + '<span class="weapon-stats"><span class="stat">клавиша N, у всей стороны</span></span>';
-      el.kitRow.appendChild(card);
     }
   }
 

@@ -14,7 +14,7 @@ import {
 } from '../src/sim/sim.js';
 import {
   TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES, DAMAGE, GADGETS,
-  SPECIAL, FLARE,
+  FLARE,
 } from '../src/sim/constants.js';
 import { createHostSession, createLocalSession } from '../src/net/session.js';
 
@@ -1327,36 +1327,52 @@ console.log('\nA door never pushes anyone through a wall:');
     stepSim(world, state, { a1: createInput(), d1: { ...createInput(), use: true } });
     check('nobody works it from another floor', state.power === false);
 
-    // ── The tube.
-    a.specialCooldown = 0;
-    a.useCooldown = 0;
-    stepSim(world, state, { a1: { ...createInput(), special: true }, d1: createInput() });
-    check('the attacker has night vision on the key', a.nvg === true);
+    // ── The tube. It is a kit choice like any other, so it has to be picked
+    // before it is in anyone's hands — and picking it costs the flashbangs.
+    check('night vision is on the attackers\' kit list', GADGETS.nvg.team === 'attackers');
+    check('a defender cannot take it', setGadget(state, 'd1', 'nvg') === false);
+    state.phase = 'prep';
+    check('an attacker can', setGadget(state, 'a1', 'nvg') === true);
+    check('and it replaces what he was carrying', a.gadget === 'nvg', a.gadget);
+    state.phase = 'live';
+
+    a.gadgetCooldown = 0;
+    a.gadgetDown = false;
+    stepSim(world, state, { a1: { ...createInput(), gadget: true }, d1: createInput() });
+    check('the tube goes down on the same key as everything else', a.nvg === true);
+    check('and wearing it spends nothing', a.gadgetLeft === GADGETS.nvg.count,
+      `${a.gadgetLeft}`);
     a.useCooldown = 0;
     stepSim(world, state, { a1: { ...createInput(), toggleLight: true }, d1: createInput() });
-    check('and the torch pushes it back up', a.nvg === false && a.flashlight === true);
-    a.specialCooldown = 0;
-    stepSim(world, state, { a1: { ...createInput(), special: true }, d1: createInput() });
+    check('the torch pushes it back up', a.nvg === false && a.flashlight === true);
+    a.gadgetCooldown = 0;
+    a.gadgetDown = false;
+    stepSim(world, state, { a1: { ...createInput(), gadget: true }, d1: createInput() });
     check('pulling it down again puts the torch out', a.nvg === true && a.flashlight === false);
 
-    // ── The flare.
+    // ── The flare, picked the same way.
     const flares = () => state.throwables.filter((t) => t.kind === 'flare');
+    state.phase = 'prep';
+    check('flares are on the defenders\' list', setGadget(state, 'd1', 'flare') === true);
+    check('and an attacker cannot take them', setGadget(state, 'a1', 'flare') === false);
+    state.phase = 'live';
     d.pos = { x: -9, y: 0, z: -7 };
     d.look = { yaw: -Math.PI / 2, pitch: 0 };
-    d.specialCooldown = 0;
-    const had = d.specialLeft;
+    d.gadgetCooldown = 0;
+    d.gadgetDown = false;
+    const had = d.gadgetLeft;
     stepSim(world, state, {
-      a1: createInput(), d1: { ...createInput(), special: true, yaw: -Math.PI / 2 },
+      a1: createInput(), d1: { ...createInput(), gadget: true, yaw: -Math.PI / 2 },
     });
     check('the defender lights a flare on the same key', flares().length === 1);
-    check('and it comes out of a pocket that empties', d.specialLeft === had - 1,
-      `${d.specialLeft} of ${had}`);
+    check('and it comes out of a pocket that empties', d.gadgetLeft === had - 1,
+      `${d.gadgetLeft} of ${had}`);
 
     for (let i = 0; i < TICK_RATE * 2; i++) {
       stepSim(world, state, { a1: createInput(), d1: createInput() });
     }
     const burning = flares()[0];
-    check('it lands and lies there burning', !!burning && burning.fuse > FLARE.burn - 3,
+    check('it lands and lies there burning', !!burning && burning.fuse > GADGETS.flare.fuse - 3,
       burning ? `${burning.fuse.toFixed(1)} s left` : 'gone');
     check('the floor around it counts as lit', litByFlare(state, burning.pos));
     check('and the next room does not',
@@ -1383,8 +1399,10 @@ console.log('\nA door never pushes anyone through a wall:');
     check('a new round restores the power', state.power === true);
     check('takes the tube off', state.players.a1.nvg === false);
     check('and hands the flares back',
-      state.players.d1.specialLeft === SPECIAL.defenders.count,
-      `${state.players.d1.specialLeft}`);
+      state.players.d1.gadgetLeft === GADGETS.flare.count,
+      `${state.players.d1.gadgetLeft}`);
+    check('the kit choice itself survives the round',
+      state.players.a1.gadget === 'nvg' && state.players.d1.gadget === 'flare');
   }
 
   // ── Bots stage themselves, or the solo player never meets any of this.
@@ -1392,7 +1410,9 @@ console.log('\nA door never pushes anyone through a wall:');
   // This runs on its own world: a session builds one, and the point of the
   // check is the whole loop — kit handed out, staging walked, doors fitted.
   {
-    const solo = createLocalSession({ map: APARTMENT, bots: 2 });
+    // Three of them, because the kit list is no longer all door fittings: one
+    // wires, one carries flares for the dark, one wedges.
+    const solo = createLocalSession({ map: APARTMENT, bots: 3 });
     const idle = createInput();
     for (let i = 0; i < TICK_RATE * (ROUND.selectTime + ROUND.prepTime) && solo.state.phase !== 'live'; i++) {
       solo.tick(idle);
@@ -1401,6 +1421,17 @@ console.log('\nA door never pushes anyone through a wall:');
     check('the defenders fit their kit before the round starts', fitted.length >= 2,
       fitted.join(', '));
     check('and one of them wires a doorway', fitted.includes('trap'), fitted.join(', '));
+
+    // And the one holding flares does nothing with them until the lights go —
+    // then lights one, without being told where.
+    const flareBot = Object.values(solo.state.players).find((p) => p.gadget === 'flare');
+    check('one of them came with flares instead', !!flareBot, flareBot?.gadget);
+    const lit = () => solo.state.throwables.filter((t) => t.kind === 'flare').length;
+    for (let i = 0; i < TICK_RATE * 3; i++) solo.tick(idle);
+    check('and holds on to them while the lights are on', lit() === 0);
+    solo.state.power = false;
+    for (let i = 0; i < TICK_RATE * 3 && lit() === 0; i++) solo.tick(idle);
+    check('cutting the power is what makes it strike one', lit() >= 1, `${lit()} burning`);
   }
 
   // ── A new round clears the flat.

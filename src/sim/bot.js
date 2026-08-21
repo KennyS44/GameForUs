@@ -4,10 +4,10 @@
 // The bot plays the way the map wants to be played: it holds an angle, reacts
 // to sound, and pushes only when it has a reason to.
 
-import { createInput, eyePosition, aimDirection, litByFlare, burningFlares } from './sim.js?v=41124dad';
-import { hasLineOfSight } from './world.js?v=41124dad';
-import { distXZ, clamp } from './math.js?v=41124dad';
-import { BLIND, GADGETS, SPECIAL, FLARE } from './constants.js?v=41124dad';
+import { createInput, eyePosition, aimDirection, litByFlare, burningFlares } from './sim.js?v=dae1d203';
+import { hasLineOfSight } from './world.js?v=dae1d203';
+import { distXZ, clamp } from './math.js?v=dae1d203';
+import { BLIND, GADGETS } from './constants.js?v=dae1d203';
 
 // Indoors nobody picks a figure out of the gloom across the whole map.
 const MAX_SIGHT = 24;
@@ -225,8 +225,8 @@ export function createBotBrain(seed = 7) {
 
 // How far this bot can make out a man standing at `at`. With the lights on it
 // is the length of a room; with them off it is arm's length, and the two ways
-// out of that are the two special items — a tube on your own head, or a flare
-// burning where the other man is standing.
+// out of that are the two things the kit list sells for exactly that — a tube
+// on your own head, or a flare burning where the other man is standing.
 function sightRange(state, bot, at) {
   if (state.power !== false) return MAX_SIGHT;
   if (bot.nvg) return NVG_SIGHT;
@@ -234,30 +234,31 @@ function sightRange(state, bot, at) {
   return DARK_SIGHT;
 }
 
-// What a bot does about the lights going out. Nothing clever: the tube costs
-// nothing to wear, so an attacker puts it on and leaves it on; a defender
-// lights a flare when there is none burning nearby and it still has one.
+// What a bot does about the lights going out — and only if it picked something
+// for the dark, exactly like a player. A bot carrying wedges is as blind as
+// anybody else who spent his slot elsewhere.
 const FLARE_SPACING = 6; // no point stacking two in the same doorway
 
 function handleDarkness(world, state, bot, b, input) {
   if (state.power !== false) return;
-  const own = SPECIAL[bot.team];
-  if (!own) return;
+  if (bot.gadgetLeft <= 0 || bot.gadgetCooldown > 0) return;
 
-  if (own.id === 'nvg') {
-    if (!bot.nvg) input.special = true;
+  // The tube costs nothing to wear, so it goes on and stays on.
+  if (bot.gadget === 'nvg') {
+    if (!bot.nvg) input.gadget = true;
     return;
   }
+  if (bot.gadget !== 'flare') return;
 
-  if (bot.specialLeft <= 0 || bot.specialCooldown > 0) return;
   // Only where it would help. A bot that drops one at its feet every few
   // seconds turns the defence into a runway.
   for (const t of burningFlares(state)) {
     if (distXZ(t.pos, bot.pos) < FLARE_SPACING) return;
   }
-  if (state.time - (b.lastFlare ?? -99) < FLARE.burn * 0.5) return;
+  const burn = GADGETS.flare.fuse ?? 45;
+  if (state.time - (b.lastFlare ?? -99) < burn * 0.5) return;
   b.lastFlare = state.time;
-  input.special = true;
+  input.gadget = true;
 }
 
 // Walk to a doorway and fit whatever is being carried to it. Returns false

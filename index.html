@@ -10,8 +10,8 @@
 <meta name="description" content="Хардкорный тактический шутер в тёмном двухэтажном пентхаусе: свет, звук и двери решают больше, чем реакция.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <!-- Written by tools/stamp-version.mjs; the page checks it against version.txt. -->
-<meta name="gameforus-version" content="41124dad">
-<link rel="stylesheet" href="styles.css?v=41124dad">
+<meta name="gameforus-version" content="dae1d203">
+<link rel="stylesheet" href="styles.css?v=dae1d203">
 </head>
 <body>
 
@@ -27,6 +27,35 @@
   </div>
 
   <div class="hitmarker" id="hitmarker" aria-hidden="true"></div>
+  <!-- Looking down a scope. Magnified glass does not show you a crosshair
+       floating in a room, it shows you a circle of picture with the inside of
+       the tube all around it — so the sight picture is drawn here, over the
+       whole screen, and the weapon is taken out of the way. Reference: any
+       scoped rifle in Rainbow Six, Tarkov or Zero Hour. -->
+  <div class="scope" id="scope" aria-hidden="true">
+    <div class="scope-shade"></div>
+    <svg class="scope-reticle" viewBox="-50 -50 100 100" fill="none">
+      <!-- A German #4, which is what a marksman's glass actually carries:
+           three heavy posts that find the middle of the picture for you in bad
+           light, a fine cross in the gap where the aiming happens, and mil
+           marks along it to hold over with. Every line is drawn twice — pale
+           underneath so it reads against a dark doorway, dark on top so it
+           reads against a lit wall. -->
+      <g class="under">
+        <path class="post" d="M-47 0H-14M47 0H14M0 47V30"/>
+        <path class="fine" d="M-14 0H14M0-33V30"/>
+        <path class="fine" d="M-31 -2.4V2.4M-21 -1.8V1.8M21 -1.8V1.8M31 -2.4V2.4"/>
+        <path class="fine" d="M-2.4 22H2.4M-1.8 13H1.8"/>
+      </g>
+      <g class="over">
+        <path class="post" d="M-47 0H-14M47 0H14M0 47V30"/>
+        <path class="fine" d="M-14 0H14M0-33V30"/>
+        <path class="fine" d="M-31 -2.4V2.4M-21 -1.8V1.8M21 -1.8V1.8M31 -2.4V2.4"/>
+        <path class="fine" d="M-2.4 22H2.4M-1.8 13H1.8"/>
+      </g>
+      <circle class="scope-pip" cx="0" cy="0" r="0.85"/>
+    </svg>
+  </div>
   <!-- Night vision. A green wash and a hard round edge to the tube: the
        screen stops being a window and starts being one eyepiece. -->
   <div class="nvg" id="nvg" aria-hidden="true"></div>
@@ -70,14 +99,6 @@
         <span class="gadget-key">G</span>
         <span class="gadget-name" id="gadget-name">Светошумовая</span>
         <span class="gadget-left" id="gadget-left">2</span>
-      </span>
-      <!-- The side's own item: the tube for the attackers, flares for the
-           defenders. Not chosen at the loadout screen — you get what your
-           side carries. -->
-      <span class="gadget special" id="special-slot">
-        <span class="gadget-key">N</span>
-        <span class="gadget-name" id="special-name">ПНВ</span>
-        <span class="gadget-left" id="special-left">—</span>
       </span>
     </div>
   </div>
@@ -154,7 +175,6 @@
         <div><dt>F в тихом шаге</dt><dd>приоткрыть тихо</dd></div>
         <div><dt>V</dt><dd>выбить дверь ногой</dd></div>
         <div><dt>G</dt><dd>снаряжение: бросить или поставить на дверь</dd></div>
-        <div><dt>N</dt><dd>спецпредмет: ПНВ у штурма, фаер у обороны</dd></div>
         <div><dt>F у щитка</dt><dd>вырубить свет во всём здании (терраса)</dd></div>
         <div><dt>T</dt><dd>фонарь</dd></div>
         <div><dt>B</dt><dd>таблица счёта</dd></div>
@@ -220,9 +240,10 @@
       <p class="hint">
         Пока идёт отсчёт, обе стороны стоят на месте. Дальше — полминуты
         подготовки: оборона расходится по квартире, штурм ждёт на площадке.
-        Снаряжение ставится и бросается клавишей <b>G</b>, спецпредмет —
-        клавишей <b>N</b>. На террасе есть электрощит: <b>F</b> у него гасит
-        свет во всём здании, обеим сторонам сразу.
+        Снаряжение ставится, бросается и включается клавишей <b>G</b> — один
+        слот на всё, так что ПНВ вместо светошумовых и фаеры вместо клиньев.
+        На террасе есть электрощит: <b>F</b> у него гасит свет во всём здании,
+        обеим сторонам сразу.
       </p>
       <p class="loadout-source">
         С одного попадания не убивает ничто, кроме AMR-50 — и той нужна прямая
@@ -428,6 +449,6 @@
   window.addEventListener('load', function () { window.setTimeout(offerUpdate, 1200); });
 })();
 </script>
-<script type="module" src="src/main.js?v=41124dad"></script>
+<script type="module" src="src/main.js?v=dae1d203"></script>
 </body>
 </html>

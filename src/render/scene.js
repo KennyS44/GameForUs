@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=41124dad';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=41124dad';
-import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=41124dad';
-import { buildWeaponModel } from './weapons.js?v=41124dad';
+import * as THREE from '../../vendor/three.module.js?v=dae1d203';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=dae1d203';
+import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=dae1d203';
+import { buildWeaponModel } from './weapons.js?v=dae1d203';
 
 // How much light there is in a room with every lamp in it switched off. Kept
 // here rather than inline because three different places have to agree on it:
@@ -399,7 +399,7 @@ const DEVICE_COLOR = {
 // ── Smoke ─────────────────────────────────────────────────────────────────
 
 const SMOKE_TINT = new THREE.Color(0x9aa0a9);
-const PUFFS = 13;
+const PUFFS = 16;
 
 // One soft disc, drawn once into a canvas: white in the middle, nothing at the
 // rim. Everything about the shape of a cloud comes from stacking these.
@@ -443,25 +443,60 @@ const PUFF_LAYOUT = (() => {
       size: 1.0 + rnd() * 0.45,
       spin: rnd() * Math.PI * 2,
       rate: (rnd() - 0.5) * 0.42,
+      // Its own brightness and its own thickness. Without these the billows
+      // all agree with each other and with the ball underneath, and a cloud
+      // comes out as one smooth grey sphere — which is not what smoke is.
+      tint: 0.80 + rnd() * 0.34,
+      thick: 0.58 + rnd() * 0.22,
     });
   }
   return out;
 })();
 
+// A cloud is a solid core with a frayed edge stuck to it.
+//
+// Billboards alone are not smoke you cannot see through: however many are
+// stacked, each one is partly transparent, and from outside the far wall shows
+// faintly through the middle of the cloud — which is the one thing a smoke
+// grenade must never allow, because the simulation has already decided nobody
+// can see through it. So the middle is a plain opaque ball, and the billboards
+// are only there to break its edge into something that looks like smoke rather
+// than like a balloon.
+const CORE_RADIUS = 0.68;
+
 function makeCloud(scene, geo, mat) {
   const group = new THREE.Group();
   const material = mat.clone();
+
+  // Opaque, front faces only: from outside it is a wall, and from inside it is
+  // not drawn at all — in there the scene's fog is what blinds you.
+  const coreMat = new THREE.MeshBasicMaterial({ color: SMOKE_TINT.clone() });
+  const core = new THREE.Mesh(coreGeometry(), coreMat);
+  group.add(core);
+
+  // A material each, so every billow can carry its own shade. Sixteen of them
+  // per cloud and at most a handful of clouds in a round: cheaper than it
+  // sounds, and it is the whole difference between smoke and a grey balloon.
   const puffs = PUFF_LAYOUT.map((p) => {
-    const mesh = new THREE.Mesh(geo, material);
+    const mat2 = material.clone();
+    const mesh = new THREE.Mesh(geo, mat2);
     mesh.position.set(p.x, p.y, p.z);
     mesh.scale.setScalar(p.size);
-    mesh.userData.spin = p.spin;
-    mesh.userData.rate = p.rate;
+    mesh.userData = { spin: p.spin, rate: p.rate, tint: p.tint, thick: p.thick, mat: mat2 };
     group.add(mesh);
     return mesh;
   });
   scene.add(group);
-  return { group, puffs, material };
+  return { group, puffs, material, core, coreMat };
+}
+
+// One sphere, shared by every cloud on the map.
+let coreGeo = null;
+function coreGeometry() {
+  // Enough segments that the edge of the ball never reads as a polygon
+  // through the billowing round it.
+  if (!coreGeo) coreGeo = new THREE.SphereGeometry(1, 32, 22);
+  return coreGeo;
 }
 
 // How much light is falling on a point, on a scale where 1 is a well-lit room.
@@ -656,18 +691,29 @@ export function createEquipmentView(scene) {
       if (!c) continue;
       cloud.group.position.set(c.pos.x, c.pos.y + 0.55, c.pos.z);
       cloud.group.scale.setScalar(Math.max(0.05, c.radius * c.grown));
-      cloud.material.opacity = 0.52 * Math.min(1, c.grown * 1.6);
+      const fill = Math.min(1, c.grown * 1.6);
+      // The solid middle. It arrives once the can has actually filled and it
+      // shrinks away before the edge does, so a cloud coming up and a cloud
+      // burning out both fray — rather than a ball switching on and off in a
+      // doorway.
+      const solid = Math.max(0, Math.min(1, (c.grown - 0.22) / 0.6));
+      cloud.core.visible = solid > 0.01;
+      cloud.core.scale.setScalar(CORE_RADIUS * solid);
       // Smoke has no light of its own. It is as bright as the room it is
       // standing in — which means a cloud in a lit hallway is a white wall,
       // and the same cloud after somebody throws the breaker is a black one.
-      cloud.material.color.copy(SMOKE_TINT).multiplyScalar(litness(state, world, c.pos));
+      const lit = litness(state, world, c.pos);
+      cloud.coreMat.color.copy(SMOKE_TINT).multiplyScalar(lit);
       // Billboards face the camera; the slow spin is what keeps them from
-      // reading as a stack of flat cards.
-      if (camera) {
-        for (const puff of cloud.puffs) {
-          puff.quaternion.copy(camera.quaternion);
-          puff.rotateZ(puff.userData.spin + state.time * puff.userData.rate);
-        }
+      // reading as a stack of flat cards, and the per-billow shade is what
+      // keeps the whole thing from reading as one ball.
+      for (const puff of cloud.puffs) {
+        const u = puff.userData;
+        u.mat.color.copy(SMOKE_TINT).multiplyScalar(lit * u.tint);
+        u.mat.opacity = u.thick * fill;
+        if (!camera) continue;
+        puff.quaternion.copy(camera.quaternion);
+        puff.rotateZ(u.spin + state.time * u.rate);
       }
     }
 

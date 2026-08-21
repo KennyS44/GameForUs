@@ -386,10 +386,6 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 /* A device card has no blueprint above it, so it needs its own floor to sit
    at the same height as a weapon card in the row above. */
 .kit-card { min-height: 132px; }
-/* The side's own item. Shown for the same reason the others are, and dimmed
-   because there is nothing here to decide. */
-.kit-card.fixed { cursor: default; opacity: 0.72; }
-.kit-card.fixed:hover { border-color: var(--line); }
 .loadout-status {
   font-family: var(--mono);
   font-size: 14px;
@@ -407,6 +403,49 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 .loadout-source a { color: var(--accent); }
 
 /* ── HUD ─────────────────────────────────────────────────────────────── */
+
+/* The scope's sight picture.
+
+   A magnified optic does not look like a crosshair floating in the room; it
+   looks like a circle of picture with the inside of the tube around it, and
+   nothing else on the screen at all. Two layers do that: a black surround with
+   a round hole cut in it, and the reticle drawn to the same circle. The weapon
+   itself is taken out of the pass by the renderer, because a rifle across the
+   middle of a sight picture is a rifle in the way. */
+.scope {
+  position: absolute;
+  inset: 0;
+  z-index: 21;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s linear;
+}
+.scope-shade {
+  position: absolute;
+  inset: 0;
+  /* `closest-side` measures to the nearest edge, so the hole stays a circle of
+     78% of the screen height whatever the window's shape. */
+  background: radial-gradient(circle closest-side at 50% 50%,
+    rgba(0, 0, 0, 0) 0 74%,
+    rgba(0, 0, 0, 0.55) 76.5%,
+    #040507 80%, #040507 100%);
+}
+.scope-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 74%;           /* exactly the hole the shade cuts, so nothing spills */
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+}
+.scope-reticle path { stroke-linecap: butt; }
+.scope-reticle .under path { stroke: rgba(226, 232, 240, 0.45); }
+.scope-reticle .over path { stroke: rgba(8, 10, 13, 0.9); }
+.scope-reticle .under .post { stroke-width: 2.6; }
+.scope-reticle .over  .post { stroke-width: 1.8; }
+.scope-reticle .under .fine { stroke-width: 1.1; }
+.scope-reticle .over  .fine { stroke-width: 0.45; }
+.scope-pip { fill: #ff2f1c; }
 
 .blindfold {
   position: fixed;
@@ -477,8 +516,8 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 }
 .gadget.empty { opacity: 0.4; }
 /* The tube, while it is down: the one HUD element that is lit rather than dim. */
-.gadget.special.live .gadget-name,
-.gadget.special.live .gadget-left { color: #6ee7a0; }
+.gadget.live .gadget-name,
+.gadget.live .gadget-left { color: #6ee7a0; }
 .gadget-key {
   border: 1px solid var(--line);
   border-radius: 4px;

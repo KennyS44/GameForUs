@@ -7,15 +7,15 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-  GADGETS, DEFAULT_GADGET, BLIND, SPECIAL, NVG, FLARE, POWER,
-} from './constants.js?v=41124dad';
+  GADGETS, DEFAULT_GADGET, BLIND, NVG, FLARE, POWER,
+} from './constants.js?v=dae1d203';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=41124dad';
+} from './math.js?v=dae1d203';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=41124dad';
+} from './world.js?v=dae1d203';
 
 const GRAVITY = 18;
 
@@ -27,8 +27,6 @@ export function createInput() {
     lean: 0,
     fire: false, aim: false, reload: false,
     use: false, kick: false, toggleLight: false, gadget: false,
-    // The side's own special item: the attackers' tube, the defenders' flare.
-    special: false,
   };
 }
 
@@ -68,14 +66,9 @@ function createPlayer(id, team, spawn, name) {
     gadget: DEFAULT_GADGET[team],
     gadgetLeft: GADGETS[DEFAULT_GADGET[team]].count,
     gadgetCooldown: 0,
-    // The special item is not a choice — each side has exactly one, and it is
-    // the reason cutting the power is a plan rather than a nuisance.
-    special: SPECIAL[team].id,
-    specialLeft: SPECIAL[team].count ?? 0,
-    specialCooldown: 0,
-    specialDown: false,
-    // Night vision: attackers only, and only while they hold it down over
-    // their eyes. A torch and a tube are not worn at the same time.
+    // Night vision: only if it was the device they picked, and only while
+    // they have it down over their eyes. A torch and a tube are never worn at
+    // the same time.
     nvg: false,
     // 0 is seeing normally, 1 is a white screen. Only a flash sets it.
     blind: 0,
@@ -617,6 +610,19 @@ function useGadget(world, state, p) {
   const def = GADGETS[p.gadget];
   if (!def || p.gadgetLeft <= 0 || p.gadgetCooldown > 0) return false;
 
+  // Worn, not spent: the tube goes up and down as often as you like, and it
+  // sits in the same slot everything else does, so wearing it is what you
+  // gave your flashbangs up for.
+  if (def.kind === 'toggle') {
+    p.nvg = !p.nvg;
+    // A torch and a tube are never worn together: one of them exists to make
+    // the other pointless.
+    if (p.nvg) p.flashlight = false;
+    p.gadgetCooldown = NVG.toggleTime;
+    emit(state, { type: 'nvg', on: p.nvg, by: p.id });
+    return true;
+  }
+
   if (def.kind === 'door') {
     const found = doorInReach(world, state, p, 1.9);
     if (!found) return false;
@@ -639,21 +645,34 @@ function useGadget(world, state, p) {
 
   const eye = eyePosition(p);
   const dir = aimDirection(p);
+  // A grenade is lobbed underarm and a flare is rolled along the floor, so
+  // both the speed and the lift belong to the kit entry rather than to this
+  // function. Everything unstated throws like a grenade.
+  const speed = def.throwSpeed ?? THROW_SPEED;
+  const lift = def.lift ?? THROW_LIFT;
+  const drop = def.lift == null ? 0.1 : 0.3; // rolled from lower down
   state.throwables.push({
     kind: p.gadget,
     by: p.id,
     team: p.team,
-    pos: { x: eye.x + dir.x * 0.4, y: eye.y - 0.1 + dir.y * 0.4, z: eye.z + dir.z * 0.4 },
+    pos: { x: eye.x + dir.x * 0.4, y: eye.y - drop + dir.y * 0.4, z: eye.z + dir.z * 0.4 },
     vel: {
-      x: dir.x * THROW_SPEED + p.vel.x,
-      y: dir.y * THROW_SPEED + THROW_LIFT,
-      z: dir.z * THROW_SPEED + p.vel.z,
+      x: dir.x * speed + p.vel.x,
+      y: dir.y * speed + lift,
+      z: dir.z * speed + p.vel.z,
     },
     fuse: def.fuse,
   });
   p.gadgetLeft--;
   p.gadgetCooldown = 0.7;
-  emit(state, { type: 'throw', kind: p.gadget, by: p.id });
+  // A grenade makes its noise when it goes off; a flare makes its only noise
+  // when it is struck, because it never goes off at all.
+  if (p.gadget === 'flare') {
+    makeNoise(state, eye, def.loudness ?? 6, 'flare', p.id);
+    emit(state, { type: 'flare', pos: { ...eye }, by: p.id });
+  } else {
+    emit(state, { type: 'throw', kind: p.gadget, by: p.id });
+  }
   return true;
 }
 
@@ -690,50 +709,6 @@ function throwBreaker(world, state, p) {
   // was standing on the terrace when they did.
   makeNoise(state, found.sw.pos, POWER.loudness, 'power', p.id);
   emit(state, { type: 'power', on: state.power, pos: { ...found.sw.pos }, by: p.id });
-  return true;
-}
-
-// ── The special item ──────────────────────────────────────────────────────
-//
-// One key, two entirely different things, because the sides are not symmetric:
-// the attackers put a tube over their eyes and the defenders set fire to a
-// stick. Both are answers to the same question — what do you do about a flat
-// with no power in it — and each is the other's counter.
-function useSpecial(world, state, p) {
-  const def = SPECIAL[p.team];
-  if (!def || p.specialCooldown > 0) return false;
-
-  if (def.id === 'nvg') {
-    p.nvg = !p.nvg;
-    // A torch and a tube are not worn at the same time: one of them exists to
-    // make the other pointless.
-    if (p.nvg) p.flashlight = false;
-    p.specialCooldown = NVG.toggleTime;
-    emit(state, { type: 'nvg', on: p.nvg, by: p.id });
-    return true;
-  }
-
-  if (p.specialLeft <= 0) return false;
-  const eye = eyePosition(p);
-  const dir = aimDirection(p);
-  // Rolled along the floor rather than lobbed at the ceiling: a flare is
-  // placed where you want the light, and it stays where it stops.
-  state.throwables.push({
-    kind: 'flare',
-    by: p.id,
-    team: p.team,
-    pos: { x: eye.x + dir.x * 0.4, y: eye.y - 0.3 + dir.y * 0.4, z: eye.z + dir.z * 0.4 },
-    vel: {
-      x: dir.x * FLARE.throwSpeed + p.vel.x,
-      y: dir.y * FLARE.throwSpeed + 0.6,
-      z: dir.z * FLARE.throwSpeed + p.vel.z,
-    },
-    fuse: FLARE.burn,
-  });
-  p.specialLeft--;
-  p.specialCooldown = 0.7;
-  makeNoise(state, eye, FLARE.loudness, 'flare', p.id);
-  emit(state, { type: 'flare', pos: { ...eye }, by: p.id });
   return true;
 }
 
@@ -1129,11 +1104,7 @@ function stepPlayer(world, state, p, input, dt) {
     p.useCooldown = 0.25;
   }
 
-  // ── The special item ──
-  p.specialCooldown = Math.max(0, p.specialCooldown - dt);
-  const wantsSpecial = input.special && !p.specialDown;
-  p.specialDown = !!input.special;
-  if (wantsSpecial) useSpecial(world, state, p);
+  // A tube that is down is a tube anything bright can fill with white.
   stepNightVision(world, state, p);
 
   // ── Doors ──
@@ -1502,12 +1473,6 @@ export function resetRound(world, state) {
     p.gadgetLeft = GADGETS[gadgetId].count;
     p.gadgetCooldown = 0;
     p.gadgetDown = false;
-    // The special item is not chosen, so there is nothing to remember: each
-    // side gets its own back, unlit and switched off.
-    p.special = SPECIAL[p.team].id;
-    p.specialLeft = SPECIAL[p.team].count ?? 0;
-    p.specialCooldown = 0;
-    p.specialDown = false;
     p.nvg = false;
     p.blind = 0;
   }

@@ -1,18 +1,18 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=41124dad';
+import * as THREE from '../vendor/three.module.js?v=dae1d203';
 import {
   buildScene, syncDoors, syncLights, syncSmokeFog, makeAvatar, poseAvatar,
   setAvatarWeapon, createEquipmentView,
-} from './render/scene.js?v=41124dad';
-import { createEffects } from './render/effects.js?v=41124dad';
-import { createView } from './render/view.js?v=41124dad';
-import { createHud } from './ui/hud.js?v=41124dad';
-import { DT, NVG } from './sim/constants.js?v=41124dad';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=41124dad';
-import { raycastGeometry } from './sim/world.js?v=41124dad';
-import { distXZ } from './sim/math.js?v=41124dad';
+} from './render/scene.js?v=dae1d203';
+import { createEffects } from './render/effects.js?v=dae1d203';
+import { createView } from './render/view.js?v=dae1d203';
+import { createHud } from './ui/hud.js?v=dae1d203';
+import { DT, NVG } from './sim/constants.js?v=dae1d203';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=dae1d203';
+import { raycastGeometry } from './sim/world.js?v=dae1d203';
+import { distXZ } from './sim/math.js?v=dae1d203';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -317,6 +317,8 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
       view.update(me, dtReal, moving, wallAhead(me));
       // Whatever the sight is magnifying, the mouse is divided by.
       input.setZoom(view.zoom);
+      // ...and if that glass is a scope, the screen becomes the eyepiece.
+      hud.setScope(view.scoped);
       audio.setListener(view.camera.position, forwardOf(view.camera));
       hud.update(session.state, me, dtReal);
       updatePrompt();

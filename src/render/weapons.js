@@ -10,7 +10,7 @@
 // is the silhouette — a bullpup with the magazine on its back is not the same
 // shape as a sawn-off, and that difference is the whole point of the roster.
 
-import * as THREE from '../../vendor/three.module.js?v=41124dad';
+import * as THREE from '../../vendor/three.module.js?v=dae1d203';
 
 const MM = 0.001;
 
@@ -29,7 +29,7 @@ const MATS = {
   rubber: new THREE.MeshStandardMaterial({
     color: 0x0c0d10, roughness: 1.0, metalness: 0.0, emissive: 0x060709,
   }),
-  // Webbing: the sling, and anything else woven.
+  // Webbing: the cuff at the end of a sleeve, and anything else woven.
   webbing: new THREE.MeshStandardMaterial({
     color: 0x262a31, roughness: 1.0, metalness: 0.0, emissive: 0x090b0e,
   }),
@@ -69,6 +69,12 @@ const MATS = {
   housing: new THREE.MeshStandardMaterial({
     color: 0x1b1d22, roughness: 0.6, metalness: 0.5, emissive: 0x0a0c10,
     side: THREE.DoubleSide,
+  }),
+  // The ring of light around the inside of a sight's glass. Anyone who has
+  // looked through a red dot has seen it, and without it these tubes read as
+  // holes cut in a black block rather than as optics.
+  rim: new THREE.MeshBasicMaterial({
+    color: 0x7d9cb2, transparent: true, opacity: 0.38, depthWrite: false, toneMapped: false,
   }),
 };
 
@@ -241,7 +247,7 @@ const BUILDS = {
 
   // 5.45 long-stroke piston: the gas tube above the barrel is the profile.
   'ar-545-piston': {
-    oal: 940, grip: 500, support: 178, sight: [462, 87],
+    oal: 940, grip: 500, support: 178, sight: [462, 87], optic: 'holo',
     parts: [
       ['rod', 0, 68, 16, 'steel'],
       ['rod', 60, 300, 9, 'steel'],
@@ -266,7 +272,7 @@ const BUILDS = {
 
   // 5.56 short-stroke piston: continuous rail, telescoping stock.
   'ar-556-piston': {
-    oal: 800, grip: 554, support: 212, sight: [484, 84],
+    oal: 800, grip: 554, support: 212, sight: [484, 84], optic: 'holo',
     parts: [
       ['rod', 0, 60, 14, 'steel'],
       ['rod', 52, 368, 9, 'steel'],
@@ -290,7 +296,7 @@ const BUILDS = {
 
   // 5.56 with a monolithic rail and a folding stock: longer, flatter on top.
   'ar-556-folder': {
-    oal: 890, grip: 572, support: 206, sight: [480, 86],
+    oal: 890, grip: 572, support: 206, sight: [480, 86], optic: 'holo',
     parts: [
       ['rod', 0, 62, 15, 'steel'],
       ['rod', 54, 351, 9, 'steel'],
@@ -312,7 +318,7 @@ const BUILDS = {
 
   // Sawn-off double: two barrels, a break-action frame and nothing else.
   'sg-12-double': {
-    oal: 420, grip: 370, support: 176, sling: false, sight: [359, 74],
+    oal: 420, grip: 370, support: 176, sight: [359, 74],
     parts: [
       ['slab', 0, 300, 3, 26, 46, 'steel'],
       ['slab', 0, 300, -26, -3, 46, 'steel'],
@@ -331,7 +337,7 @@ const BUILDS = {
 
   // Pump gun: the magazine tube under the barrel and a forend that rides it.
   'sg-12-pump': {
-    oal: 1000, grip: 636, support: 226, sight: [570, 78],
+    oal: 1000, grip: 636, support: 226, sight: [570, 78], optic: 'holo',
     parts: [
       ['slab', 0, 52, -22, 22, 40, 'steel'],
       ['rod', 46, 470, 11, 'steel'],
@@ -354,7 +360,7 @@ const BUILDS = {
 
   // Magazine-fed semi-auto 12 gauge: a rifle's layout, everything thicker.
   'sg-12-mag': {
-    oal: 940, grip: 522, support: 180, sight: [444, 89],
+    oal: 940, grip: 522, support: 180, sight: [444, 89], optic: 'holo',
     parts: [
       ['rod', 0, 58, 18, 'steel'],
       ['rod', 50, 290, 11, 'steel'],
@@ -455,7 +461,6 @@ export function buildWeaponModel(id, { hands = true } = {}) {
 
   if (hands) addHands(group, def, z);
   addOptic(group, def, z, scale);
-  addSling(group, def, z);
 
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, 0, z(-20));
@@ -470,6 +475,9 @@ export function buildWeaponModel(id, { hands = true } = {}) {
   return {
     group, muzzle, sight, scale,
     arms: group.userData.arms ?? null,
+    // Which sight is fitted, so the runtime knows whether aiming means looking
+    // over a rail or looking down a tube.
+    optic: def.optic ?? 'dot',
     zoom: def.optic === 'scope' ? 2.4 : 1,
   };
 }
@@ -616,34 +624,36 @@ function limbAlong(group, mat, from, dir, len, radius) {
   return mesh;
 }
 
-// A two-point sling, hanging where a sling hangs: off the handguard, under
-// the weapon, and back onto the stock. It is the piece that says the thing in
-// your hands is carried rather than spawned, and it is one tube.
-function addSling(group, def, z) {
-  if (def.sling === false) return;
-  const curve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(0.006, -0.030, z(def.support - 10)),
-    new THREE.Vector3(0.016, -0.150, z((def.support + def.oal) / 2)),
-    new THREE.Vector3(0.008, -0.022, z(def.oal - 90)),
-  ]);
-  const strap = new THREE.Mesh(
-    new THREE.TubeGeometry(curve, 14, 0.0055, 5, false),
-    MATS.webbing,
-  );
-  group.add(strap);
-}
-
 // ── Optics ─────────────────────────────────────────────────────────────────
 //
-// Every sight on the roster is a tube you look through, and until now there
-// was nothing inside it. Now there is a mark.
+// Three sights, drawn after the three every game this one is measured against
+// puts on a rifle. They differ in what is inside the glass, which is the only
+// part of a sight you actually spend a round looking at:
 //
-// A reticle is projected light, not a painted part: a dot sized in real
+//   'dot'   — a reflex sight. One dot, nothing around it. Zero Hour's, and
+//             Siege's red dot: the cleanest sight picture on the roster, so it
+//             goes on the SMGs, where the fight is close and fast.
+//   'holo'  — a holographic sight, drawn off the EOTech everyone copies: a
+//             ring with a dot in the middle of it. The real one is a 68 MOA
+//             ring around a 1 MOA dot, which is why the ring is wide enough to
+//             frame a man at room distance and the dot small enough to aim
+//             with. Rifles and the fighting shotguns.
+//   'scope' — magnified glass. What a scope looks like is not a cross floating
+//             in a room, it is a circle of picture with black all round it, so
+//             that one is drawn over the screen rather than inside the tube —
+//             see `#scope` in index.html and `syncScope` in view.js.
+//
+// A reticle is projected light, not a painted part: a mark sized in real
 // millimetres would be a fraction of a pixel across, so these are sized to
 // what they must be on screen and divided back out of the weapon's viewmodel
 // scale, which is why an AMR's mark is the same size as an SMG's.
-const DOT_RADIUS = 0.0052;   // on-screen size of a collimator dot
+const DOT_RADIUS = 0.0046;   // on-screen size of an aiming dot
 const LINE = 0.0011;         // thickness of an etched crosshair line
+
+// The mark, sized by the glass it is projected onto rather than by the screen:
+// a ring has to fit inside the window whatever tube it is in.
+const RING_OUTER = 0.62;     // fraction of the glass radius
+const RING_WIDTH = 0.085;    // ...and how thick the ring is drawn
 
 function addOptic(group, def, z, scale) {
   const tube = def.parts.find((p) => p[0] === 'sight');
@@ -652,15 +662,23 @@ function addOptic(group, def, z, scale) {
   const y = def.sight[1] * MM;
   const at = z(def.sight[0]);
   const s = 1 / scale;
+  const kind = def.optic ?? 'dot';
 
   // Glass across the front of the tube, in front of the mark.
-  const lens = new THREE.Mesh(new THREE.CircleGeometry(inner, 20), MATS.lens);
+  const lens = new THREE.Mesh(new THREE.CircleGeometry(inner, 24), MATS.lens);
   lens.position.set(0, y, z(tube[1] + 10));
   group.add(lens);
 
-  if (def.optic === 'scope') {
-    // Marksman glass: an etched cross with a gap in the middle, a couple of
-    // holdover marks under it, and the centre dot lit up.
+  // ...and the ring of light where the glass meets the housing. It is the one
+  // detail that separates "an optic" from "a hole in a black block".
+  const rim = new THREE.Mesh(new THREE.RingGeometry(inner * 0.88, inner, 28), MATS.rim);
+  rim.position.set(0, y, z(tube[1] + 12));
+  group.add(rim);
+
+  if (kind === 'scope') {
+    // Inside the tube: a plain fine cross, because at this size the tube is a
+    // few pixels across and the sight picture the player actually reads is the
+    // full-screen one. This is what somebody standing beside you would see.
     const bar = (w, h, x, dy) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.0006), MATS.etch);
       m.position.set(x, y + dy, at);
@@ -672,22 +690,62 @@ function addOptic(group, def, z, scale) {
     bar(reach - gap, LINE * s, gap + (reach - gap) / 2, 0);
     bar(LINE * s, reach - gap, 0, gap + (reach - gap) / 2);
     bar(LINE * s, reach - gap, 0, -(gap + (reach - gap) / 2));
-    for (const drop of [0.3, 0.55, 0.8]) {
-      bar(inner * 0.2, LINE * s * 0.8, 0, -reach * drop);
-    }
-    const core = new THREE.Mesh(new THREE.CircleGeometry(DOT_RADIUS * s * 0.55, 10), MATS.dot);
+    const core = new THREE.Mesh(new THREE.CircleGeometry(DOT_RADIUS * s * 0.5, 10), MATS.dot);
     core.position.set(0, y, at + 0.0004);
     group.add(core);
     return;
   }
 
-  // Everything else carries a collimator: one floating dot, nothing round it
-  // to hide a body behind, which is the whole reason to fit one.
-  const halo = new THREE.Mesh(new THREE.CircleGeometry(DOT_RADIUS * s * 2.1, 14), MATS.glow);
+  if (kind === 'holo') {
+    // The hood: two cheeks and a roof, squared off around a round window. It
+    // is the silhouette that tells a holographic sight from a red dot at a
+    // glance, and it is the reason this one looks like a box on the rail.
+    // `tube` is ['sight', front, rear, radius, y], so the housing runs from
+    // tube[1] to tube[2] — the hood covers the front half of it.
+    const wall = inner * 0.22;
+    const deep = Math.abs(tube[2] - tube[1]) * MM * 0.55;
+    const mid = z(tube[1] + Math.abs(tube[2] - tube[1]) * 0.27);
+    const cheek = (side) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(wall, inner * 2.05, deep), MATS.housing);
+      m.position.set(side * (inner + wall * 0.75), y, mid);
+      group.add(m);
+    };
+    cheek(-1);
+    cheek(1);
+    const roof = new THREE.Mesh(
+      new THREE.BoxGeometry(inner * 2 + wall * 3, wall, deep),
+      MATS.housing,
+    );
+    roof.position.set(0, y + inner + wall * 0.6, mid);
+    group.add(roof);
+
+    // The mark: a wide ring for finding a man in a doorway, a small dot in the
+    // middle of it for hitting him.
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(inner * (RING_OUTER - RING_WIDTH), inner * RING_OUTER, 40),
+      MATS.dot,
+    );
+    ring.position.set(0, y, at);
+    group.add(ring);
+    const glow = new THREE.Mesh(
+      new THREE.RingGeometry(inner * (RING_OUTER - RING_WIDTH * 2.2), inner * (RING_OUTER + RING_WIDTH * 1.2), 40),
+      MATS.glow,
+    );
+    glow.position.set(0, y, at - 0.0002);
+    group.add(glow);
+    const core = new THREE.Mesh(new THREE.CircleGeometry(DOT_RADIUS * s * 0.55, 12), MATS.dot);
+    core.position.set(0, y, at + 0.0004);
+    group.add(core);
+    return;
+  }
+
+  // A reflex sight: one floating dot, nothing round it to hide a body behind,
+  // which is the whole reason to fit one instead of the ring above.
+  const halo = new THREE.Mesh(new THREE.CircleGeometry(DOT_RADIUS * s * 2.3, 16), MATS.glow);
   halo.position.set(0, y, at);
   group.add(halo);
 
-  const core = new THREE.Mesh(new THREE.CircleGeometry(DOT_RADIUS * s, 14), MATS.dot);
+  const core = new THREE.Mesh(new THREE.CircleGeometry(DOT_RADIUS * s, 16), MATS.dot);
   core.position.set(0, y, at + 0.0004);
   group.add(core);
 }

@@ -360,9 +360,10 @@ export const WEAPON_CLASSES = [
 // through a door and takes the room's senses away; defence makes every door
 // cost time and noise.
 //
-// Two kinds, and the difference is how you deliver them:
-//   'throw' — lobbed underarm, bounces, then goes off on its fuse.
-//   'door'  — fitted to the door you are looking at, within arm's reach.
+// Three kinds, and the difference is how you deliver them:
+//   'throw'  — lobbed underarm, bounces, then goes off on its fuse.
+//   'door'   — fitted to the door you are looking at, within arm's reach.
+//   'toggle' — worn rather than spent: the key switches it on and off.
 //
 // Nothing here breaks the rule the guns follow: the hardest blast in the list
 // takes 70 of 100, so a device wounds and warns, it does not delete anyone.
@@ -426,6 +427,22 @@ export const GADGETS = {
     name: 'Сигнализация', team: 'defenders', kind: 'door', count: 2,
     blurb: 'Дверь открыли — вой на весь этаж. Слышно за 34 м.',
     loudness: 34,
+  },
+  // The two answers to a flat with its power cut. They sit in the same list as
+  // everything else on purpose: carrying the tube costs an attacker his
+  // flashbangs, and carrying flares costs a defender his wedges. Cutting the
+  // mains is only a plan if somebody paid for it at the loadout screen.
+  nvg: {
+    name: 'ПНВ', team: 'attackers', kind: 'toggle', count: 1,
+    blurb: 'Видно в темноте. Любой яркий свет засвечивает трубку.',
+  },
+  flare: {
+    name: 'Фаер', team: 'defenders', kind: 'throw', count: 3,
+    blurb: 'Горит 45 с, освещает комнату и слепит ПНВ.',
+    // Rolled along the floor rather than lobbed at the ceiling: a flare is
+    // placed where you want the light, and it never goes off — its fuse is
+    // simply how long it burns.
+    fuse: 45, throwSpeed: 7.5, lift: 0.6, loudness: 6,
   },
 };
 
@@ -492,29 +509,13 @@ export const POWER = {
   moonlight: 3.0,
 };
 
-// ── The special item ──────────────────────────────────────────────────────
+// The two items the breaker exists for are picked from the kit list like
+// everything else — see GADGETS.nvg and GADGETS.flare. What lives here is how
+// they behave once they are in your hands.
 //
-// One per side, carried on top of the gun and the device, on its own key. It
-// exists because of the breaker: with the lights on neither of these is worth
-// much, and with the lights out the round is about nothing else.
-//
-// The trade between them is deliberate. Night vision sees everywhere and is
-// beaten by a single burning stick; a flare lights one room and cannot be
+// The trade between them is deliberate: night vision sees everywhere and is
+// beaten by a single burning stick, and a flare lights one room and cannot be
 // taken back once it is lit.
-export const SPECIAL = {
-  attackers: {
-    id: 'nvg',
-    name: 'ПНВ',
-    blurb: 'Видно в темноте. Любой яркий свет засвечивает трубку.',
-  },
-  defenders: {
-    id: 'flare',
-    name: 'Фаер',
-    count: 2,
-    blurb: 'Горит 45 с, освещает комнату и слепит ПНВ.',
-  },
-};
-
 export const NVG = {
   // How much the tube lifts the darkness. Not a floodlight: shapes, doorways
   // and a man moving, all in one flat green with no depth to it.
@@ -530,11 +531,10 @@ export const NVG = {
 };
 
 export const FLARE = {
-  burn: 45, // seconds it lasts
+  // How long it burns is GADGETS.flare.fuse — one number, in the kit entry,
+  // so the card a player reads and the stick on the floor cannot disagree.
   radius: 7, // metres its light reaches
   intensity: 5.5, // candela, same scale as a room bulb
-  loudness: 6, // it hisses; it does not bang
-  throwSpeed: 7.5, // rolled along the floor rather than lobbed at the ceiling
 };
 
 export const FLASHLIGHT = {

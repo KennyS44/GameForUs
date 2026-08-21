@@ -1,10 +1,10 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=41124dad';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=41124dad';
-import { lerp } from '../sim/math.js?v=41124dad';
-import { buildWeaponModel } from './weapons.js?v=41124dad';
+import * as THREE from '../../vendor/three.module.js?v=dae1d203';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=dae1d203';
+import { lerp } from '../sim/math.js?v=dae1d203';
+import { buildWeaponModel } from './weapons.js?v=dae1d203';
 
 export function createView(scene) {
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.02, 120);
@@ -92,10 +92,36 @@ export function createView(scene) {
   // mouse down by the same amount: glass that magnifies the target magnifies
   // the twitch as well, and a scope that turns like a red dot is unusable.
   let zoomNow = 1;
+  // How far into a scope's own sight picture we are: 0 at the hip, 1 with the
+  // eyepiece filling the screen. The HUD reads it every frame.
+  let scoped = 0;
   let lastYaw = 0;
   let lastRecoilPitch = 0;
   let lastRecoilYaw = 0;
   let lastBurstShots = 0;
+
+  // ── What aiming does to the camera the weapon is drawn with ──
+  //
+  // The sights used to come up and change almost nothing: the optic stayed a
+  // metre from the eye and four per cent of the screen high, so aiming a rifle
+  // read as looking down at the top of one. A real sight picture is the other
+  // way round — the glass is a hand's width from your eye and fills a third of
+  // what you can see, and the barrel runs away from it into the distance.
+  //
+  // Two numbers get that without pretending the eye is really 80 mm behind the
+  // rail (at which distance the stock would be through the back of your head):
+  //
+  //   ADS_SIGHT_DIST — where the weapon's own sight sits when the aim is up.
+  //   ADS_FOV        — the viewmodel pass's field of view at that moment.
+  //
+  // The narrow field is what does the work. It magnifies the whole viewmodel
+  // about three times while the world keeps its own wide angle, so the optic
+  // grows to the size it should be, the parts nearer the muzzle recede the way
+  // they do along a real rifle, and nothing about where the rounds go moves —
+  // the mark is on the axis, and the axis is the middle of the screen.
+  const ADS_SIGHT_DIST = 0.40;
+  const ADS_FOV = 32;
+  let viewFov = FOV;
 
   // How close a wall has to be before the muzzle would be inside it. The
   // viewmodel is drawn over the world, so without this the barrel appears to
@@ -175,24 +201,35 @@ export function createView(scene) {
     lastRecoilYaw = player.recoil.yaw;
     smoothed.recoilRoll = lerp(smoothed.recoilRoll + kickedYaw * 2.5, 0, Math.min(1, dt * 12));
 
-    // Far enough forward that the stock never crowds the near plane — a gun
-    // model straddling the eye reads as a grey slab across the screen.
-    //
-    // ADS is computed rather than tuned: the offset is whatever puts this
-    // weapon's own sight on the middle of the screen. A scope sits 130 mm over
-    // the bore and an SMG's optic 50 mm, and neither needs a magic number.
-    // Carried, not posed. The old hip sat the weapon nine degrees off the line
-    // of the screen, which reads as a man holding his rifle sideways — and
-    // since the rounds go where the crosshair is and not where the barrel
-    // points, it also reads as a lie. Two degrees of cant is a carry; nine is
-    // a photograph.
+    // Carried, not posed. The hip keeps the weapon far enough forward that the
+    // stock never crowds the near plane — a gun model straddling the eye reads
+    // as a grey slab across the screen — and turned a couple of degrees across
+    // the body, which is a carry. Nine degrees, which this used to have, is a
+    // photograph: a man holding his rifle sideways while the rounds go where
+    // the crosshair is.
+    const t = smoothed.aim;
+    weapon.group.scale.setScalar(weapon.scale);
+
+    // The viewmodel's own lens narrows as the sights come up. Only when it
+    // actually moves: rebuilding a projection matrix every frame of a round is
+    // work for nothing.
+    const wantFov = lerp(FOV, ADS_FOV, t);
+    if (Math.abs(wantFov - viewFov) > 0.01) {
+      viewFov = wantFov;
+      viewCamera.fov = viewFov;
+      viewCamera.updateProjectionMatrix();
+    }
+
+    // ADS is computed rather than tuned: whatever puts this weapon's own sight
+    // on the middle of the screen, a fixed distance from the eye. A scope sits
+    // 130 mm over the bore and an SMG's optic 50 mm, and neither needs a magic
+    // number of its own.
     const hip = { x: 0.155, y: -0.205, z: -0.60 };
     const ads = {
       x: -weapon.sight.position.x * weapon.scale,
       y: -weapon.sight.position.y * weapon.scale,
-      z: -0.60,
+      z: -ADS_SIGHT_DIST - weapon.sight.position.z * weapon.scale,
     };
-    const t = smoothed.aim;
     weapon.group.position.set(
       lerp(hip.x, ads.x, t) + smoothed.sway.x * (1 - t * 0.7) + bobX * 0.8,
       lerp(hip.y, ads.y, t) + smoothed.sway.y + bobY * 0.8,
@@ -201,11 +238,13 @@ export function createView(scene) {
     // At the hip the weapon is carried on the right and turned a few degrees
     // across the body, so what the eye gets is its side — receiver, magazine,
     // the hands on it — rather than the back of a stock pointing at the lens.
-    // Aiming swings all of that onto the sight line.
+    // The muzzle rides a touch low, the way a rifle is actually carried
+    // between low ready and the shoulder. Aiming swings all of that onto the
+    // sight line.
     weapon.group.rotation.set(
-      lerp(0.045, 0, t) + smoothed.recoilKick * 1.4,
-      lerp(0.115, 0, t) + smoothed.sway.x * 0.6 + smoothed.recoilRoll * 0.8,
-      lerp(0.055, 0, t) + smoothed.recoilRoll,
+      lerp(-0.055, 0, t) + smoothed.recoilKick * 1.4,
+      lerp(0.125, 0, t) + smoothed.sway.x * 0.6 + smoothed.recoilRoll * 0.8,
+      lerp(0.062, 0, t) + smoothed.recoilRoll,
     );
 
     // Up against a wall: pull the weapon in and raise the muzzle, the way you
@@ -223,11 +262,12 @@ export function createView(scene) {
     }
 
     // Aiming folds the arms down and back: at the eye they are behind the
-    // weapon, not beside it.
+    // weapon, not beside it, and a forearm across the sight picture is the
+    // one thing a sight picture must not have in it.
     if (weapon.arms) {
-      weapon.arms.rotation.x = t * 0.42;
-      weapon.arms.position.y = -t * 0.05;
-      weapon.arms.position.z = t * 0.03;
+      weapon.arms.rotation.x = t * 0.85;
+      weapon.arms.position.y = -t * 0.12;
+      weapon.arms.position.z = t * 0.06;
     }
 
     // Reloading dips the weapon out of view.
@@ -250,7 +290,13 @@ export function createView(scene) {
       torch.target.updateMatrixWorld();
     }
 
-    weapon.group.visible = player.alive;
+    // Down a scope there is no weapon to see. Magnified glass fills the whole
+    // eye — a circle of picture with black around it, which the HUD draws —
+    // and a rifle drawn across the middle of that is a rifle in the way. Every
+    // game with a real scope does this; ours just does it a frame earlier.
+    scoped = weapon.optic === 'scope' ? Math.max(0, (t - 0.55) / 0.4) : 0;
+    scoped = Math.min(1, scoped);
+    weapon.group.visible = player.alive && scoped < 0.98;
 
     if (viewMuzzleLife > 0) {
       viewMuzzleLife -= dt;
@@ -283,6 +329,9 @@ export function createView(scene) {
     // How much the sight is magnifying right now: 1 at the hip, up to the
     // weapon's own figure at full aim.
     get zoom() { return zoomNow; },
+    // ...and how much of the screen the eyepiece has taken over, which is only
+    // ever non-zero on the two weapons with glass on them.
+    get scoped() { return scoped; },
     // A getter, not the object: the model is replaced whenever the player
     // picks a different weapon.
     get weapon() { return weapon; },
