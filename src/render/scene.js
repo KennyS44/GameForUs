@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=dae1d203';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=dae1d203';
-import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=dae1d203';
-import { buildWeaponModel } from './weapons.js?v=dae1d203';
+import * as THREE from '../../vendor/three.module.js?v=aa2e2025';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=aa2e2025';
+import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=aa2e2025';
+import { buildWeaponModel } from './weapons.js?v=aa2e2025';
 
 // How much light there is in a room with every lamp in it switched off. Kept
 // here rather than inline because three different places have to agree on it:
@@ -17,29 +17,63 @@ const DOOR_THICKNESS = 0.06;
 // CC0 textures from Poly Haven — see vendor/textures/LICENSE.txt.
 // Only the surfaces you spend the most time staring at get maps; the rest stay
 // flat colours so the page stays light.
+//
+// Three maps each, and the third one is what stopped these surfaces looking
+// painted. A colour map says what a wall is; a normal map says which way its
+// bumps face; and until now every one of them was told to be exactly as shiny
+// as every other part of itself, because roughness was one number for the
+// whole material. Real plaster is not: it is duller where it is scuffed and
+// glossier where it has been wiped, parquet is a lacquer that has worn thin in
+// places, and grout is flat next to porcelain that is not.
+//
+// `arm` is Poly Haven's packed map, and it carries three of those answers at
+// once — occlusion in the red channel, roughness in green, metalness in blue —
+// so one file does the work of three. They are data rather than pictures and
+// nobody ever looks at one directly, which is why they are compressed harder
+// than the colour maps and still cost less than a tenth of the folder.
 const TEXTURES = {
-  concrete: { map: 'concrete_diff.jpg', normal: 'concrete_nor.jpg', metresPerTile: 3.0 },
-  floor: { map: 'floor_diff.jpg', normal: 'floor_nor.jpg', metresPerTile: 2.4 },
-  drywall: { map: 'drywall_diff.jpg', normal: 'drywall_nor.jpg', metresPerTile: 3.4, normalScale: 0.45 },
+  // Tiled tighter than they used to be. Plaster at three and a half metres to
+  // the tile is a smooth beige field with a suggestion of grain in it; at two
+  // it is a wall you can see the trowel marks on.
+  concrete: {
+    map: 'concrete_diff.jpg', normal: 'concrete_nor.jpg', arm: 'concrete_arm.jpg',
+    metresPerTile: 2.4,
+  },
+  floor: {
+    map: 'floor_diff.jpg', normal: 'floor_nor.jpg', arm: 'floor_arm.jpg',
+    metresPerTile: 1.9,
+  },
+  drywall: {
+    map: 'drywall_diff.jpg', normal: 'drywall_nor.jpg', arm: 'drywall_arm.jpg',
+    metresPerTile: 2.2, normalScale: 0.7,
+  },
   // Doors and furniture: walnut veneer, tiled at the size veneer actually
   // comes in, so a door reads as a door and not as a brown block.
   // `tint` multiplies the map. Walls and floors keep the photograph's own
   // colour; furniture does not — the flat is meant to be dark walnut and dark
   // cloth, and a scan of pale veneer would repaint the whole penthouse.
   wood: {
-    map: 'wood_diff.jpg', normal: 'wood_nor.jpg',
+    map: 'wood_diff.jpg', normal: 'wood_nor.jpg', arm: 'wood_arm.jpg',
     metresPerTile: 1.4, normalScale: 0.6, tint: 0x7d6144,
   },
   // Large-format porcelain, laid at 1.2 m to the tile — the floor of a
   // bathroom you would find in a flat like this one.
-  tile: { map: 'tile_diff.jpg', normal: 'tile_nor.jpg', metresPerTile: 1.2, normalScale: 0.7 },
+  tile: {
+    map: 'tile_diff.jpg', normal: 'tile_nor.jpg', arm: 'tile_arm.jpg',
+    metresPerTile: 1.2, normalScale: 0.7,
+  },
   // Sofas and beds. The weave is small and tiles tight — at three metres it is
   // the difference between upholstery and a painted crate.
   fabric: {
-    map: 'fabric_diff.jpg', normal: 'fabric_nor.jpg',
+    map: 'fabric_diff.jpg', normal: 'fabric_nor.jpg', arm: 'fabric_arm.jpg',
     metresPerTile: 0.55, normalScale: 1.0, tint: 0x878390,
   },
 };
+
+// How much of its own sheen each surface keeps once the map has spoken. The
+// map carries the pattern — where a floor is worn and where it is not — and
+// this is the one dial left: a multiplier, not a replacement.
+const ROUGHNESS = { floor: 0.85, wood: 0.9, tile: 0.72, concrete: 1.0, drywall: 1.0, fabric: 1.0 };
 
 const textureLoader = new THREE.TextureLoader();
 const textureCache = new Map();
@@ -50,7 +84,9 @@ function loadTexture(file, { srgb }) {
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 4;
+    // Floors and corridors are nearly always seen at a glancing angle, which
+    // is exactly where a texture smears without this.
+    tex.anisotropy = 8;
     textureCache.set(file, tex);
   }
   return textureCache.get(file);
@@ -75,17 +111,27 @@ function materialFor(def) {
       const s = tex.normalScale ?? 0.8;
       params.normalScale = new THREE.Vector2(s, s);
     }
+    if (tex.arm) {
+      // One file, three jobs. Three.js reads occlusion out of the red channel,
+      // roughness out of the green and metalness out of the blue, so the same
+      // texture is handed to all three slots — and because every one of them
+      // is a multiplier, the numbers beside it stay meaningful.
+      const arm = loadTexture(tex.arm, { srgb: false });
+      params.aoMap = arm;
+      params.roughnessMap = arm;
+      params.metalnessMap = arm;
+      params.roughness = ROUGHNESS[def.name] ?? 1;
+      // Nothing in this flat is metal except the metal, and the blue channel
+      // of all six of these is zero — so this multiplies out to nothing and
+      // exists only so the map is read at all.
+      params.metalness = 1;
+      // Occlusion is the shadow a surface casts into its own dents. At full
+      // strength it reads as dirt; this is enough to give the grain depth.
+      params.aoMapIntensity = 0.85;
+    }
   }
 
-  if (def.name === 'floor') {
-    // Lacquered parquet: enough sheen to catch a torch beam down a corridor.
-    params.roughness = 0.55;
-  } else if (def.name === 'wood') {
-    params.roughness = 0.62;
-  } else if (def.name === 'tile') {
-    // Glazed: wetter-looking than parquet, and it throws the torch back.
-    params.roughness = 0.32;
-  } else if (def.name === 'metal') {
+  if (def.name === 'metal') {
     params.roughness = 0.45;
     params.metalness = 0.75;
   } else if (def.name === 'glass') {
@@ -95,34 +141,41 @@ function materialFor(def) {
     params.metalness = 0.25;
     params.transparent = true;
     params.opacity = 0.45;
-  } else if (def.name === 'fabric') {
-    params.roughness = 1.0;
-  } else if (def.name === 'concrete') {
-    params.roughness = 0.98;
   }
   return new THREE.MeshStandardMaterial(params);
 }
 
-// BoxGeometry gives every face UVs from 0 to 1, so one texture would stretch
-// across a 15 m wall and repeat identically on a 0.4 m shelf. Rescaling the UVs
-// by each face's real size keeps the grain the same everywhere.
+// Texture coordinates taken from where a surface is in the flat, not from
+// which box it happens to belong to.
 //
-// Face order is +X, -X, +Y, -Y, +Z, -Z, four vertices each.
-function applyBoxUv(geometry, sx, sy, sz, metresPerTile) {
+// BoxGeometry gives every face UVs from 0 to 1, so one texture would stretch
+// across a 15 m wall and repeat identically on a 0.4 m shelf. Rescaling by each
+// face's real size fixes the stretching but not the worse half of the problem:
+// a wall with a doorway in it is three boxes — the panel to the left, the panel
+// to the right and the lintel over the top — and each one started its own copy
+// of the plaster at its own corner. The grain stopped dead at every join, which
+// on a wall is a visible seam running floor to ceiling beside every door.
+//
+// So the pattern is nailed to the building instead. Each vertex is projected
+// along whichever axis its face points down — a wall takes its coordinates from
+// the floor plan, a floor from the plan seen from above — and divided by the
+// tile size. Two boxes that touch now continue each other's grain, because they
+// are reading the same wall out of the same texture at the same place.
+function applyWorldUv(geometry, centre, metresPerTile) {
+  const pos = geometry.attributes.position;
+  const nor = geometry.attributes.normal;
   const uv = geometry.attributes.uv;
-  const spans = [
-    [sz, sy], [sz, sy], // ±X
-    [sx, sz], [sx, sz], // ±Y
-    [sx, sy], [sx, sy], // ±Z
-  ];
-  for (let face = 0; face < 6; face++) {
-    const [du, dv] = spans[face];
-    const su = du / metresPerTile;
-    const sv = dv / metresPerTile;
-    for (let i = 0; i < 4; i++) {
-      const idx = face * 4 + i;
-      uv.setXY(idx, uv.getX(idx) * su, uv.getY(idx) * sv);
-    }
+  const s = 1 / metresPerTile;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i) + centre.x;
+    const y = pos.getY(i) + centre.y;
+    const z = pos.getZ(i) + centre.z;
+    const nx = Math.abs(nor.getX(i));
+    const ny = Math.abs(nor.getY(i));
+    // Whichever way the face looks is the axis that gets dropped.
+    if (nx > 0.5) uv.setXY(i, z * s, y * s);
+    else if (ny > 0.5) uv.setXY(i, x * s, z * s);
+    else uv.setXY(i, x * s, y * s);
   }
   uv.needsUpdate = true;
   return geometry;
@@ -211,16 +264,33 @@ export function buildScene(world) {
   };
 
   // ── Static geometry ──
+  //
+  // Every box is drawn a millimetre and a half bigger than it is.
+  //
+  // A wall with a doorway in it is three boxes that meet exactly: the panel to
+  // the left ends on the same plane the lintel begins on. Exactly is the
+  // problem — two surfaces that share an edge and nothing more leave a hairline
+  // of whatever is behind them showing through as the triangles are rasterised,
+  // and on this map that read as a lit seam running floor to ceiling beside
+  // every door. Overlapping the neighbours closes it.
+  //
+  // Only the picture grows. Collision, bullets and doors all read `world.boxes`
+  // and never see this, so nothing in the flat is a millimetre bigger to walk
+  // into or to shoot than it is to look at.
+  const SEAM = 0.0015;
   const staticGroup = new THREE.Group();
   for (const b of world.boxes) {
     const sx = b.max.x - b.min.x;
     const sy = b.max.y - b.min.y;
     const sz = b.max.z - b.min.z;
-    const geo = new THREE.BoxGeometry(sx, sy, sz);
+    const geo = new THREE.BoxGeometry(sx + SEAM, sy + SEAM, sz + SEAM);
+    const centre = {
+      x: b.min.x + sx / 2, y: b.min.y + sy / 2, z: b.min.z + sz / 2,
+    };
     const tiling = TEXTURES[b.material.name]?.metresPerTile;
-    if (tiling) applyBoxUv(geo, sx, sy, sz, tiling);
+    if (tiling) applyWorldUv(geo, centre, tiling);
     const mesh = new THREE.Mesh(geo, getMat(b.material));
-    mesh.position.set(b.min.x + sx / 2, b.min.y + sy / 2, b.min.z + sz / 2);
+    mesh.position.set(centre.x, centre.y, centre.z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     staticGroup.add(mesh);
@@ -234,9 +304,23 @@ export function buildScene(world) {
     const pivot = new THREE.Group();
     pivot.position.set(door.hinge.x, door.floorY ?? 0, door.hinge.z);
 
-    const geo = new THREE.BoxGeometry(door.width, DOOR_HEIGHT, DOOR_THICKNESS);
+    // The leaf is drawn a little larger than the hole it fills.
+    //
+    // A door hangs on hinges screwed to the face of the jamb, so a shut one
+    // stands in front of its opening rather than inside it — and the opening is
+    // 2.1 m tall where the leaf is 2.05, which left a finger's width of the
+    // next room showing right round the top and sides of every closed door in
+    // the flat. Lit from the other side that reads as a glowing outline, which
+    // is the single most blockout-looking thing in the place. A real door laps
+    // its frame; this one laps it by four centimetres.
+    const OVERLAP = 0.04;
+    const leafW = door.width + OVERLAP * 2;
+    const leafH = DOOR_HEIGHT + OVERLAP * 2;
+    const geo = new THREE.BoxGeometry(leafW, leafH, DOOR_THICKNESS);
     const mesh = new THREE.Mesh(geo, getMat(door.material));
-    mesh.position.set(door.width / 2, DOOR_HEIGHT / 2, 0);
+    // Still hung off the same hinge: the lap goes back over the jamb, not out
+    // into the doorway, so the panel swings exactly where it always did.
+    mesh.position.set(door.width / 2 - OVERLAP, leafH / 2 - OVERLAP, 0);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     pivot.add(mesh);

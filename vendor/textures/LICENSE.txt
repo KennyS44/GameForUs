@@ -6,12 +6,16 @@ for any purpose, commercial or not, with no attribution required.
 
 Attribution is given here anyway, because the people who made them deserve it.
 
-  concrete_diff.jpg, concrete_nor.jpg   from "concrete_wall_008"
-  drywall_diff.jpg, drywall_nor.jpg     from "plastered_wall"
-  floor_diff.jpg, floor_nor.jpg         from "wood_floor"
-  wood_diff.jpg, wood_nor.jpg           from "black_walnut_veneer_01"
-  fabric_diff.jpg, fabric_nor.jpg       from "cotton_jersey"
-  tile_diff.jpg, tile_nor.jpg           from "floor_tiles_02"
+  concrete_{diff,nor,arm}.jpg   from "concrete_wall_008"
+  drywall_{diff,nor,arm}.jpg    from "plastered_wall"
+  floor_{diff,nor,arm}.jpg      from "wood_floor"
+  wood_{diff,nor,arm}.jpg       from "black_walnut_veneer_01"
+  fabric_{diff,nor,arm}.jpg     from "cotton_jersey"
+  tile_{diff,nor,arm}.jpg       from "floor_tiles_02"
 
-All downsampled to 1K and re-encoded as progressive JPEG at quality 88:
-twelve maps in 1.6 MB, which is less than the five they replaced.
+The `arm` maps are Poly Haven's packed ones: ambient occlusion in the red
+channel, roughness in green, metalness in blue. One file does the work of
+three, and since they carry numbers rather than a picture they are cut to 768
+px and quality 78 — six of them together weigh less than one colour map.
+
+Colour and normal maps are 1K at quality 88. Eighteen maps in 1.9 MB.

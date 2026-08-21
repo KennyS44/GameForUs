@@ -1,18 +1,18 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=dae1d203';
+import * as THREE from '../vendor/three.module.js?v=aa2e2025';
 import {
   buildScene, syncDoors, syncLights, syncSmokeFog, makeAvatar, poseAvatar,
   setAvatarWeapon, createEquipmentView,
-} from './render/scene.js?v=dae1d203';
-import { createEffects } from './render/effects.js?v=dae1d203';
-import { createView } from './render/view.js?v=dae1d203';
-import { createHud } from './ui/hud.js?v=dae1d203';
-import { DT, NVG } from './sim/constants.js?v=dae1d203';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=dae1d203';
-import { raycastGeometry } from './sim/world.js?v=dae1d203';
-import { distXZ } from './sim/math.js?v=dae1d203';
+} from './render/scene.js?v=aa2e2025';
+import { createEffects } from './render/effects.js?v=aa2e2025';
+import { createView } from './render/view.js?v=aa2e2025';
+import { createHud } from './ui/hud.js?v=aa2e2025';
+import { DT, NVG } from './sim/constants.js?v=aa2e2025';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=aa2e2025';
+import { raycastGeometry } from './sim/world.js?v=aa2e2025';
+import { distXZ } from './sim/math.js?v=aa2e2025';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
