@@ -238,11 +238,11 @@
 <rect x="539.8" y="414.4" width="23.4" height="41.6" class="blocker rubble"/>
 <rect x="563.2" y="511.9" width="20.8" height="23.4" class="blocker blocked"/>
 <text x="573.6" y="549.3" class="note">Мешает пройти, но не мешает стрелять</text>
-<rect x="90" y="144" width="31.2" height="78" class="blocker furniture"/>
-<rect x="91.3" y="145.3" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="91.3" y="219.1" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="118.3" y="145.3" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="118.3" y="219.1" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="90" y="144" width="31.2" height="78" class="blocker furniture" transform="rotate(-11.5 105.6 183)"/>
+<rect x="84.2" y="148.7" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-11.5 85 149.5)"/>
+<rect x="98.9" y="221.1" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-11.5 99.7 221.9)"/>
+<rect x="110.7" y="143.3" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-11.5 111.5 144.1)"/>
+<rect x="125.4" y="215.7" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-11.5 126.2 216.5)"/>
 <rect x="299.3" y="332.5" width="39" height="18.2" class="blocker furniture"/>
 <rect x="298" y="331.2" width="41.6" height="20.8" class="blocker furniture"/>
 <rect x="297.6" y="330.8" width="42.4" height="21.6" class="blocker furniture"/>
@@ -269,35 +269,35 @@
 <rect x="641.2" y="118" width="41.6" height="1.8" class="blocker furniture"/>
 <rect x="642.5" y="121.1" width="39" height="42.4" class="blocker furniture"/>
 <rect x="641.2" y="119.8" width="41.6" height="45" class="blocker furniture"/>
-<rect x="407.2" y="297.4" width="57.2" height="26" class="blocker furniture"/>
-<rect x="408.5" y="298.7" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="408.5" y="320.5" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="461.5" y="298.7" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="461.5" y="320.5" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="411.9" y="280" width="11.4" height="11.4" class="blocker furniture"/>
-<rect x="412.7" y="280.8" width="1" height="1" class="blocker furniture"/>
-<rect x="412.7" y="289.6" width="1" height="1" class="blocker furniture"/>
-<rect x="421.5" y="280.8" width="1" height="1" class="blocker furniture"/>
-<rect x="421.5" y="289.6" width="1" height="1" class="blocker furniture"/>
-<rect x="411.9" y="280" width="11.4" height="1" class="blocker furniture"/>
-<rect x="448.3" y="280" width="11.4" height="11.4" class="blocker furniture"/>
-<rect x="449.1" y="280.8" width="1" height="1" class="blocker furniture"/>
-<rect x="449.1" y="289.6" width="1" height="1" class="blocker furniture"/>
-<rect x="457.9" y="280.8" width="1" height="1" class="blocker furniture"/>
-<rect x="457.9" y="289.6" width="1" height="1" class="blocker furniture"/>
-<rect x="448.3" y="280" width="11.4" height="1" class="blocker furniture"/>
-<rect x="411.9" y="329.4" width="11.4" height="11.4" class="blocker furniture"/>
-<rect x="412.7" y="330.2" width="1" height="1" class="blocker furniture"/>
-<rect x="412.7" y="339" width="1" height="1" class="blocker furniture"/>
-<rect x="421.5" y="330.2" width="1" height="1" class="blocker furniture"/>
-<rect x="421.5" y="339" width="1" height="1" class="blocker furniture"/>
-<rect x="411.9" y="339.8" width="11.4" height="1" class="blocker furniture"/>
-<rect x="448.3" y="329.4" width="11.4" height="11.4" class="blocker furniture"/>
-<rect x="449.1" y="330.2" width="1" height="1" class="blocker furniture"/>
-<rect x="449.1" y="339" width="1" height="1" class="blocker furniture"/>
-<rect x="457.9" y="330.2" width="1" height="1" class="blocker furniture"/>
-<rect x="457.9" y="339" width="1" height="1" class="blocker furniture"/>
-<rect x="448.3" y="339.8" width="11.4" height="1" class="blocker furniture"/>
+<rect x="407.2" y="297.4" width="57.2" height="26" class="blocker furniture" transform="rotate(-19.5 435.8 310.4)"/>
+<rect x="406.4" y="308.2" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-19.5 407.2 308.9)"/>
+<rect x="413.7" y="328.8" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-19.5 414.4 329.5)"/>
+<rect x="456.4" y="290.5" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-19.5 457.2 291.3)"/>
+<rect x="463.7" y="311.1" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-19.5 464.4 311.9)"/>
+<rect x="404.7" y="287.5" width="11.4" height="11.4" class="blocker furniture" transform="rotate(-19.5 410.4 293.2)"/>
+<rect x="404.2" y="290" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 404.8 290.5)"/>
+<rect x="407.2" y="298.3" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 407.7 298.8)"/>
+<rect x="412.6" y="287" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 413.1 287.5)"/>
+<rect x="415.5" y="295.4" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 416 295.9)"/>
+<rect x="403" y="287.8" width="11.4" height="1" class="blocker furniture" transform="rotate(-19.5 408.7 288.3)"/>
+<rect x="439" y="275.3" width="11.4" height="11.4" class="blocker furniture" transform="rotate(-19.5 444.7 281)"/>
+<rect x="438.6" y="277.8" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 439.1 278.4)"/>
+<rect x="441.5" y="286.2" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 442 286.7)"/>
+<rect x="446.9" y="274.9" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 447.4 275.4)"/>
+<rect x="449.8" y="283.2" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 450.4 283.7)"/>
+<rect x="437.3" y="275.6" width="11.4" height="1" class="blocker furniture" transform="rotate(-19.5 443 276.1)"/>
+<rect x="421.2" y="334" width="11.4" height="11.4" class="blocker furniture" transform="rotate(-19.5 426.9 339.8)"/>
+<rect x="420.7" y="336.5" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 421.2 337.1)"/>
+<rect x="423.7" y="344.9" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 424.2 345.4)"/>
+<rect x="429.1" y="333.6" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 429.6 334.1)"/>
+<rect x="432" y="341.9" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 432.5 342.4)"/>
+<rect x="422.9" y="344.1" width="11.4" height="1" class="blocker furniture" transform="rotate(-19.5 428.6 344.7)"/>
+<rect x="455.5" y="321.9" width="11.4" height="11.4" class="blocker furniture" transform="rotate(-19.5 461.2 327.6)"/>
+<rect x="455" y="324.4" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 455.6 324.9)"/>
+<rect x="458" y="332.7" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 458.5 333.3)"/>
+<rect x="463.4" y="321.5" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 463.9 322)"/>
+<rect x="466.3" y="329.8" width="1" height="1" class="blocker furniture" transform="rotate(-19.5 466.8 330.3)"/>
+<rect x="457.2" y="332" width="11.4" height="1" class="blocker furniture" transform="rotate(-19.5 462.9 332.5)"/>
 <rect x="374.7" y="259.7" width="23.4" height="28.6" class="blocker furniture"/>
 <rect x="373.4" y="258.4" width="26" height="31.2" class="blocker furniture"/>
 <rect x="373" y="258" width="26.8" height="32" class="blocker furniture"/>
@@ -324,8 +324,8 @@
 <rect x="888.5" y="160.3" width="17.2" height="66.1" class="blocker furniture"/>
 <rect x="888.5" y="160.3" width="17.2" height="66.1" class="blocker furniture"/>
 <rect x="888.5" y="160.3" width="17.2" height="66.1" class="blocker furniture"/>
-<rect x="807.6" y="300" width="31.2" height="31.2" class="blocker furniture"/>
-<rect x="810.2" y="301.6" width="23.9" height="27" class="blocker furniture"/>
+<rect x="807.6" y="300" width="31.2" height="31.2" class="blocker furniture" transform="rotate(-24.1 823.2 315.6)"/>
+<rect x="810.1" y="302" width="23.9" height="27" class="blocker furniture" transform="rotate(-24.1 822 315.5)"/>
 <rect x="131.6" y="505.4" width="78" height="4.2" class="blocker furniture"/>
 <rect x="132.6" y="510.6" width="75.9" height="12" class="blocker furniture"/>
 <rect x="131.6" y="509.6" width="78" height="14" class="blocker furniture"/>
@@ -335,22 +335,22 @@
 <rect x="314.9" y="465.1" width="59.8" height="13" class="blocker furniture"/>
 <rect x="313.6" y="463.8" width="62.4" height="15.6" class="blocker furniture"/>
 <rect x="313.2" y="463.4" width="63.2" height="16.4" class="blocker furniture"/>
-<rect x="422.8" y="544.4" width="15.6" height="52" class="blocker furniture"/>
-<rect x="424.1" y="545.7" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="424.1" y="593.5" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="435.5" y="545.7" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="435.5" y="593.5" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="422.8" y="544.4" width="15.6" height="52" class="blocker furniture" transform="rotate(-6.9 430.6 570.4)"/>
+<rect x="421.3" y="546.6" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-6.9 422.1 547.3)"/>
+<rect x="427" y="594.1" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-6.9 427.8 594.8)"/>
+<rect x="432.6" y="545.2" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-6.9 433.4 546)"/>
+<rect x="438.4" y="592.7" width="1.6" height="1.6" class="blocker furniture" transform="rotate(-6.9 439.1 593.5)"/>
 <rect x="624" y="461.2" width="9.4" height="13" class="blocker furniture"/>
 <rect x="680.2" y="461.2" width="9.4" height="13" class="blocker furniture"/>
 <rect x="625.6" y="462.5" width="6.2" height="10.4" class="blocker furniture"/>
 <rect x="681.8" y="462.5" width="6.2" height="10.4" class="blocker furniture"/>
 <rect x="631.6" y="465.4" width="50.4" height="4.7" class="blocker furniture"/>
 <rect x="729.6" y="508" width="78" height="36.4" class="blocker furniture"/>
-<rect x="604.8" y="531.4" width="36.4" height="15.6" class="blocker furniture"/>
-<rect x="606.1" y="532.7" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="606.1" y="544.1" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="638.3" y="532.7" width="1.6" height="1.6" class="blocker furniture"/>
-<rect x="638.3" y="544.1" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="604.8" y="531.4" width="36.4" height="15.6" class="blocker furniture" transform="rotate(28.6 623 539.2)"/>
+<rect x="610.8" y="525.7" width="1.6" height="1.6" class="blocker furniture" transform="rotate(28.6 611.6 526.5)"/>
+<rect x="605.3" y="535.7" width="1.6" height="1.6" class="blocker furniture" transform="rotate(28.6 606.1 536.5)"/>
+<rect x="639.1" y="541.1" width="1.6" height="1.6" class="blocker furniture" transform="rotate(28.6 639.9 541.9)"/>
+<rect x="633.6" y="551.2" width="1.6" height="1.6" class="blocker furniture" transform="rotate(28.6 634.4 551.9)"/>
 <rect x="131.6" y="710.8" width="130" height="13" class="blocker furniture"/>
 <rect x="143.2" y="710.5" width="0.5" height="0.8" class="blocker furniture"/>
 <rect x="155" y="710.5" width="0.5" height="0.8" class="blocker furniture"/>

@@ -7,7 +7,7 @@
 //   node tools/sim-smoke.mjs
 
 import { APARTMENT, MATERIALS } from '../src/maps/apartment.js';
-import { buildWorld, hasLineOfSight, doorAngle } from '../src/sim/world.js';
+import { buildWorld, hasLineOfSight, doorAngle, raycastGeometry } from '../src/sim/world.js';
 import {
   createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout,
   setGadget, rangeScale, hitDamage, litByFlare,
@@ -16,7 +16,8 @@ import {
   TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES, DAMAGE, GADGETS,
   FLARE,
 } from '../src/sim/constants.js';
-import { nearestNode, findPath, smoothPath } from '../src/sim/nav.js';
+import { nearestNode, nodePos, findPath, smoothPath } from '../src/sim/nav.js';
+import { turnBox, pointInBox } from '../src/sim/math.js';
 import { createBotBrain } from '../src/sim/bot.js';
 import { createHostSession, createLocalSession } from '../src/net/session.js';
 
@@ -1611,6 +1612,110 @@ console.log('\nA door never pushes anyone through a wall:');
   }
 }
 
+// ── Things that stand at an angle ─────────────────────────────────────────
+//
+// A box in this map used to be a pair of corners, and a pair of corners has no
+// angle in it: every table, sofa and bed in the flat stood square to the
+// building. Now a box may be turned about its own centre, and the claim worth
+// testing is that the whole engine believes it — the bullet, the boot, and the
+// graph the bots walk — rather than just the picture.
+{
+  console.log('\nTurned boxes:');
+
+  // A room with one wall through the middle of it, at forty-five degrees.
+  const room = (yaw) => {
+    const wall = turnBox({
+      min: { x: -2, y: 0, z: -0.1 }, max: { x: 2, y: 2.4, z: 0.1 },
+      material: MATERIALS.concrete,
+    }, yaw);
+    return {
+      geometry: [
+        { min: { x: -6, y: -0.5, z: -6 }, max: { x: 6, y: 0, z: 6 }, material: MATERIALS.floor },
+        wall,
+      ],
+      doors: [], lights: [], switches: [],
+      spawns: { attackers: [{ x: -4, z: -4 }], defenders: [{ x: 4, z: 4 }] },
+      bounds: { min: { x: -6, y: 0, z: -6 }, max: { x: 6, y: 2.4, z: 6 } },
+    };
+  };
+  const turnedWorld = buildWorld(room(Math.PI / 4));
+
+  {
+    // Straight across the middle: the wall is there, so the round stops.
+    const across = raycastGeometry(turnedWorld, createState(turnedWorld, 1),
+      { x: -3, y: 1, z: 3 }, { x: 0.7071, y: 0, z: -0.7071 }, 12);
+    check('a round stops at a wall standing at an angle',
+      across.some((h) => h.material.name === 'concrete'), `${across.length} hits`);
+
+    // ...and through the corner of the square the wall's bounds occupy, where
+    // there is nothing but air. This is the difference between understanding
+    // the shape and understanding the box round it.
+    const corner = raycastGeometry(turnedWorld, createState(turnedWorld, 1),
+      { x: -2.6, y: 1, z: -2.2 }, { x: 1, y: 0, z: 0 }, 12);
+    check('...and passes through the empty corner of its bounds',
+      !corner.some((h) => h.material.name === 'concrete'), `${corner.length} hits`);
+  }
+
+  {
+    // Walking into it at an angle. The old resolution could only give a man
+    // back his x or his z, so on a wall at forty-five degrees he stopped dead;
+    // the point of the circle is that he slides along it instead.
+    const s = createState(turnedWorld, 3);
+    addPlayer(turnedWorld, s, 'a', 'attackers', 'A');
+    s.phase = 'live';
+    s.phaseTime = 300;
+    const a = s.players.a;
+    // The wall runs from (-1.4, 1.4) to (1.4, -1.4), so its two sides are
+    // where x + z is negative and where it is positive. He starts on the
+    // negative side and walks straight at it.
+    a.pos = { x: -1.5, y: 0, z: -1.5 };
+    for (let i = 0; i < 90; i++) {
+      stepSim(turnedWorld, s, { a: { ...createInput(), moveZ: 1, yaw: -Math.PI * 0.75 } }, 1 / TICK_RATE);
+    }
+    check('a man cannot walk through it', a.pos.x + a.pos.z < 0,
+      `ended at (${a.pos.x.toFixed(2)}, ${a.pos.z.toFixed(2)})`);
+    check('...and is left standing clear of it, not inside',
+      !turnedWorld.boxes.some((b) => pointInBox(b, a.pos.x, a.pos.y + 1, a.pos.z)));
+
+    // Now the same wall, taken at a glancing angle: he should travel along it.
+    const s2 = createState(turnedWorld, 4);
+    addPlayer(turnedWorld, s2, 'b', 'attackers', 'B');
+    s2.phase = 'live';
+    s2.phaseTime = 300;
+    const b = s2.players.b;
+    // Started where the wall is long, so what is measured is the slide and
+    // not him strolling round the end of it.
+    b.pos = { x: 0.6, y: 0, z: -2.5 };
+    const from = { x: b.pos.x, z: b.pos.z };
+    for (let i = 0; i < 120; i++) {
+      stepSim(turnedWorld, s2, { a: createInput(), b: { ...createInput(), moveZ: 1, yaw: Math.PI } }, 1 / TICK_RATE);
+    }
+    // Pushed due north into a wall lying across his path at forty-five
+    // degrees: what he gets is a slide along it, which shows up as movement in
+    // x that he never asked for.
+    const slid = Math.abs(b.pos.x - from.x);
+    check('and slides along it rather than sticking to it', slid > 0.8,
+      `slid ${slid.toFixed(2)} m sideways`);
+  }
+
+  {
+    // The bots' graph has to know the difference too: the corners of the
+    // square the wall's bounds occupy are floor, and a bot may stand on them.
+    const nav = turnedWorld.nav;
+    const corner = nearestNode(nav, { x: -1.7, y: 0, z: -1.7 }, 0.5);
+    check('the walkable graph leaves the empty corners walkable', corner >= 0
+      && Math.hypot(nodePos(nav, corner).x + 1.7, nodePos(nav, corner).z + 1.7) < 0.5,
+      corner >= 0 ? JSON.stringify(nodePos(nav, corner)) : 'no node');
+    // ...and not one standing place in the whole room is inside the wall.
+    const wall = turnedWorld.boxes.find((x) => x.yaw);
+    let inWall = 0;
+    for (let n = 0; n < nav.count; n++) {
+      if (pointInBox(wall, nav.x[n], nav.y[n] + 0.1, nav.z[n])) inWall++;
+    }
+    check('and not one standing place in it is inside the wall', inWall === 0, `${inWall} of ${nav.count}`);
+  }
+}
+
 // ── Bots that walk the flat ───────────────────────────────────────────────
 //
 // The three claims worth holding onto: there is a route between any two places
@@ -1683,6 +1788,10 @@ console.log('\nA door never pushes anyone through a wall:');
     // "did somebody come and look" — where they happen to be standing on the
     // last frame is not.
     let closest = Infinity;
+    // How restless they ever got. Asking at the final frame is asking whether
+    // they happened to be restless at one arbitrary moment — and a side that
+    // has just seen somebody is not restless, which is the point.
+    let restless = 0;
     const was = new Map();
     const input = createInput();
     for (let i = 0; i < seconds * TICK_RATE; i++) {
@@ -1695,6 +1804,7 @@ console.log('\nA door never pushes anyone through a wall:');
       man.health = PLAYER.maxHealth;
       man.alive = true;
       if (s.phase === 'live' && s.phaseTime < 30) s.phaseTime = 400;
+      restless = Math.max(restless, brain.squads.get('defenders')?.pressure ?? 0);
       for (const id of ids) {
         const p = s.players[id];
         p.alive = true;
@@ -1712,7 +1822,7 @@ console.log('\nA door never pushes anyone through a wall:');
         }
       }
     }
-    return { world: w, state: s, ids, brain, seen, still, man, closest };
+    return { world: w, state: s, ids, brain, seen, still, man, closest, restless };
   }
 
   {
@@ -1728,9 +1838,8 @@ console.log('\nA door never pushes anyone through a wall:');
       `${worst.toFixed(0)} s without progress`);
 
     // A quiet enemy is the thing that makes a side restless.
-    const squad = quiet.brain.squads.get('defenders');
-    check('a silent enemy makes the side go looking', squad.pressure > 0.5,
-      squad.pressure.toFixed(2));
+    check('a silent enemy makes the side go looking', quiet.restless > 0.5,
+      quiet.restless.toFixed(2));
   }
 
   {

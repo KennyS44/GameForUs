@@ -10,6 +10,7 @@ import { APARTMENT } from '../src/maps/apartment.js';
 import { buildWorld, doorFrame, localToWorld } from '../src/sim/world.js';
 import { createState, addPlayer, stepSim, createInput } from '../src/sim/sim.js';
 import { PLAYER, TICK_RATE } from '../src/sim/constants.js';
+import { pointInBox } from '../src/sim/math.js';
 
 let failures = 0;
 function check(name, cond, detail = '') {
@@ -26,8 +27,12 @@ const CELL = 0.25;
 
 console.log(`map: ${world.boxes.length} boxes, ${world.doors.length} doors, ${world.lights.length} lights`);
 
-const inside = (b, x, y, z) =>
-  x > b.min.x && x < b.max.x && y > b.min.y && y < b.max.y && z > b.min.z && z < b.max.z;
+// A box may be turned about its own centre, so "is this point inside it" is
+// the simulation's own answer rather than a comparison of corners.
+const inside = (b, x, y, z) => pointInBox(b, x, y, z);
+// ...and where anything wants the ground a box covers rather than the box
+// itself, the bounds it actually occupies.
+const bounds = (b) => b.aabb ?? b;
 
 // Can a standing player occupy this spot on this storey? Needs floor under the
 // feet and a body's worth of clear air above them.
@@ -265,11 +270,14 @@ for (const b of world.boxes) {
   if (b.tag !== 'furniture') continue;
   const cx = (b.min.x + b.max.x) / 2;
   const cz = (b.min.z + b.max.z) / 2;
-  const held = world.boxes.some((o) =>
-    o !== b
-    && o.max.x > b.min.x + 1e-3 && o.min.x < b.max.x - 1e-3
-    && o.max.z > b.min.z + 1e-3 && o.min.z < b.max.z - 1e-3
-    && o.max.y > b.min.y - GAP && o.min.y < b.min.y + GAP);
+  const bb = bounds(b);
+  const held = world.boxes.some((o) => {
+    const ob = bounds(o);
+    return o !== b
+      && ob.max.x > bb.min.x + 1e-3 && ob.min.x < bb.max.x - 1e-3
+      && ob.max.z > bb.min.z + 1e-3 && ob.min.z < bb.max.z - 1e-3
+      && ob.max.y > bb.min.y - GAP && ob.min.y < bb.min.y + GAP;
+  });
   check(`furniture at (${cx.toFixed(1)}, ${cz.toFixed(1)}) is held up by something`, held,
     `${(b.max.x - b.min.x).toFixed(2)}x${(b.max.z - b.min.z).toFixed(2)} at y=${b.min.y.toFixed(2)}`);
 }
@@ -321,6 +329,10 @@ for (let i = 0; i < world.boxes.length; i++) {
   for (let j = i + 1; j < world.boxes.length; j++) {
     const a = world.boxes[i];
     const b = world.boxes[j];
+    // Two boxes at different angles have no faces in common to fight over,
+    // and a turned box's own corners are said in its own frame — so this
+    // comparison only means anything between two things standing square.
+    if (a.yaw || b.yaw) continue;
     for (const [k, u, v] of AXES) {
       if (span(a, b, u) <= 1e-3 || span(a, b, v) <= 1e-3) continue;
       for (const side of ['min', 'max']) {

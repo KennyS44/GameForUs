@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=0e7e12c6';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=0e7e12c6';
-import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=0e7e12c6';
-import { buildWeaponModel } from './weapons.js?v=0e7e12c6';
+import * as THREE from '../../vendor/three.module.js?v=34006d2e';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=34006d2e';
+import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=34006d2e';
+import { buildWeaponModel } from './weapons.js?v=34006d2e';
 
 // How much light there is in a room with every lamp in it switched off. Kept
 // here rather than inline because three different places have to agree on it:
@@ -291,6 +291,10 @@ export function buildScene(world) {
     if (tiling) applyWorldUv(geo, centre, tiling);
     const mesh = new THREE.Mesh(geo, getMat(b.material));
     mesh.position.set(centre.x, centre.y, centre.z);
+    // Turned about its own centre, which is the same centre the texture was
+    // projected from — so the grain turns with the thing rather than sliding
+    // across it.
+    if (b.yaw) mesh.rotation.y = b.yaw;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     staticGroup.add(mesh);
@@ -315,6 +319,7 @@ export function buildScene(world) {
       getMat(b.material),
     );
     mesh.position.set(b.min.x + sx / 2, b.min.y + sy / 2, b.min.z + sz / 2);
+    if (b.yaw) mesh.rotation.y = b.yaw;
     mesh.receiveShadow = true;
     staticGroup.add(mesh);
   }

@@ -34,6 +34,8 @@
 //
 // Keeping them apart is what lets a door be something everyone shoots through
 // and everyone pays for, while a wall is something only the .50 crosses.
+import { turnBox } from '../sim/math.js?v=34006d2e';
+
 export const MATERIALS = {
   concrete: { name: 'concrete', resist: 0, color: 0x3a3a3e, hardness: 1.0 },
   floor: { name: 'floor', resist: 0, color: 0x5b4835, hardness: 1.0 },
@@ -355,6 +357,46 @@ const eastStair = [
 // what they meant. What changes is what a bullet and an eye find at knee
 // height.
 
+// Turn a piece of furniture where it stands.
+//
+// Everything a flat is furnished with used to be square to the building,
+// because a box in this map is a pair of corners and a pair of corners has no
+// angle in it. Now it can have one: every part of a piece swings about the
+// same pivot and every part carries the same angle, so a table turned thirty
+// degrees is a turned table rather than a top at thirty degrees over four legs
+// still facing north.
+//
+// The whole engine understands this — bullets, footsteps, the walkable graph
+// the bots read and the picture on screen all ask the box for its own frame
+// and get the same answer. See `turnBox` and the helpers beside it in math.js.
+function turn(parts, yaw, px, pz) {
+  const cos = Math.cos(yaw);
+  const sin = Math.sin(yaw);
+  // No pivot given: turn it about the middle of its own footprint.
+  if (px === undefined) {
+    let x0 = Infinity; let x1 = -Infinity; let z0 = Infinity; let z1 = -Infinity;
+    for (const b of parts) {
+      x0 = Math.min(x0, b.min.x); x1 = Math.max(x1, b.max.x);
+      z0 = Math.min(z0, b.min.z); z1 = Math.max(z1, b.max.z);
+    }
+    px = (x0 + x1) / 2;
+    pz = (z0 + z1) / 2;
+  }
+  return parts.map((b) => {
+    const dx = (b.min.x + b.max.x) / 2 - px;
+    const dz = (b.min.z + b.max.z) / 2 - pz;
+    const nx = px + dx * cos + dz * sin;
+    const nz = pz - dx * sin + dz * cos;
+    const hx = (b.max.x - b.min.x) / 2;
+    const hz = (b.max.z - b.min.z) / 2;
+    return turnBox({
+      ...b,
+      min: { x: nx - hx, y: b.min.y, z: nz - hz },
+      max: { x: nx + hx, y: b.max.y, z: nz + hz },
+    }, yaw);
+  });
+}
+
 const LEG = 0.06;
 // How far a shelf is let into the sides that carry it. A joint, not a gap:
 // boards that only touch hold nothing up, and the map checks are right to say
@@ -587,7 +629,7 @@ function lockers(x0, z0, x1, z1, y, o = {}) {
 const furniture = ([
   // ── Ground floor ──
   // Open court: a bench and a planter along the parapet, clear of the stair.
-  ...onLegs(-15.6, -16.6, -14.4, -13.6, 0, { h: 0.45 }),
+  ...turn(onLegs(-15.6, -16.6, -14.4, -13.6, 0, { h: 0.45 }), 0.2),
   ...cabinet(-7.6, -9.4, -6.0, -8.6, 0, { h: 0.5, plinth: 0.06 }), // planter
 
   // Study + guest bedroom (one room, column in the middle).
@@ -596,13 +638,16 @@ const furniture = ([
   ...shelves(3.0, -17.7, 5.5, -17.1, 0, { back: 'n' }), // bookcase, north wall
   ...bed(5.6, -17.6, 7.2, -15.8, 0, { head: 'n' }), // against the east wall
 
-  // Dining: a table in the middle — you walk round it, not through it, and
-  // four chairs to say what the table is for.
-  ...onLegs(-3.4, -10.7, -1.2, -9.7, 0),
-  ...chair(-3.0, -11.15, 0, { facing: 'n' }),
-  ...chair(-1.6, -11.15, 0, { facing: 'n' }),
-  ...chair(-3.0, -9.25, 0, { facing: 's' }),
-  ...chair(-1.6, -9.25, 0, { facing: 's' }),
+  // Dining: a table in the middle — you walk round it, not through it — with
+  // four chairs to say what it is for, and the whole set stood at an angle to
+  // the room the way a table that people actually sit at ends up.
+  ...turn([
+    ...onLegs(-3.4, -10.7, -1.2, -9.7, 0),
+    ...chair(-3.0, -11.15, 0, { facing: 'n' }),
+    ...chair(-1.6, -11.15, 0, { facing: 'n' }),
+    ...chair(-3.0, -9.25, 0, { facing: 's' }),
+    ...chair(-1.6, -9.25, 0, { facing: 's' }),
+  ], 0.34),
   ...wardrobe(-4.7, -12.2, -3.7, -11.0, 0), // sideboard in the corner
 
   // Kitchen: counter and fridge on the north wall, island off-centre.
@@ -613,15 +658,16 @@ const furniture = ([
   // Bathroom + utility, split by the bar-height barrier.
   ...cabinet(8.2, -17.6, 10.4, -17.0, 0, { h: 0.9, mat: M.metal, worktop: M.tile }),
   ...shelves(15.1, -16.0, 15.8, -13.4, 0, { mat: M.metal, shelves: 5, back: 'e' }),
-  ...crates(12.0, -10.6, 13.2, -9.4, 0),
+  ...turn(crates(12.0, -10.6, 13.2, -9.4, 0), 0.42),
 
   // Cinema: two rows of seating and a low cabinet under the screen.
   ...sofa(-14.0, -2.7, -11.0, -2.0, 0, { back: 'n', arms: false }),
   ...sofa(-14.0, -1.1, -11.0, -0.4, 0, { back: 'n', arms: false }),
   ...cabinet(-7.0, -4.3, -4.6, -3.7, 0, { h: 0.6 }),
 
-  // Hall: a bench on the west wall, out of every doorway.
-  ...onLegs(-2.8, -1.2, -2.2, 0.8, 0, { h: 0.45 }),
+  // Hall: a bench near the west wall, out of every doorway and stood at a
+  // slight angle, because nobody lines a bench up with a wall to the degree.
+  ...turn(onLegs(-2.8, -1.2, -2.2, 0.8, 0, { h: 0.45 }), 0.12),
 
   // Gym: two uprights on their feet with a bar racked across them, mats, a
   // bench. The footprint is the block's; the middle of it is now air.
@@ -631,7 +677,7 @@ const furniture = ([
   box(7.16, 0.14, -4.35, 7.40, 1.3, -3.95, M.metal),
   box(5.23, 1.06, -4.24, 7.17, 1.14, -4.06, M.metal),
   box(9.0, 0, -2.6, 12.0, 0.15, -1.2, M.fabric), // mats
-  ...onLegs(4.2, -1.7, 5.6, -1.1, 0, { h: 0.5 }),
+  ...turn(onLegs(4.2, -1.7, 5.6, -1.1, 0, { h: 0.5 }), -0.5),
 
   // Cloakroom: lockers on the south wall, bench in the middle.
   ...lockers(-14.0, 5.2, -9.0, 5.7, 0),
@@ -652,7 +698,7 @@ const furniture = ([
   // ── Upper floor ──
   // Terrace: loungers along the parapet, nothing near the glass doors.
   ...onLegs(-15.6, -9.9, -13.2, -9.1, F2, { h: 0.5, thick: 0.12 }),
-  ...onLegs(-7.6, -16.8, -6.2, -14.4, F2, { h: 0.5, thick: 0.12 }),
+  ...turn(onLegs(-7.6, -16.8, -6.2, -14.4, F2, { h: 0.5, thick: 0.12 }), 0.55),
 
   // Bedroom 2.
   ...bed(-4.4, -17.6, -2.6, -15.7, F2, { head: 'n' }),
@@ -687,14 +733,20 @@ const furniture = ([
 
   // Upper lounge and media room.
   ...sofa(-2.4, -1.4, 0.4, -0.6, F2, { back: 'n' }),
+  // An armchair pulled round to face the screen rather than the wall.
+  ...turn(sofa(1.1, -0.9, 1.9, -0.1, F2, { back: 'n', h: 0.8, arms: true }), -0.7),
   ...cabinet(3.9, -4.3, 5.5, -3.7, F2, { h: 0.95, worktop: M.tile }), // bar counter
   ...sofa(-2.6, 4.2, 0.6, 5.2, F2, { back: 's', h: 0.8 }),
   ...cabinet(3.2, 1.3, 5.4, 1.9, F2, { h: 0.6 }), // media cabinet
 
   // Sauna and office.
   ...onLegs(6.4, -4.4, 8.4, -3.8, F2, { h: 0.45, thick: 0.1 }),
-  ...desk(6.8, 2.6, 9.0, 3.6, F2, { pedestal: 'right' }),
-  ...chair(7.6, 4.3, F2, { facing: 's' }),
+  // Angled into the corner, and kept back from the doorway: a door that
+  // shoves somebody out of its way has to have somewhere to put them.
+  ...turn([
+    ...desk(6.6, 2.7, 8.7, 3.7, F2, { pedestal: 'right' }),
+    ...chair(7.4, 4.4, F2, { facing: 's' }),
+  ], -0.16),
   ...shelves(14.6, 3.0, 15.8, 5.0, F2, { h: 1.8, back: 'e' }),
 // Tagged so the floor plans can draw it and the checks can tell it from a wall.
 ]).map((b) => ({ ...b, tag: 'furniture' }));

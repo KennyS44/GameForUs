@@ -198,7 +198,13 @@ function blockers(floor) {
     if (!['barrier', 'column', 'blocked', 'rubble', 'furniture'].includes(b.tag)) continue;
     const onThis = floor === 0 ? b.min.y < 2.6 : b.min.y >= F2 - 0.01;
     if (!onThis) continue;
-    out.push(`<rect x="${n(px(b.min.x))}" y="${n(pz(b.min.z))}" width="${n((b.max.x - b.min.x) * SCALE)}" height="${n((b.max.z - b.min.z) * SCALE)}" class="blocker ${b.tag}"/>`);
+    // A piece standing at an angle is drawn at that angle. The sheet turns
+    // the other way round from the world — down the page is +z — so the sign
+    // of the angle flips on its way onto the paper.
+    const spin = b.yaw
+      ? ` transform="rotate(${n((-b.yaw * 180) / Math.PI)} ${n(px((b.min.x + b.max.x) / 2))} ${n(pz((b.min.z + b.max.z) / 2))})"`
+      : '';
+    out.push(`<rect x="${n(px(b.min.x))}" y="${n(pz(b.min.z))}" width="${n((b.max.x - b.min.x) * SCALE)}" height="${n((b.max.z - b.min.z) * SCALE)}" class="blocker ${b.tag}"${spin}/>`);
     if (b.note) {
       out.push(`<text x="${n(px((b.min.x + b.max.x) / 2))}" y="${n(pz(b.max.z)) + 14}" class="note">${esc(b.note)}</text>`);
     }

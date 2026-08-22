@@ -1,10 +1,10 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=0e7e12c6';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=0e7e12c6';
-import { lerp } from '../sim/math.js?v=0e7e12c6';
-import { buildWeaponModel } from './weapons.js?v=0e7e12c6';
+import * as THREE from '../../vendor/three.module.js?v=34006d2e';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=34006d2e';
+import { lerp } from '../sim/math.js?v=34006d2e';
+import { buildWeaponModel } from './weapons.js?v=34006d2e';
 
 // ── Where the weapon is held ───────────────────────────────────────────────
 //

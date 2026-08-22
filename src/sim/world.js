@@ -2,9 +2,11 @@
 // geometry, and bullet raycasts that respect material penetration.
 // Pure — no engine types cross this boundary.
 
-import { rayBox, boxOverlaps, clamp } from './math.js?v=0e7e12c6';
-import { DOOR } from './constants.js?v=0e7e12c6';
-import { buildNav } from './nav.js?v=0e7e12c6';
+import {
+  rayBox, rayTurnedBox, boxOverlaps, pointInBox, pushOutOfBox, clamp,
+} from './math.js?v=34006d2e';
+import { DOOR } from './constants.js?v=34006d2e';
+import { buildNav } from './nav.js?v=34006d2e';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -51,13 +53,7 @@ function panelFits(geometry, hinge, theta, width, base) {
     const px = hinge.x + cos * width * along;
     const pz = hinge.z + sin * width * along;
     for (const py of [base + 0.25, base + 1.0, base + 1.9]) {
-      for (const b of geometry) {
-        if (
-          px > b.min.x && px < b.max.x &&
-          py > b.min.y && py < b.max.y &&
-          pz > b.min.z && pz < b.max.z
-        ) return false;
-      }
+      for (const b of geometry) if (pointInBox(b, px, py, pz)) return false;
     }
   }
   return true;
@@ -133,6 +129,12 @@ export function buildWorld(map) {
   const world = {
     map,
     boxes: map.geometry,
+    // Boxes standing square to the world, and boxes turned about their own
+    // centre. Movement resolves the two differently — sliding along an axis
+    // means nothing to a wall at forty degrees — so they are separated once
+    // here rather than asked about on every step of every player.
+    flat: map.geometry.filter((b) => !b.yaw),
+    turned: map.geometry.filter((b) => b.yaw),
     doors,
     lights: map.lights,
     // Things you can throw that are bolted to the building rather than
@@ -212,7 +214,7 @@ function resolveAxis(world, pos, radius, height, axis, delta, stepHeight) {
   next[axis] += delta;
   const pb = playerBox(next, radius, height);
 
-  for (const b of world.boxes) {
+  for (const b of world.flat) {
     if (!boxOverlaps(pb, b)) continue;
 
     // Vertical moves may only resolve against surfaces we were already clear
@@ -227,7 +229,8 @@ function resolveAxis(world, pos, radius, height, axis, delta, stepHeight) {
     // Step over low obstacles instead of stopping dead on them.
     if (axis !== 'y' && b.max.y - pos.y <= stepHeight + 1e-4) {
       const lifted = { ...next, y: b.max.y };
-      if (!world.boxes.some((o) => o !== b && boxOverlaps(playerBox(lifted, radius, height), o))) {
+      if (!world.flat.some((o) => o !== b && boxOverlaps(playerBox(lifted, radius, height), o))
+        && !world.turned.some((o) => pushOutOfBox(o, lifted.x, lifted.y, lifted.z, radius, height))) {
         next.y = b.max.y;
         pos.y = b.max.y;
         continue;
@@ -242,6 +245,16 @@ function resolveAxis(world, pos, radius, height, axis, delta, stepHeight) {
     delta = 0;
   }
   return next;
+}
+
+// Is there room for a body standing here? Both kinds of box have a say: the
+// square ones by overlap, the turned ones by the same circle the movement
+// resolution uses. A door deciding where to shove somebody has to ask this,
+// or it will push them into the one piece of furniture standing at an angle.
+function bodyClear(world, pos, radius, height) {
+  const body = playerBox(pos, radius, height);
+  if (world.flat.some((b) => boxOverlaps(body, b))) return false;
+  return !world.turned.some((b) => pushOutOfBox(b, pos.x, pos.y, pos.z, radius, height));
 }
 
 // Push the player out of any door panel they are standing inside.
@@ -276,8 +289,7 @@ function resolveDoors(world, state, pos, radius, height) {
 
     const tryPush = (dx, dz) => {
       const p = localToWorld(frame, { x: lp.x + dx, y: lp.y, z: lp.z + dz });
-      const body = playerBox({ x: p.x, y: pos.y, z: p.z }, radius, height);
-      if (world.boxes.some((b) => boxOverlaps(body, b))) return false;
+      if (!bodyClear(world, { x: p.x, y: pos.y, z: p.z }, radius, height)) return false;
       pos.x = p.x;
       pos.z = p.z;
       return true;
@@ -296,6 +308,30 @@ function resolveDoors(world, state, pos, radius, height) {
   }
 }
 
+// Push the player out of anything standing at an angle.
+//
+// The axis-by-axis resolution above is exactly right for a building made of
+// squares and exactly wrong for a sofa turned forty degrees: it can only ever
+// give a man his old x or his old z back, so he catches on the corner and
+// stops dead instead of sliding along the front of it. So turned boxes are
+// settled the other way round — the body is treated as a circle, which is the
+// same shape from every angle, and shoved out along the shortest way to
+// daylight. Twice, because leaving one box can walk you into the next.
+function resolveTurned(world, pos, radius, height) {
+  if (!world.turned.length) return;
+  for (let pass = 0; pass < 2; pass++) {
+    let moved = false;
+    for (const b of world.turned) {
+      const push = pushOutOfBox(b, pos.x, pos.y, pos.z, radius, height);
+      if (!push) continue;
+      pos.x += push.x;
+      pos.z += push.z;
+      moved = true;
+    }
+    if (!moved) return;
+  }
+}
+
 export function moveAndCollide(world, state, pos, delta, radius, height, stepHeight) {
   let p = { ...pos };
 
@@ -303,6 +339,7 @@ export function moveAndCollide(world, state, pos, delta, radius, height, stepHei
   if (delta.z !== 0) p = resolveAxis(world, p, radius, height, 'z', delta.z, stepHeight);
   if (delta.y !== 0) p = resolveAxis(world, p, radius, height, 'y', delta.y, stepHeight);
 
+  resolveTurned(world, p, radius, height);
   resolveDoors(world, state, p, radius, height);
 
   // Never let anyone leak outside the map.
@@ -317,7 +354,11 @@ export function groundedAt(world, pos, radius) {
     min: { x: pos.x - radius, y: pos.y - 0.08, z: pos.z - radius },
     max: { x: pos.x + radius, y: pos.y + 0.02, z: pos.z + radius },
   };
-  return world.boxes.some((b) => boxOverlaps(probe, b));
+  if (world.flat.some((b) => boxOverlaps(probe, b))) return true;
+  // ...and the same question for anything turned: a table at an angle is still
+  // a table to stand on.
+  return world.turned.some((b) =>
+    pushOutOfBox(b, pos.x, probe.min.y, pos.z, radius, probe.max.y - probe.min.y) !== null);
 }
 
 // ── Raycast ───────────────────────────────────────────────────────────────
@@ -329,7 +370,7 @@ export function raycastGeometry(world, state, origin, dir, maxDist) {
   const hits = [];
 
   for (const b of world.boxes) {
-    const r = rayBox(origin, dir, b);
+    const r = b.yaw ? rayTurnedBox(origin, dir, b) : rayBox(origin, dir, b);
     if (!r.hit) continue;
     const enter = Math.max(r.tNear, 0);
     if (enter > maxDist) continue;

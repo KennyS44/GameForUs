@@ -13,7 +13,8 @@
 // Pure like the rest of the simulation: boxes in, numbers out. No engine, no
 // clock, no Math.random.
 
-import { PLAYER } from './constants.js?v=0e7e12c6';
+import { PLAYER } from './constants.js?v=34006d2e';
+import { columnHitsBox } from './math.js?v=34006d2e';
 
 // Fine enough that a 1 m doorway is two or three cells wide, coarse enough
 // that the whole building is a few thousand of them.
@@ -69,7 +70,10 @@ export function buildNav(world) {
     row.length = 0;
     for (let i = 0; i < boxes.length; i++) {
       const b = boxes[i];
-      if (b.min.z < z + R && b.max.z > z - R) row.push(b);
+      // A box turned about its centre covers more ground than its own numbers
+      // say, so the cheap passes use the bounds it actually occupies.
+      const bb = b.aabb ?? b;
+      if (bb.min.z < z + R && bb.max.z > z - R) row.push(b);
     }
     for (let ix = 0; ix < cols; ix++) {
       colStart[iz * cols + ix] = nx.length;
@@ -82,7 +86,11 @@ export function buildNav(world) {
       tops.length = 0;
       for (let i = 0; i < row.length; i++) {
         const b = row[i];
-        if (b.min.x >= x + R || b.max.x <= x - R) continue;
+        const bb = b.aabb ?? b;
+        if (bb.min.x >= x + R || bb.max.x <= x - R) continue;
+        // ...and then the real shape, for the ones standing at an angle: a
+        // sofa turned forty degrees leaves the corners of its own bounds walkable.
+        if (b.yaw && !columnHitsBox(b, x, z, R)) continue;
         near.push(b);
         if (b.max.y <= ceiling) tops.push(b.max.y);
       }
