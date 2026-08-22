@@ -1,21 +1,21 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=b574760e';
+import { APARTMENT } from './maps/apartment.js?v=08fb6a1e';
 // The same projection tools/floorplan.mjs draws the sheets with, so a mark and
 // the wall it is next to are worked out from one set of numbers.
-import { PLAN, UPPER_FROM } from './maps/plan.js?v=b574760e';
-import { createGame } from './game.js?v=b574760e';
-import { createAudio } from './audio/audio.js?v=b574760e';
-import { createInputSource, saveSettings } from './input/input.js?v=b574760e';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=b574760e';
+import { PLAN, UPPER_FROM } from './maps/plan.js?v=08fb6a1e';
+import { createGame } from './game.js?v=08fb6a1e';
+import { createAudio } from './audio/audio.js?v=08fb6a1e';
+import { createInputSource, saveSettings } from './input/input.js?v=08fb6a1e';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=08fb6a1e';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=b574760e';
-import { createLoadout } from './ui/loadout.js?v=b574760e';
-import { createArmoury, savedOptics, saveOptic } from './ui/armoury.js?v=b574760e';
-import { storageGet, storageSet } from './util/storage.js?v=b574760e';
-import { DEBUG, AUTO_SOLO, AUTO_RANGE, SOLO_BOTS, SOLO_MATES } from './util/flags.js?v=b574760e';
-import { swapsSides } from './sim/sim.js?v=b574760e';
+} from './net/transport.js?v=08fb6a1e';
+import { createLoadout } from './ui/loadout.js?v=08fb6a1e';
+import { createArmoury, savedOptics, saveOptic } from './ui/armoury.js?v=08fb6a1e';
+import { storageGet, storageSet } from './util/storage.js?v=08fb6a1e';
+import { DEBUG, AUTO_SOLO, AUTO_RANGE, SOLO_BOTS, SOLO_MATES } from './util/flags.js?v=08fb6a1e';
+import { swapsSides } from './sim/sim.js?v=08fb6a1e';
 
 const $ = (id) => document.getElementById(id);
 
@@ -283,7 +283,7 @@ async function startRange(weaponId) {
   storageSet(WEAPON_KEY, weaponId);
   let RANGE;
   try {
-    ({ RANGE } = await import('./maps/range.js?v=b574760e'));
+    ({ RANGE } = await import('./maps/range.js?v=08fb6a1e'));
   } catch {
     setStatus($('net-status'), 'Полигон не открылся.', 'error');
     showScreen('armoury');
@@ -600,7 +600,7 @@ showScreen('main');
 // below is never fetched, so `window.__gfu` stays undefined on the live site,
 // and there is nothing to remember to take out again. See src/util/flags.js.
 if (DEBUG) {
-  import('./util/debug.js?v=b574760e').then(({ installDebug }) => {
+  import('./util/debug.js?v=08fb6a1e').then(({ installDebug }) => {
     installDebug({ input, getGame: () => game, startSolo, showMenu });
     // Started only after the handle exists, so a tool that asks for both never
     // races the match into being before it can steer it.

@@ -14,7 +14,7 @@
 // when the flag is set, so a visitor to the published site never downloads it
 // and `window.__gfu` is undefined. Nothing else in the game reads it.
 
-import { ROUND, DT, WEAPONS, GADGETS } from '../sim/constants.js?v=b574760e';
+import { ROUND, DT, WEAPONS, GADGETS } from '../sim/constants.js?v=08fb6a1e';
 
 export function installDebug({ input, getGame, startSolo, showMenu }) {
   // Fields forced into every input frame the game samples. The simulation reads
@@ -72,6 +72,9 @@ export function installDebug({ input, getGame, startSolo, showMenu }) {
           grounded: p.grounded,
         },
         players: Object.values(s.players).length,
+        // The mains. One switch feeds every lamp in the building, so a picture
+        // of a black flat is either a bug or somebody having thrown it.
+        power: s.power !== false,
       };
     },
 
@@ -233,6 +236,59 @@ export function installDebug({ input, getGame, startSolo, showMenu }) {
     redraw(n = 1) {
       for (let i = 0; i < n; i++) game().advance(0);
       return n;
+    },
+
+    // Draw until the picture stops changing, and say how many it took.
+    //
+    // The fixed count above was a guess, and about one frame in six came out
+    // with the room unlit — the weapon correctly lit by its own pass, the flat
+    // behind it black, which reads exactly like a bug in whatever was being
+    // photographed rather than like a picture taken too early. Guessing a
+    // larger number would only move the odds.
+    //
+    // So the picture is asked instead of the clock: draw, take a coarse
+    // reading of what came out, and stop when two in a row agree. Whatever the
+    // late arrival is — a light's contribution, a texture, a shadow map — this
+    // waits for it rather than assuming how many passes it needs. Coarse on
+    // purpose: a 32x18 average is blind to a bot walking in the distance and
+    // very loud about a room that is still black.
+    // Force every material in the world to be compiled again, and redraw.
+    //
+    // For the one picture in six that came out with the flat black while the
+    // mains were on. The simulation had the lamps lit and the renderer did
+    // not, and it stayed that way however many times the frame was drawn — a
+    // stale shader program, compiled for a scene that did not have those
+    // lights in it yet. This is the sledgehammer that proves it and fixes it;
+    // it is slow, so only the tools ever call it, and only when the picture
+    // has already come out wrong.
+    relight() {
+      const scene = game().scene;
+      scene.traverse((o) => {
+        const m = o.material;
+        if (!m) return;
+        if (Array.isArray(m)) m.forEach((x) => { x.needsUpdate = true; });
+        else m.needsUpdate = true;
+      });
+      game().advance(0);
+      return true;
+    },
+
+    settle(max = 24) {
+      const canvas = document.getElementById('game');
+      const probe = new OffscreenCanvas(32, 18);
+      const ctx = probe.getContext('2d', { willReadFrequently: true });
+      let last = null;
+      for (let i = 1; i <= max; i++) {
+        game().advance(0);
+        ctx.drawImage(canvas, 0, 0, probe.width, probe.height);
+        const px = ctx.getImageData(0, 0, probe.width, probe.height).data;
+        let sum = 0;
+        for (let k = 0; k < px.length; k += 4) sum += px[k] + px[k + 1] + px[k + 2];
+        const now = Math.round(sum / (px.length / 4));
+        if (last !== null && now === last) return { frames: i, brightness: now };
+        last = now;
+      }
+      return { frames: max, brightness: last ?? 0 };
     },
 
     // Stop and start the loop that paces itself. A tool pauses first and then

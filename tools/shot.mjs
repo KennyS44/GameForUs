@@ -182,12 +182,26 @@ async function compose(page, shot) {
 
     g.tick(Math.max(1, o.ticks));
     g.hud(o.hud);
-    // Let the lighting finish arriving before the shutter — see redraw().
-    g.redraw(4);
+    // Wait for the picture to finish arriving rather than guessing how many
+    // passes that takes — see settle() in src/util/debug.js.
+    let drew = g.settle();
+
+    // ...and if what arrived is a black flat with the mains on, the renderer
+    // and the simulation disagree about the lighting. That happened to about
+    // one picture in six and was stable within a run, so no number of extra
+    // passes would have helped: the shader programs were compiled for a scene
+    // that did not have those lamps in it. Rebuild them and look again.
+    let relit = false;
+    if (g.info().power && drew.brightness < 12) {
+      g.relight();
+      drew = g.settle();
+      relit = true;
+    }
+
     await g.frame();
     // Where he was put, as well as where he ended up: the two come apart more
     // often than you would think, and silently. See the check below.
-    return { ...g.info(), asked };
+    return { ...g.info(), asked, drew, relit };
   }, shot);
 }
 
@@ -348,6 +362,18 @@ for (const weapon of weapons) {
     ? `${info.me.pos.x},${info.me.pos.z} эт.${info.me.pos.y > 1.65 ? 2 : 1}`
     : 'нет игрока';
   console.log(`${out}  ${weapon ?? '(по умолчанию)'}  ${info.phase}  ${where}${opts.ads ? `  прицел ${info.me?.aim}` : ''}`);
+
+  // A black picture has an innocent explanation more often than not: somebody
+  // threw the breaker. Worth saying, because the alternative reading is "the
+  // renderer is broken", and that costs an hour.
+  if (info.power === false) {
+    console.error('  ! электричество отключено — в квартире темно, это не сбой рендера');
+  }
+  if (info.relit) {
+    console.error(
+      `  ! кадр вышел неосвещённым (яркость ${info.drew.brightness}), пересобрал шейдеры и переснял`,
+    );
+  }
 
   // A round that has already been decided is a scoreboard, not a picture.
   if (info.phase === 'over') {

@@ -87,7 +87,7 @@ for (const id of Object.keys(OPTICS)) {
     // sight halfway to the eye is a picture of nothing.
     g.tick(140);
     g.hud(false);
-    g.redraw(4);
+    g.settle();
     await g.frame();
     return g.info();
   }, { id, weapon, at: AT, face: FACE });

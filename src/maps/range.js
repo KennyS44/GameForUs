@@ -25,7 +25,7 @@
 // `onLegs` and the rest of the furniture) are private to that file, so the two
 // this map needs are written out again below rather than by prising them loose
 // and disturbing the flat.
-import { MATERIALS } from './apartment.js?v=b574760e';
+import { MATERIALS } from './apartment.js?v=08fb6a1e';
 
 const M = MATERIALS;
 

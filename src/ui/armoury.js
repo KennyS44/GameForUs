@@ -13,8 +13,8 @@
 
 import {
   WEAPONS, WEAPON_CLASSES, OPTICS, OPTICS_BY_CLASS, defaultOptic, opticFits,
-} from '../sim/constants.js?v=b574760e';
-import { storageGet, storageSet } from '../util/storage.js?v=b574760e';
+} from '../sim/constants.js?v=08fb6a1e';
+import { storageGet, storageSet } from '../util/storage.js?v=08fb6a1e';
 
 const $ = (id) => document.getElementById(id);
 const KEY = 'gameforus.optics';
