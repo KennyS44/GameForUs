@@ -18,11 +18,11 @@
 //   · it changes its mind about you. A quiet enemy makes it restless and it
 //     comes looking; a loud one makes it sit down and watch the noise.
 
-import { createInput, eyePosition, aimDirection, litByFlare, burningFlares } from './sim.js?v=f541ce5d';
-import { raycastGeometry, smokeBlocks } from './world.js?v=f541ce5d';
-import { nearestNode, nodePos, findPath, smoothPath } from './nav.js?v=f541ce5d';
-import { distXZ, clamp } from './math.js?v=f541ce5d';
-import { BLIND, GADGETS } from './constants.js?v=f541ce5d';
+import { createInput, eyePosition, aimDirection, litByFlare, burningFlares } from './sim.js?v=1a8eeedb';
+import { raycastGeometry, smokeBlocks } from './world.js?v=1a8eeedb';
+import { nearestNode, nodePos, findPath, smoothPath } from './nav.js?v=1a8eeedb';
+import { distXZ, clamp } from './math.js?v=1a8eeedb';
+import { BLIND, GADGETS } from './constants.js?v=1a8eeedb';
 
 // Indoors nobody picks a figure out of the gloom across the whole map.
 const MAX_SIGHT = 24;

@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=f541ce5d';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=f541ce5d';
-import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=f541ce5d';
-import { buildWeaponModel } from './weapons.js?v=f541ce5d';
+import * as THREE from '../../vendor/three.module.js?v=1a8eeedb';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=1a8eeedb';
+import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=1a8eeedb';
+import { buildWeaponModel } from './weapons.js?v=1a8eeedb';
 
 // How much light there is in a room with every lamp in it switched off. Kept
 // here rather than inline because three different places have to agree on it:
@@ -483,7 +483,7 @@ const DEVICE_COLOR = {
 // ── Smoke ─────────────────────────────────────────────────────────────────
 
 const SMOKE_TINT = new THREE.Color(0x9aa0a9);
-const PUFFS = 16;
+const PUFFS = 22;
 
 // One soft disc, drawn once into a canvas: white in the middle, nothing at the
 // rim. Everything about the shape of a cloud comes from stacking these.
@@ -531,7 +531,7 @@ const PUFF_LAYOUT = (() => {
       // all agree with each other and with the ball underneath, and a cloud
       // comes out as one smooth grey sphere — which is not what smoke is.
       tint: 0.80 + rnd() * 0.34,
-      thick: 0.58 + rnd() * 0.22,
+      thick: 0.68 + rnd() * 0.24,
     });
   }
   return out;
@@ -546,7 +546,7 @@ const PUFF_LAYOUT = (() => {
 // can see through it. So the middle is a plain opaque ball, and the billboards
 // are only there to break its edge into something that looks like smoke rather
 // than like a balloon.
-const CORE_RADIUS = 0.68;
+const CORE_RADIUS = 0.55;
 
 function makeCloud(scene, geo, mat) {
   const group = new THREE.Group();
@@ -574,12 +574,34 @@ function makeCloud(scene, geo, mat) {
   return { group, puffs, material, core, coreMat };
 }
 
-// One sphere, shared by every cloud on the map.
+// The solid middle, shared by every cloud on the map — and deliberately not a
+// sphere.
+//
+// A ball has a perfectly circular silhouette, and a perfectly circular
+// silhouette is the one shape the eye will not accept as smoke however soft
+// the fringe around it is: the billows fray the outer third and the eye reads
+// the hard round edge underneath them anyway. So the vertices are pushed in
+// and out by a fifth, in three overlapping waves, and the outline comes out
+// lumpy. It costs nothing — one geometry, built once, no shader, no texture.
 let coreGeo = null;
 function coreGeometry() {
-  // Enough segments that the edge of the ball never reads as a polygon
-  // through the billowing round it.
-  if (!coreGeo) coreGeo = new THREE.SphereGeometry(1, 32, 22);
+  if (coreGeo) return coreGeo;
+  // Enough segments that the lumps are lumps rather than facets.
+  const geo = new THREE.SphereGeometry(1, 40, 28);
+  const pos = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const bulge = 1
+      + 0.13 * Math.sin(v.x * 3.1 + v.y * 2.3)
+      + 0.09 * Math.sin(v.y * 4.7 - v.z * 3.9 + 1.7)
+      + 0.06 * Math.sin(v.z * 6.2 + v.x * 5.1 + 3.4);
+    v.multiplyScalar(bulge);
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  coreGeo = geo;
   return coreGeo;
 }
 

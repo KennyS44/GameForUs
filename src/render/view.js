@@ -1,10 +1,10 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=f541ce5d';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=f541ce5d';
-import { lerp } from '../sim/math.js?v=f541ce5d';
-import { buildWeaponModel } from './weapons.js?v=f541ce5d';
+import * as THREE from '../../vendor/three.module.js?v=1a8eeedb';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=1a8eeedb';
+import { lerp } from '../sim/math.js?v=1a8eeedb';
+import { buildWeaponModel } from './weapons.js?v=1a8eeedb';
 
 // ── Where the weapon is held ───────────────────────────────────────────────
 //
@@ -17,14 +17,17 @@ import { buildWeaponModel } from './weapons.js?v=f541ce5d';
 // magazine, the hands on it — with the stock running off the bottom corner,
 // which is how a rifle looks to the man holding it at low ready.
 const CARRY = {
-  x: 0.15,
-  y: -0.105,
-  z: -0.315,
-  // Turned across the body and nosed down a few degrees. Aiming takes all of
-  // this out and puts the sight on the axis instead.
-  pitch: -0.055,
-  yaw: 0.145,
-  roll: 0.055,
+  x: 0.125,
+  y: -0.125,
+  z: -0.36,
+  // Barely nosed down and turned only a few degrees across the body, so the
+  // barrel runs at the middle of the screen instead of past it. Turned any
+  // further and the stock swings into the bottom corner and stays there, which
+  // is not a carry, it is a man wearing a rifle. Aiming takes all of this out
+  // and puts the sight on the axis instead.
+  pitch: -0.018,
+  yaw: 0.06,
+  roll: 0.04,
 };
 
 // ADS is computed rather than tuned: whatever puts this weapon's own sight on
@@ -114,8 +117,11 @@ export function createView(scene) {
     bob: 0,
     sway: { x: 0, y: 0 },
     aim: 0,
-    recoilKick: 0,
-    recoilRoll: 0,
+    // The three ways a shot shows in the hands: the muzzle climbing, the
+    // muzzle walking sideways, and the whole thing shoved back at you.
+    climb: 0,
+    swing: 0,
+    push: 0,
     crowd: 0,
   };
   // What the aim is doing to the field of view, so the runtime can slow the
@@ -205,29 +211,35 @@ export function createView(scene) {
     smoothed.sway.x = lerp(smoothed.sway.x, -dYaw * 1.6, Math.min(1, dt * 10));
     smoothed.sway.y = lerp(smoothed.sway.y, 0, Math.min(1, dt * 10));
 
-    // Recoil kicks the gun back toward the shooter — once per round fired.
+    // Recoil, as the muzzle moving rather than as the hands shaking.
     //
-    // This follows the kick of each shot, not the total climb of the sights.
-    // Seven shots into a burst the sights sit eight degrees high and stay
-    // there, and a viewmodel driven by that total would stand the weapon on
-    // its end and fill half the screen with it. Driven by the step instead,
-    // the gun punches and settles no matter how long you hold the trigger.
-    // Every round gets a punch of its own on top of however far it moved the
-    // sights, so the muzzle still jumps late in a burst, where the pattern has
-    // settled and the sights barely climb any more.
+    // The simulation already owns the recoil: it walks the sights up and side
+    // to side along a pattern you can learn. What the viewmodel adds is the
+    // sight of that happening — the weapon pivots about its own sight, so the
+    // barrel climbs and swings while the mark stays exactly where the rounds
+    // are going. It follows the pattern's own steps rather than inventing a
+    // tremble of its own, and the one thing it adds is a shove straight back
+    // into the shoulder, which is the only motion that cannot move the aim.
     const burst = player.burstShots ?? 0;
     const fired = burst > lastBurstShots;
     lastBurstShots = burst;
-    const kicked = Math.max(0, player.recoil.pitch - lastRecoilPitch);
+    const kickedPitch = Math.max(0, player.recoil.pitch - lastRecoilPitch);
     lastRecoilPitch = player.recoil.pitch;
-    smoothed.recoilKick = Math.min(0.30, smoothed.recoilKick + (fired ? 0.1 : 0) + kicked * 4);
-    smoothed.recoilKick = lerp(smoothed.recoilKick, 0, Math.min(1, dt * 14));
-
-    // Sideways kick rolls the weapon a little, so the tremble is not purely
-    // up and down.
     const kickedYaw = player.recoil.yaw - lastRecoilYaw;
     lastRecoilYaw = player.recoil.yaw;
-    smoothed.recoilRoll = lerp(smoothed.recoilRoll + kickedYaw * 2.5, 0, Math.min(1, dt * 12));
+
+    smoothed.climb = lerp(
+      Math.min(0.11, smoothed.climb + kickedPitch * 2.4 + (fired ? 0.012 : 0)),
+      0, Math.min(1, dt * 9),
+    );
+    smoothed.swing = lerp(
+      Math.max(-0.09, Math.min(0.09, smoothed.swing + kickedYaw * 2.4)),
+      0, Math.min(1, dt * 9),
+    );
+    smoothed.push = lerp(
+      Math.min(0.05, smoothed.push + (fired ? 0.018 : 0)),
+      0, Math.min(1, dt * 11),
+    );
 
     // Carried, not posed. The hip keeps the weapon far enough forward that the
     // stock never crowds the near plane — a gun model straddling the eye reads
@@ -248,24 +260,39 @@ export function createView(scene) {
       viewCamera.updateProjectionMatrix();
     }
 
-    // A scope sits 130 mm over the bore and an SMG's optic 50 mm, and neither
-    // needs a magic number of its own: what ADS asks for is this weapon's own
-    // sight, on the middle of the screen, at ADS_SIGHT_DIST.
-    const hip = CARRY;
-    const ads = {
-      x: -weapon.sight.position.x * weapon.scale,
-      y: -weapon.sight.position.y * weapon.scale,
-      z: -ADS_SIGHT_DIST - weapon.sight.position.z * weapon.scale,
-    };
-    weapon.group.position.set(
-      lerp(hip.x, ads.x, t) + smoothed.sway.x * (1 - t * 0.7) + bobX * 0.8,
-      lerp(hip.y, ads.y, t) + smoothed.sway.y + bobY * 0.8,
-      lerp(hip.z, ads.z, t) + smoothed.recoilKick * 0.5,
-    );
+    // Where the weapon points. The rotation goes first, because where it has
+    // to *sit* depends on it.
     weapon.group.rotation.set(
-      lerp(CARRY.pitch, 0, t) + smoothed.recoilKick * 1.4,
-      lerp(CARRY.yaw, 0, t) + smoothed.sway.x * 0.6 + smoothed.recoilRoll * 0.8,
-      lerp(CARRY.roll, 0, t) + smoothed.recoilRoll,
+      lerp(CARRY.pitch, 0, t) + smoothed.climb,
+      lerp(CARRY.yaw, 0, t) + smoothed.sway.x * 0.6 * (1 - t) + smoothed.swing,
+      lerp(CARRY.roll, 0, t) + smoothed.swing * 0.5 * (1 - t),
+    );
+
+    // ...and the sight goes on the middle of the screen and stays there.
+    //
+    // This is the one thing aiming has to get right, and it used to be wrong:
+    // sway, head bob and the recoil rotation all moved the model after the
+    // aiming offset was worked out, and since the model turns about the grip,
+    // half a degree of it swung the optic a long way off the axis. The mark
+    // wandered; the rounds did not, because the simulation fires down the
+    // camera. On a submachine gun held on a distant target that reads as a
+    // weapon that does not shoot where it is pointed.
+    //
+    // So: rotate the sight's own offset by whatever the weapon is doing, and
+    // put the model wherever leaves that offset on the axis. Now the barrel
+    // can climb and swing all it likes — it pivots about the glass, and the
+    // dot sits on the point of impact through the whole burst. Everything that
+    // is not on the axis fades out with the aim.
+    const hip = CARRY;
+    const pinned = weapon.sight.position.clone()
+      .multiplyScalar(weapon.scale)
+      .applyEuler(weapon.group.rotation);
+    const ads = { x: -pinned.x, y: -pinned.y, z: -ADS_SIGHT_DIST - pinned.z };
+    const loose = 1 - t;
+    weapon.group.position.set(
+      lerp(hip.x, ads.x, t) + (smoothed.sway.x + bobX * 0.8) * loose,
+      lerp(hip.y, ads.y, t) + (smoothed.sway.y + bobY * 0.8) * loose,
+      lerp(hip.z, ads.z, t) + smoothed.push,
     );
 
     // Up against a wall: pull the weapon in and raise the muzzle, the way you
@@ -273,8 +300,9 @@ export function createView(scene) {
     // of the wall rather than hanging through it.
     const wantCrowd = Math.max(0, Math.min(1, 1 - wallDistance / CLEARANCE));
     smoothed.crowd = lerp(smoothed.crowd, wantCrowd, Math.min(1, dt * 11));
-    if (smoothed.crowd > 0.001) {
-      const c = smoothed.crowd;
+    if (smoothed.crowd > 0.001 && loose > 0.001) {
+      // ...but not while aiming. Nothing moves the sight off the axis.
+      const c = smoothed.crowd * loose;
       weapon.group.position.z += c * 0.26;
       weapon.group.position.y -= c * 0.02;
       weapon.group.position.x += c * 0.10;
@@ -282,13 +310,22 @@ export function createView(scene) {
       weapon.group.rotation.z += c * 0.12;
     }
 
-    // Aiming folds the arms down and back: at the eye they are behind the
-    // weapon, not beside it, and a forearm across the sight picture is the
-    // one thing a sight picture must not have in it.
+    // Aiming folds the arms down and back and out of frame.
+    //
+    // The support forearm runs back toward the eye, and the narrow lens the
+    // sights are drawn with magnifies whatever is nearest the camera about
+    // three times — so at the eye that sleeve was a slab across the bottom
+    // corner of the screen. At the shoulder the arms are below the sight line
+    // and behind the weapon, which on a screen means gone.
+    // Mostly a drop, barely a fold: swinging them about the grip past a
+    // radian brings the far end of the support forearm back up and into the
+    // sight picture, which is the opposite of the point — at the eye it filled
+    // the bottom corner of the screen with a black slab, and on the shorter
+    // weapons it filled the window.
     if (weapon.arms) {
-      weapon.arms.rotation.x = t * 0.85;
-      weapon.arms.position.y = -t * 0.12;
-      weapon.arms.position.z = t * 0.06;
+      weapon.arms.rotation.x = t * 0.5;
+      weapon.arms.position.y = -t * 0.30;
+      weapon.arms.position.z = t * 0.16;
     }
 
     // Reloading dips the weapon out of view.

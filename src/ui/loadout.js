@@ -8,7 +8,7 @@
 // mind as often as you like, press "В бой" when you mean it, and if the clock
 // runs out first the highlighted set is taken as your answer.
 
-import { WEAPONS, WEAPON_CLASSES, GADGETS } from '../sim/constants.js?v=f541ce5d';
+import { WEAPONS, WEAPON_CLASSES, GADGETS } from '../sim/constants.js?v=1a8eeedb';
 
 const $ = (id) => document.getElementById(id);
 
@@ -171,5 +171,13 @@ export function createLoadout({ onConfirm }) {
     pending = { weapon: null, gadget: null };
   }
 
-  return { update, reset, confirm };
+  // Coming back to change your mind, which is a different thing. What you
+  // picked stays picked and stays highlighted; all that is undone is the
+  // confirming, so the clock can still answer for you if you walk away again.
+  function reopen() {
+    confirmed = false;
+    paint();
+  }
+
+  return { update, reset, reopen, confirm };
 }

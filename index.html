@@ -10,8 +10,8 @@
 <meta name="description" content="Хардкорный тактический шутер в тёмном двухэтажном пентхаусе: свет, звук и двери решают больше, чем реакция.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <!-- Written by tools/stamp-version.mjs; the page checks it against version.txt. -->
-<meta name="gameforus-version" content="f541ce5d">
-<link rel="stylesheet" href="styles.css?v=f541ce5d">
+<meta name="gameforus-version" content="1a8eeedb">
+<link rel="stylesheet" href="styles.css?v=1a8eeedb">
 </head>
 <body>
 
@@ -259,6 +259,47 @@
     </div>
   </section>
 
+  <!-- Planning.
+       Confirming a weapon used to drop you into a landing with nothing to do
+       until the defence finished setting up. This is what a team actually does
+       with that minute: reads the building. The plans are the same two sheets
+       the map tool draws from the map data, so nothing on them is a guess —
+       and nothing on them is an enemy, because the only marks are your own
+       side's, which you would have on a radio anyway. -->
+  <section class="screen screen-plan" id="screen-plan" hidden>
+    <header class="brand">
+      <h1>План здания</h1>
+      <p class="tagline"><span id="plan-phase">До начала</span> <b id="plan-timer">0:30</b></p>
+    </header>
+    <div class="panel plan-panel">
+      <div class="plan-sheets">
+        <figure class="plan-sheet">
+          <div class="plan-frame">
+            <img src="docs/plan-ground.svg" alt="План первого этажа">
+            <div class="plan-marks" id="plan-marks-ground"></div>
+          </div>
+          <figcaption>Первый этаж · вход, двор, лестницы</figcaption>
+        </figure>
+        <figure class="plan-sheet">
+          <div class="plan-frame">
+            <img src="docs/plan-upper.svg" alt="План второго этажа">
+            <div class="plan-marks" id="plan-marks-upper"></div>
+          </div>
+          <figcaption>Второй этаж · терраса, спальни</figcaption>
+        </figure>
+      </div>
+      <p class="hint" id="plan-hint">
+        Синим отмечены свои. Противника на плане нет и не будет — вы знаете
+        только то, что видите и слышите сами. План открывается клавишей
+        <b>M</b>, пока идёт подготовка.
+      </p>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-plan-close">В квартиру</button>
+        <button class="btn btn-ghost" id="btn-plan-back">Вернуться к выбору</button>
+      </div>
+    </div>
+  </section>
+
   <!-- Pause -->
   <section class="screen screen-narrow" id="screen-pause" hidden>
     <div class="panel">
@@ -449,6 +490,6 @@
   window.addEventListener('load', function () { window.setTimeout(offerUpdate, 1200); });
 })();
 </script>
-<script type="module" src="src/main.js?v=f541ce5d"></script>
+<script type="module" src="src/main.js?v=1a8eeedb"></script>
 </body>
 </html>

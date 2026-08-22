@@ -153,7 +153,11 @@ export function createAudio() {
   // a clear line to 1 for several walls. A wall does not turn a noise down so
   // much as take the edge off it: the crack goes and the thump stays, which is
   // exactly why a shot through drywall sounds further away than it is.
-  function panner(pos, refDistance, maxDistance, muffle = 0) {
+  // `send` is how much of this sound the room gets to answer. A gunshot is an
+  // event the whole flat rings with; a footstep is not, and at the same send
+  // as everything else a man walking dragged a tail behind every step and the
+  // corridor sounded like a swimming pool.
+  function panner(pos, refDistance, maxDistance, muffle = 0, send = 1) {
     const p = ctx.createPanner();
     p.panningModel = 'HRTF';
     p.distanceModel = 'inverse';
@@ -168,7 +172,15 @@ export function createAudio() {
       p.setPosition(pos.x, pos.y, pos.z);
     }
     p.connect(master);
-    if (reverbIn) p.connect(reverbIn);
+    if (reverbIn && send > 0.01) {
+      if (send >= 0.99) {
+        p.connect(reverbIn);
+      } else {
+        const tap = ctx.createGain();
+        tap.gain.value = send;
+        p.connect(tap).connect(reverbIn);
+      }
+    }
     if (muffle <= 0.01) return p;
 
     const wall = ctx.createBiquadFilter();
@@ -185,10 +197,14 @@ export function createAudio() {
   // Something happening at your own body rather than out in the flat: not
   // panned, not attenuated, and never behind a wall — but the room still
   // answers it, because your boots ring off the tiles the same as anyone's.
-  function ownVoice() {
+  function ownVoice(send = 1) {
     const g = ctx.createGain();
     g.connect(master);
-    if (reverbIn) g.connect(reverbIn);
+    if (reverbIn && send > 0.01) {
+      const tap = ctx.createGain();
+      tap.gain.value = send;
+      g.connect(tap).connect(reverbIn);
+    }
     return g;
   }
 
@@ -261,6 +277,11 @@ export function createAudio() {
   // men in different rooms still sound like two men in different rooms, which
   // is the entire point of listening — they just no longer sound like tap
   // dancers.
+  // How much of a footstep the room gets to answer. A shot is an event a flat
+  // rings with; a boot is a boot. At the full send every step dragged a tail
+  // after it and a corridor sounded like a swimming pool.
+  const FOOT_SEND = 0.3;
+
   const FLOORS = {
     floor:    { thump: 380, dur: 0.085, scuff: 900, bright: 0.16, vol: 1.00 },
     tile:     { thump: 430, dur: 0.060, scuff: 2600, bright: 0.34, vol: 0.95 },
@@ -281,7 +302,7 @@ export function createAudio() {
     if (!ensure() || !enabled) return;
     const f = FLOORS[surface] ?? FLOORS.floor;
     const t = ctx.currentTime;
-    const out = own ? ownVoice() : panner(pos, 1.2, 26, muffle);
+    const out = own ? ownVoice(FOOT_SEND) : panner(pos, 1.2, 26, muffle, FOOT_SEND);
     // This number is before the filters, and they throw most of it away: a
     // lowpass at 400 Hz keeps about a third of a noise burst, so what reaches
     // the ear is a third of what is written here. Measured at the output it is

@@ -1,15 +1,15 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=f541ce5d';
-import { createGame } from './game.js?v=f541ce5d';
-import { createAudio } from './audio/audio.js?v=f541ce5d';
-import { createInputSource, saveSettings } from './input/input.js?v=f541ce5d';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=f541ce5d';
+import { APARTMENT } from './maps/apartment.js?v=1a8eeedb';
+import { createGame } from './game.js?v=1a8eeedb';
+import { createAudio } from './audio/audio.js?v=1a8eeedb';
+import { createInputSource, saveSettings } from './input/input.js?v=1a8eeedb';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=1a8eeedb';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=f541ce5d';
-import { createLoadout } from './ui/loadout.js?v=f541ce5d';
-import { storageGet, storageSet } from './util/storage.js?v=f541ce5d';
+} from './net/transport.js?v=1a8eeedb';
+import { createLoadout } from './ui/loadout.js?v=1a8eeedb';
+import { storageGet, storageSet } from './util/storage.js?v=1a8eeedb';
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,6 +19,7 @@ const screens = {
   main: $('screen-main'),
   lobby: $('screen-lobby'),
   loadout: $('screen-loadout'),
+  plan: $('screen-plan'),
   pause: $('screen-pause'),
   round: $('screen-round'),
   loading: $('screen-loading'),
@@ -59,10 +60,16 @@ function hideOverlay() {
 const loadout = createLoadout({
   // The one place a choice reaches the game. Both roads lead here: the button
   // and the countdown running out.
-  onConfirm: ({ weapon, gadget }) => {
+  onConfirm: ({ weapon, gadget, reason }) => {
     game?.session.chooseWeapon?.(weapon);
     game?.session.chooseGadget?.(gadget);
-    closeLoadout();
+    stopLoadoutPolling();
+    // Confirmed by hand, with time still on the clock: the minute that follows
+    // is the defence taking the flat, and there is nothing for an attacker to
+    // do in it. Hand him the plans instead of a wall to look at — and a way
+    // back to the racks, because a choice you cannot change is a misclick.
+    if (reason === 'player' && staging()) openPlan();
+    else closeLoadout();
   },
 });
 let loadoutPoll = 0;
@@ -74,6 +81,18 @@ function refreshLoadout() {
 function openLoadout() {
   if (!game) return;
   loadout.reset(); // a new round is a new decision
+  showLoadout();
+}
+
+// Back from the plans to the racks: the same screen, still holding what you
+// picked, waiting to be confirmed again.
+function reopenLoadout() {
+  if (!game) return;
+  loadout.reopen();
+  showLoadout();
+}
+
+function showLoadout() {
   showScreen('loadout'); // shown first: onPause reads it to know this is not a pause
   input.releaseLock();
   refreshLoadout();
@@ -91,6 +110,90 @@ function closeLoadout() {
   hideOverlay();
   input.requestLock();
 }
+
+// ── The plans ─────────────────────────────────────────────────────────────
+//
+// Two sheets and your own side's positions on them. Open while the round is
+// still getting ready; gone the moment it starts.
+
+// The map tool's own projection, copied here because these are its drawings:
+// 26 pixels to the metre on a sheet that starts at the flat's north-west
+// corner. See tools/floorplan.mjs — if that changes, this does.
+const PLAN = { scale: 26, left: 64, top: 92, x0: -16.6, z0: -18.6, w: 951.2, h: 914.2 };
+const UPPER_FROM = 1.65; // above this and a man is on the second floor
+
+let planPoll = 0;
+
+function staging() {
+  const phase = game?.session.state.phase;
+  return phase === 'select' || phase === 'prep';
+}
+
+function refreshPlan() {
+  if (!game) return;
+  const state = game.session.state;
+  if (!staging()) { closePlan(); return; }
+
+  const selecting = state.phase === 'select';
+  $('plan-phase').textContent = selecting ? 'До подготовки' : 'До начала';
+  $('plan-timer').textContent = `0:${String(Math.ceil(Math.max(0, state.phaseTime))).padStart(2, '0')}`;
+  // Changing your mind is only possible while nothing has been taken yet.
+  $('btn-plan-back').hidden = !selecting;
+
+  const me = game.session.me;
+  const marks = { ground: [], upper: [] };
+  for (const id of Object.keys(state.players)) {
+    const p = state.players[id];
+    // Your own side only. Everything else you have to find out the hard way.
+    if (!p.alive || !me || p.team !== me.team) continue;
+    const floor = p.pos.y >= UPPER_FROM ? 'upper' : 'ground';
+    marks[floor].push(
+      `<i class="plan-mark${p.id === me.id ? ' self' : ''}" style="left:${
+        ((PLAN.left + (p.pos.x - PLAN.x0) * PLAN.scale) / PLAN.w * 100).toFixed(2)
+      }%;top:${
+        ((PLAN.top + (p.pos.z - PLAN.z0) * PLAN.scale) / PLAN.h * 100).toFixed(2)
+      }%"></i>`,
+    );
+  }
+  $('plan-marks-ground').innerHTML = marks.ground.join('');
+  $('plan-marks-upper').innerHTML = marks.upper.join('');
+}
+
+function openPlan() {
+  if (!game || !staging()) return;
+  stopLoadoutPolling();
+  showScreen('plan');
+  input.releaseLock();
+  refreshPlan();
+  if (!planPoll) planPoll = setInterval(refreshPlan, 200);
+}
+
+function closePlan() {
+  clearInterval(planPoll);
+  planPoll = 0;
+  if (screens.plan.hidden) return;
+  hideOverlay();
+  input.requestLock();
+}
+
+$('btn-plan-close').addEventListener('click', closePlan);
+$('btn-plan-back').addEventListener('click', () => {
+  clearInterval(planPoll);
+  planPoll = 0;
+  reopenLoadout();
+});
+
+// M for the plans, while there is still nothing to shoot at. Ignored the
+// moment the round goes live: a man reading a map is a man not watching a
+// doorway, and this game does not do that to you.
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyM' || e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (/^(INPUT|TEXTAREA)$/.test(e.target?.tagName ?? '')) return;
+  if (!game || !staging()) return;
+  if (!screens.loadout.hidden) return;
+  e.preventDefault();
+  if (screens.plan.hidden) openPlan(); else closePlan();
+});
 
 
 
@@ -147,7 +250,7 @@ function startGame(session) {
     onPause: () => {
       // Choosing a weapon releases the mouse too, and that is not a pause: the
       // countdown has to keep running or nobody ever reaches the round.
-      if (!screens.loadout.hidden) return;
+      if (!screens.loadout.hidden || !screens.plan.hidden) return;
       // In a live match the world keeps turning while you're in the menu —
       // stopping the host would freeze everyone else. Alone against bots
       // nobody else is waiting, so the round really does stop.
@@ -161,6 +264,8 @@ function startGame(session) {
     onPhase: (phase) => {
       if (phase === 'select') openLoadout();
       else closeLoadout();
+      // Whatever is on screen, the round starting takes it away.
+      if (phase !== 'select' && phase !== 'prep') closePlan();
     },
     onRoundEnd: (winner) => {
       const iWon = session.me?.team === winner;

@@ -88,6 +88,9 @@ html, body {
   min-height: 100%;
   justify-content: center;
 }
+/* Two floor plans side by side want the width of the window, not the width of
+   a column of prose. */
+.screen-plan { max-width: 108ch; }
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(10px); }
@@ -420,15 +423,23 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
   opacity: 0;
   transition: opacity 0.1s linear;
 }
+/* The eyepiece, not a blindfold.
+   `closest-side` measures to the nearest edge, so the circle stays 74% of the
+   screen height whatever the window's shape. Outside it used to go to solid
+   black, which is what a scope looks like with your eye jammed into it — and
+   also what a room you can no longer see looks like. At the moment you most
+   need to know what is walking in from the side, the screen went out. Now the
+   edge of the glass still reads as a dark ring, and the room around it is only
+   dimmed. */
 .scope-shade {
   position: absolute;
   inset: 0;
-  /* `closest-side` measures to the nearest edge, so the hole stays a circle of
-     78% of the screen height whatever the window's shape. */
   background: radial-gradient(circle closest-side at 50% 50%,
-    rgba(0, 0, 0, 0) 0 74%,
-    rgba(0, 0, 0, 0.55) 76.5%,
-    #040507 80%, #040507 100%);
+    rgba(0, 0, 0, 0) 0 73%,
+    rgba(4, 5, 7, 0.74) 75.5%,
+    rgba(4, 5, 7, 0.46) 78%,
+    rgba(4, 5, 7, 0.3) 90%,
+    rgba(4, 5, 7, 0.4) 100%);
 }
 .scope-reticle {
   position: absolute;
@@ -892,4 +903,51 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+
+/* ── Planning ──────────────────────────────────────────────────────────────
+   The two sheets the map tool draws, with your own side marked on them. The
+   sheets are pale — they are drawings, not the game — so they sit on their own
+   light card rather than on the dark panel, the way a paper plan on a table
+   does. */
+.plan-panel { gap: var(--s-4); }
+.plan-sheets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-4);
+}
+.plan-sheet { margin: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.plan-frame {
+  position: relative;
+  background: #f7f5f1;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.plan-frame img { display: block; width: 100%; height: auto; }
+.plan-marks { position: absolute; inset: 0; pointer-events: none; }
+.plan-sheet figcaption {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+/* One mark per man on your own side. Yours is the one with a ring round it. */
+.plan-mark {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: #2f6fd0;
+  border: 2px solid #f7f5f1;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.plan-mark.self {
+  background: #eaf1fb;
+  border-color: #2f6fd0;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
 }
