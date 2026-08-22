@@ -10,7 +10,7 @@
 
 import {
   WEAPONS, WEAPON_CLASSES, GADGETS, OPTICS, OPTICS_BY_CLASS, defaultOptic,
-} from '../sim/constants.js?v=09f108eb';
+} from '../sim/constants.js?v=48d5848b';
 
 const $ = (id) => document.getElementById(id);
 
@@ -224,11 +224,17 @@ export function createLoadout({ onConfirm }) {
       buildOptics(pending.weapon, me.optics?.[pending.weapon] ?? defaultOptic(pending.weapon));
     }
 
-    const t = Math.max(0, state.phaseTime);
-    el.timer.textContent = `0:${String(Math.ceil(t)).padStart(2, '0')}`;
-    // The clock is the second way to confirm: when staging starts, whatever is
-    // highlighted is what you walk in with.
-    if (state.phase !== 'select') confirm('timeout');
+    // On a range there is no clock and nothing to be late for: the rack is
+    // open for as long as you want it, and nothing is taken as your answer.
+    if (state.practice) {
+      el.timer.textContent = '—';
+    } else {
+      const t = Math.max(0, state.phaseTime);
+      el.timer.textContent = `0:${String(Math.ceil(t)).padStart(2, '0')}`;
+      // The clock is the second way to confirm: when staging starts, whatever
+      // is highlighted is what you walk in with.
+      if (state.phase !== 'select') confirm('timeout');
+    }
     paint();
   }
 

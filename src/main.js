@@ -1,21 +1,21 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=09f108eb';
+import { APARTMENT } from './maps/apartment.js?v=48d5848b';
 // The same projection tools/floorplan.mjs draws the sheets with, so a mark and
 // the wall it is next to are worked out from one set of numbers.
-import { PLAN, UPPER_FROM } from './maps/plan.js?v=09f108eb';
-import { createGame } from './game.js?v=09f108eb';
-import { createAudio } from './audio/audio.js?v=09f108eb';
-import { createInputSource, saveSettings } from './input/input.js?v=09f108eb';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=09f108eb';
+import { PLAN, UPPER_FROM } from './maps/plan.js?v=48d5848b';
+import { createGame } from './game.js?v=48d5848b';
+import { createAudio } from './audio/audio.js?v=48d5848b';
+import { createInputSource, saveSettings } from './input/input.js?v=48d5848b';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=48d5848b';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=09f108eb';
-import { createLoadout } from './ui/loadout.js?v=09f108eb';
-import { createArmoury, savedOptics, saveOptic } from './ui/armoury.js?v=09f108eb';
-import { storageGet, storageSet } from './util/storage.js?v=09f108eb';
-import { DEBUG, AUTO_SOLO, AUTO_RANGE, SOLO_BOTS, SOLO_MATES } from './util/flags.js?v=09f108eb';
-import { swapsSides } from './sim/sim.js?v=09f108eb';
+} from './net/transport.js?v=48d5848b';
+import { createLoadout } from './ui/loadout.js?v=48d5848b';
+import { createArmoury, savedOptics, saveOptic } from './ui/armoury.js?v=48d5848b';
+import { storageGet, storageSet } from './util/storage.js?v=48d5848b';
+import { DEBUG, AUTO_SOLO, AUTO_RANGE, SOLO_BOTS, SOLO_MATES } from './util/flags.js?v=48d5848b';
+import { swapsSides } from './sim/sim.js?v=48d5848b';
 
 const $ = (id) => document.getElementById(id);
 
@@ -199,9 +199,20 @@ $('btn-plan-back').addEventListener('click', () => {
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'KeyM' || e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
   if (/^(INPUT|TEXTAREA)$/.test(e.target?.tagName ?? '')) return;
-  if (!game || !staging()) return;
-  if (!screens.loadout.hidden) return;
+  if (!game) return;
   e.preventDefault();
+
+  // On the range the same key opens the rack instead. There are no plans to
+  // read — one hall, no doors — and trying a sight is a loop of shoot, change,
+  // shoot: a room you can only reach by ending the session and coming back
+  // through the armoury is a room you stop bothering with.
+  if (onRange) {
+    if (screens.loadout.hidden) openLoadout(); else closeLoadout();
+    return;
+  }
+
+  if (!staging()) return;
+  if (!screens.loadout.hidden) return;
   if (screens.plan.hidden) openPlan(); else closePlan();
 });
 
@@ -283,7 +294,7 @@ async function startRange(weaponId) {
   storageSet(WEAPON_KEY, weaponId);
   let RANGE;
   try {
-    ({ RANGE } = await import('./maps/range.js?v=09f108eb'));
+    ({ RANGE } = await import('./maps/range.js?v=48d5848b'));
   } catch {
     setStatus($('net-status'), 'Полигон не открылся.', 'error');
     showScreen('armoury');
@@ -334,7 +345,7 @@ function startGame(session) {
       // said "leave the match" — which is a poor sign to hang over the only
       // door in a room you came into to try a sight for ten seconds.
       $('pause-hint').textContent = onRange
-        ? 'Полигон. Стрельба остановлена, Escape — вернуться к ней.'
+        ? 'Полигон. Escape — вернуться к стрельбе, M — сменить оружие и прицел.'
         : solo
           ? 'Раунд остановлен. Escape — вернуться в игру.'
           : 'Раунд продолжается. Вас всё ещё можно убить.';
@@ -610,7 +621,7 @@ showScreen('main');
 // below is never fetched, so `window.__gfu` stays undefined on the live site,
 // and there is nothing to remember to take out again. See src/util/flags.js.
 if (DEBUG) {
-  import('./util/debug.js?v=09f108eb').then(({ installDebug }) => {
+  import('./util/debug.js?v=48d5848b').then(({ installDebug }) => {
     installDebug({ input, getGame: () => game, startSolo, showMenu });
     // Started only after the handle exists, so a tool that asks for both never
     // races the match into being before it can steer it.

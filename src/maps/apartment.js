@@ -34,7 +34,7 @@
 //
 // Keeping them apart is what lets a door be something everyone shoots through
 // and everyone pays for, while a wall is something only the .50 crosses.
-import { turnBox } from '../sim/math.js?v=09f108eb';
+import { turnBox } from '../sim/math.js?v=48d5848b';
 
 export const MATERIALS = {
   concrete: { name: 'concrete', resist: 0, color: 0x3a3a3e, hardness: 1.0 },

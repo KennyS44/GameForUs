@@ -1,6 +1,6 @@
 // HUD: reads simulation state, writes DOM. Never the other way round.
 
-import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=09f108eb';
+import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=48d5848b';
 
 const $ = (id) => document.getElementById(id);
 
@@ -126,7 +126,9 @@ export function createHud() {
     el.weaponName.textContent = def.name;
     el.ammoMag.textContent = w.reloading > 0 ? '- -' : w.ammo;
     el.ammoMag.classList.toggle('low', w.ammo <= def.magSize * 0.25);
-    el.ammoReserve.textContent = w.reserve;
+    // On a range the pockets never empty, and a number that never moves reads
+    // as a number that is about to.
+    el.ammoReserve.textContent = state.practice ? '∞' : w.reserve;
     el.flashlightFlag.hidden = !me.flashlight;
 
     // ── Equipment ──

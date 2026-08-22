@@ -20,6 +20,7 @@
 // kicks a door open and a later one walks through it, so it lives or dies whole.
 
 import { APARTMENT, MATERIALS } from '../src/maps/apartment.js';
+import { RANGE } from '../src/maps/range.js';
 import { buildWorld, hasLineOfSight, doorAngle, raycastGeometry } from '../src/sim/world.js';
 import {
   createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout,
@@ -2167,6 +2168,57 @@ section('sides', () => {
 
   // And the shipped setting is the one the flat was built around.
   check('shipped setting is one round a side', ROUND.swapEvery === 1, `${ROUND.swapEvery}`);
+});
+
+// ── A range is not a round ────────────────────────────────────────────────
+//
+// Two rules that only hold where nothing is at stake: the rack never shuts and
+// the pockets never empty. Both are read off the map rather than switched on by
+// the menu, because it is the simulation that refuses a weapon change once the
+// shooting has started, and it is the simulation that has to know when not to.
+section('range', () => {
+  console.log('\nOn the range:');
+
+  const wr = buildWorld(RANGE);
+  const sr = createState(wr, 4);
+  const pr = addPlayer(wr, sr, 'p', 'attackers', 'P');
+
+  check('the map declares itself a range', sr.practice === true);
+  check('...and the flat does not', createState(buildWorld(APARTMENT), 4).practice === false);
+
+  sr.phase = 'live';
+  check('the rack is open mid-round', setLoadout(sr, 'p', 'sg-12-pump'));
+  check('...and hands over a loaded gun',
+    pr.weapon.id === 'sg-12-pump' && pr.weapon.ammo === WEAPONS['sg-12-pump'].magSize);
+  check('the rail is open too', setOptic(sr, 'p', 'sg-12-pump', 'holo'));
+  check('...but an illegal fitting is still refused',
+    !setOptic(sr, 'p', 'sg-12-pump', 'scope'));
+
+  // Empty the tube and feed it back full, twice over, and count the pockets.
+  const reserveAt = () => pr.weapon.reserve;
+  const started = reserveAt();
+  const feed = { ...createInput(), reload: true };
+  for (let i = 0; i < 60 * 30; i++) stepSim(wr, sr, { p: feed });
+  check('shell by shell, the pockets do not empty',
+    reserveAt() === started && pr.weapon.ammo === WEAPONS['sg-12-pump'].magSize,
+    `запас ${reserveAt()} из ${started}, в трубке ${pr.weapon.ammo}`);
+
+  // ...and the same for a weapon that drops the whole magazine.
+  setLoadout(sr, 'p', 'ar-545-piston');
+  const was = pr.weapon.reserve;
+  pr.weapon.ammo = 1;
+  for (let i = 0; i < 60 * 8; i++) stepSim(wr, sr, { p: feed });
+  check('and a dropped magazine costs nothing either',
+    pr.weapon.reserve === was && pr.weapon.ammo === WEAPONS['ar-545-piston'].magSize,
+    `запас ${pr.weapon.reserve} из ${was}, в магазине ${pr.weapon.ammo}`);
+
+  // The flat must be untouched by any of it.
+  const wa = buildWorld(APARTMENT);
+  const sa = createState(wa, 4);
+  addPlayer(wa, sa, 'a', 'attackers', 'A');
+  sa.phase = 'live';
+  check('in the flat the rack still shuts when the round starts',
+    !setLoadout(sa, 'a', 'sg-12-pump'));
 });
 
 // ── What goes on the rail ─────────────────────────────────────────────────

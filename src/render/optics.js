@@ -21,8 +21,8 @@
 // dependency runs one way — a weapon knows about sights, a sight knows nothing
 // about weapons.
 
-import * as THREE from '../../vendor/three.module.js?v=09f108eb';
-import { OPTICS as FITTING, OPTICS_BY_CLASS } from '../sim/constants.js?v=09f108eb';
+import * as THREE from '../../vendor/three.module.js?v=48d5848b';
+import { OPTICS as FITTING, OPTICS_BY_CLASS } from '../sim/constants.js?v=48d5848b';
 
 // ── Reticles ───────────────────────────────────────────────────────────────
 //

@@ -25,7 +25,7 @@
 // `onLegs` and the rest of the furniture) are private to that file, so the two
 // this map needs are written out again below rather than by prising them loose
 // and disturbing the flat.
-import { MATERIALS } from './apartment.js?v=09f108eb';
+import { MATERIALS } from './apartment.js?v=48d5848b';
 
 const M = MATERIALS;
 
@@ -280,6 +280,12 @@ export const RANGE = {
   // is atmosphere indoors and a fault here: the 50 m plate is the one you came
   // to look at. See CLEAR_FOG in src/render/scene.js.
   fog: { near: 40, far: 140 },
+  // Not a place where anything is at stake. Nobody is scored, nobody dies, and
+  // the point of standing here is to try things — so the rack stays open and
+  // the pockets never empty. The simulation reads this off the map rather than
+  // being told by the menu, because it is the simulation that refuses a weapon
+  // change once a round has started, and it has to know when not to.
+  practice: true,
   geometry: solid,
   rooms,
   // No doors, no ways through, no holes, no stairs and no consumer unit: the

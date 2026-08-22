@@ -14,7 +14,7 @@
 //
 // So it is worked out once, from the map's own bounds, and both sides read it.
 
-import { APARTMENT } from './apartment.js?v=09f108eb';
+import { APARTMENT } from './apartment.js?v=48d5848b';
 
 // Enough air around the flat that a wall on the boundary still has paper
 // outside it.

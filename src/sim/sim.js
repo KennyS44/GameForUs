@@ -8,14 +8,14 @@
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
   GADGETS, DEFAULT_GADGET, BLIND, NVG, FLARE, POWER, OPTICS, defaultOptic, opticFits,
-} from './constants.js?v=09f108eb';
+} from './constants.js?v=48d5848b';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=09f108eb';
+} from './math.js?v=48d5848b';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=09f108eb';
+} from './world.js?v=48d5848b';
 
 const GRAVITY = 18;
 
@@ -126,6 +126,10 @@ export function createState(world, seed = 12345) {
     // resetRound — so it has to be part of the state the host broadcasts
     // rather than a number the menu keeps to itself.
     round: 1,
+    // A range rather than a round: the rack never shuts and the pockets never
+    // empty. Copied off the map because setLoadout and its neighbours are
+    // handed a state and never a world.
+    practice: !!world.map.practice,
     players: {},
     doors,
     lights,
@@ -161,7 +165,7 @@ export function setLoadout(state, id, weaponId) {
   const p = state.players[id];
   const def = WEAPONS[weaponId];
   if (!p || !def) return false;
-  if (state.phase !== 'select' && state.phase !== 'prep') return false;
+  if (!state.practice && state.phase !== 'select' && state.phase !== 'prep') return false;
 
   p.loadout = weaponId;
   p.weapon = {
@@ -607,7 +611,7 @@ export function setGadget(state, id, gadgetId) {
   const p = state.players[id];
   const def = GADGETS[gadgetId];
   if (!p || !def || def.team !== p.team) return false;
-  if (state.phase !== 'select' && state.phase !== 'prep') return false;
+  if (!state.practice && state.phase !== 'select' && state.phase !== 'prep') return false;
 
   p.gadget = gadgetId;
   p.gadgetLeft = def.count;
@@ -633,7 +637,7 @@ export function opticOn(p, weaponId) {
 export function setOptic(state, id, weaponId, opticId) {
   const p = state.players[id];
   if (!p || !opticFits(weaponId, opticId)) return false;
-  if (state.phase !== 'select' && state.phase !== 'prep') return false;
+  if (!state.practice && state.phase !== 'select' && state.phase !== 'prep') return false;
 
   p.optics[weaponId] = opticId;
   return true;
@@ -1289,15 +1293,15 @@ function stepWeapon(world, state, p, input, dt) {
     if (w.reloading <= 0) {
       if (def.reloadStyle === 'shell') {
         w.ammo++;
-        w.reserve--;
+        if (!state.practice) w.reserve--;
         emit(state, { type: 'reloadDone', by: p.id });
         // Keep feeding until the tube is full or the pockets are empty.
         if (w.ammo < def.magSize && w.reserve > 0) startReload(state, p, def);
       } else {
         // Hardcore: the partial magazine is dropped, not merged. What was left
         // in it goes with it, so the cost of an early reload is a full mag.
-        const take = Math.min(def.magSize, w.reserve);
-        w.reserve -= take;
+        const take = state.practice ? def.magSize : Math.min(def.magSize, w.reserve);
+        if (!state.practice) w.reserve -= take;
         w.ammo = take;
         w.reloading = 0;
         emit(state, { type: 'reloadDone', by: p.id });
