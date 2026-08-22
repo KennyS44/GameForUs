@@ -1,15 +1,16 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=34006d2e';
-import { createGame } from './game.js?v=34006d2e';
-import { createAudio } from './audio/audio.js?v=34006d2e';
-import { createInputSource, saveSettings } from './input/input.js?v=34006d2e';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=34006d2e';
+import { APARTMENT } from './maps/apartment.js?v=76a1d3ce';
+import { createGame } from './game.js?v=76a1d3ce';
+import { createAudio } from './audio/audio.js?v=76a1d3ce';
+import { createInputSource, saveSettings } from './input/input.js?v=76a1d3ce';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=76a1d3ce';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=34006d2e';
-import { createLoadout } from './ui/loadout.js?v=34006d2e';
-import { storageGet, storageSet } from './util/storage.js?v=34006d2e';
+} from './net/transport.js?v=76a1d3ce';
+import { createLoadout } from './ui/loadout.js?v=76a1d3ce';
+import { storageGet, storageSet } from './util/storage.js?v=76a1d3ce';
+import { DEBUG, AUTO_SOLO, SOLO_BOTS } from './util/flags.js?v=76a1d3ce';
 
 const $ = (id) => document.getElementById(id);
 
@@ -295,16 +296,18 @@ canvas.addEventListener('click', () => {
 
 // ── Solo ──────────────────────────────────────────────────────────────────
 
-$('btn-solo').addEventListener('click', () => {
+function startSolo(bots = 2) {
   audio.resume();
   showScreen('loading');
   $('loading-detail').textContent = 'Собираем пентхаус…';
   // One frame of breathing room so the loading screen actually paints.
   requestAnimationFrame(() => {
-    const session = createLocalSession({ map: APARTMENT, name: playerName(), bots: 2 });
+    const session = createLocalSession({ map: APARTMENT, name: playerName(), bots });
     startGame(session);
   });
-});
+}
+
+$('btn-solo').addEventListener('click', () => startSolo());
 
 // ── Host ──────────────────────────────────────────────────────────────────
 
@@ -496,6 +499,22 @@ function escapeHtml(s) {
 }
 
 showScreen('main');
+
+// ── The address-bar switches ──────────────────────────────────────────────
+//
+// Neither of these does anything on a normal visit: without ?debug the module
+// below is never fetched, so `window.__gfu` stays undefined on the live site,
+// and there is nothing to remember to take out again. See src/util/flags.js.
+if (DEBUG) {
+  import('./util/debug.js?v=76a1d3ce').then(({ installDebug }) => {
+    installDebug({ input, getGame: () => game, startSolo });
+    // Started only after the handle exists, so a tool that asks for both never
+    // races the match into being before it can steer it.
+    if (AUTO_SOLO) startSolo(SOLO_BOTS);
+  });
+} else if (AUTO_SOLO) {
+  startSolo(SOLO_BOTS);
+}
 
 // Tells the start-up watchdog in crash-banner.js that the game really did boot.
 // Without it the watchdog assumes the module never ran and reports why.

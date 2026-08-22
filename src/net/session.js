@@ -5,12 +5,12 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=34006d2e';
+import { buildWorld } from '../sim/world.js?v=76a1d3ce';
 import {
   createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout, setGadget,
-} from '../sim/sim.js?v=34006d2e';
-import { createBotBrain } from '../sim/bot.js?v=34006d2e';
-import { DT } from '../sim/constants.js?v=34006d2e';
+} from '../sim/sim.js?v=76a1d3ce';
+import { createBotBrain } from '../sim/bot.js?v=76a1d3ce';
+import { DT } from '../sim/constants.js?v=76a1d3ce';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 

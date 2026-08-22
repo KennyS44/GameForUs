@@ -5,6 +5,10 @@
 // development. It is not part of the deliverable.
 //
 //   node tools/serve.mjs [port]
+//
+// tools/shot.mjs imports serve() instead of running this as a command, so the
+// screenshot tool brings up its own server and takes it down again rather than
+// depending on one somebody remembered to start.
 
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -12,7 +16,6 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = Number(process.argv[2] || process.env.PORT || 20300);
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -25,9 +28,9 @@ const TYPES = {
   '.ico': 'image/x-icon',
 };
 
-createServer(async (req, res) => {
+const handler = async (req, res) => {
   try {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const url = new URL(req.url, 'http://localhost');
     let path = decodeURIComponent(url.pathname);
     if (path.endsWith('/')) path += 'index.html';
 
@@ -50,6 +53,20 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Not found');
   }
-}).listen(PORT, () => {
-  console.log(`serving ${ROOT} at http://localhost:${PORT}`);
-});
+};
+
+// Returns the running server, so a caller can close it when it is done.
+export function serve(port) {
+  const server = createServer(handler);
+  return new Promise((ready, fail) => {
+    server.once('error', fail);
+    server.listen(port, () => ready(server));
+  });
+}
+
+// Run as a command, keep serving until interrupted.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const port = Number(process.argv[2] || process.env.PORT || 20300);
+  await serve(port);
+  console.log(`serving ${ROOT} at http://localhost:${port}`);
+}

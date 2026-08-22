@@ -8,7 +8,7 @@
 // mind as often as you like, press "В бой" when you mean it, and if the clock
 // runs out first the highlighted set is taken as your answer.
 
-import { WEAPONS, WEAPON_CLASSES, GADGETS } from '../sim/constants.js?v=34006d2e';
+import { WEAPONS, WEAPON_CLASSES, GADGETS } from '../sim/constants.js?v=76a1d3ce';
 
 const $ = (id) => document.getElementById(id);
 

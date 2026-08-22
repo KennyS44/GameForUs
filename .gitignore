@@ -7,3 +7,6 @@ gameforus.zip
 .DS_Store
 Thumbs.db
 *.swp
+
+# Screenshots taken by tools/shot.mjs — regenerate them, do not keep them.
+docs/shots/

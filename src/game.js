@@ -1,18 +1,18 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=34006d2e';
+import * as THREE from '../vendor/three.module.js?v=76a1d3ce';
 import {
   buildScene, syncDoors, syncLights, syncSmokeFog, makeAvatar, poseAvatar,
   setAvatarWeapon, createEquipmentView,
-} from './render/scene.js?v=34006d2e';
-import { createEffects } from './render/effects.js?v=34006d2e';
-import { createView } from './render/view.js?v=34006d2e';
-import { createHud } from './ui/hud.js?v=34006d2e';
-import { DT, NVG } from './sim/constants.js?v=34006d2e';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=34006d2e';
-import { raycastGeometry } from './sim/world.js?v=34006d2e';
-import { distXZ } from './sim/math.js?v=34006d2e';
+} from './render/scene.js?v=76a1d3ce';
+import { createEffects } from './render/effects.js?v=76a1d3ce';
+import { createView } from './render/view.js?v=76a1d3ce';
+import { createHud } from './ui/hud.js?v=76a1d3ce';
+import { DT, NVG } from './sim/constants.js?v=76a1d3ce';
+import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=76a1d3ce';
+import { raycastGeometry } from './sim/world.js?v=76a1d3ce';
+import { distXZ } from './sim/math.js?v=76a1d3ce';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -375,32 +375,25 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
 
   // ── Main loop ───────────────────────────────────────────────────────────
 
-  function frame(now) {
-    rafId = requestAnimationFrame(frame);
-    if (!running) return;
-
-    let dtReal = (now - lastTime) / 1000;
-    lastTime = now;
-    // A tab that was backgrounded shouldn't fast-forward the match.
-    if (dtReal > 0.25) dtReal = 0.25;
-    accumulator += dtReal;
-
-    let ticks = 0;
-    while (accumulator >= DT && ticks < MAX_CATCHUP_TICKS) {
-      const frameInput = input.sample();
-      session.tick(frameInput, DT);
+  // Moving the round on, and drawing a picture of it, are two jobs rather than
+  // one. Normally the clock decides how much of each happens and they run back
+  // to back, which is the loop below. Kept apart, they can also be driven by
+  // hand — see `advance` — and that is the difference between a screenshot tool
+  // that waits on a browser's clock and one that says "thirty seconds in" and
+  // gets there at once.
+  function simulate(ticks) {
+    for (let i = 0; i < ticks; i++) {
+      session.tick(input.sample(), DT);
       handleEvents(session.drainEvents());
-      accumulator -= DT;
-      ticks++;
     }
-    if (ticks === MAX_CATCHUP_TICKS) accumulator = 0;
-
     if (session.state.phase !== lastPhase) {
       const prev = lastPhase;
       lastPhase = session.state.phase;
       onPhase?.(lastPhase, prev);
     }
+  }
 
+  function present(dtReal) {
     const me = session.me;
     if (me) {
       const moving = Math.hypot(me.vel.x, me.vel.z) > 0.4;
@@ -443,6 +436,27 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
     renderer.clearDepth();
     renderer.render(view.viewScene, view.viewCamera);
     renderer.autoClear = true;
+  }
+
+  function frame(now) {
+    rafId = requestAnimationFrame(frame);
+    if (!running) return;
+
+    let dtReal = (now - lastTime) / 1000;
+    lastTime = now;
+    // A tab that was backgrounded shouldn't fast-forward the match.
+    if (dtReal > 0.25) dtReal = 0.25;
+    accumulator += dtReal;
+
+    let ticks = 0;
+    while (accumulator >= DT && ticks < MAX_CATCHUP_TICKS) {
+      accumulator -= DT;
+      ticks++;
+    }
+    if (ticks === MAX_CATCHUP_TICKS) accumulator = 0;
+
+    simulate(ticks);
+    present(dtReal);
   }
 
   // Distance to whatever the player is pointing at, within arm's reach. The
@@ -493,8 +507,21 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
       roundEndFired = false;
       effects.clearDecals();
     },
+    // Run the round forward on the spot and draw the result, whether or not the
+    // loop above is running. A round is paced by requestAnimationFrame, and
+    // under a software renderer that clock crawls — a minute of round costs
+    // twenty minutes of waiting — so a tool that wants to photograph the state
+    // of things at some point in the round asks for it instead of sitting out
+    // the wait. Used by the debug handle; nothing in the game calls it.
+    advance(ticks) {
+      simulate(ticks);
+      present(DT);
+    },
     get session() {
       return session;
+    },
+    get view() {
+      return view;
     },
     get hud() {
       return hud;

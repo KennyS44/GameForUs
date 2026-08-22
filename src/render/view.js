@@ -1,10 +1,11 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=34006d2e';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=34006d2e';
-import { lerp } from '../sim/math.js?v=34006d2e';
-import { buildWeaponModel } from './weapons.js?v=34006d2e';
+import * as THREE from '../../vendor/three.module.js?v=76a1d3ce';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=76a1d3ce';
+import { lerp } from '../sim/math.js?v=76a1d3ce';
+import { STILL } from '../util/flags.js?v=76a1d3ce';
+import { buildWeaponModel } from './weapons.js?v=76a1d3ce';
 
 // ── Where the weapon is held ───────────────────────────────────────────────
 //
@@ -192,7 +193,8 @@ export function createView(scene) {
     // Head bob while walking — subtle, and it stops when you aim.
     const speed = Math.hypot(player.vel.x, player.vel.z);
     if (moving && player.grounded) smoothed.bob += dt * speed * 3.4;
-    const bobAmount = (1 - smoothed.aim * 0.85) * Math.min(speed / PLAYER.speedRun, 1) * 0.022;
+    const bobAmount = STILL ? 0
+      : (1 - smoothed.aim * 0.85) * Math.min(speed / PLAYER.speedRun, 1) * 0.022;
     const bobY = Math.sin(smoothed.bob * 2) * bobAmount;
     const bobX = Math.cos(smoothed.bob) * bobAmount * 0.6;
 
@@ -240,6 +242,24 @@ export function createView(scene) {
       Math.min(0.05, smoothed.push + (fired ? 0.018 : 0)),
       0, Math.min(1, dt * 11),
     );
+
+    // Taking a picture rather than playing. Five numbers on this rig move on
+    // their own — the two axes of sway, and the climb, swing and shove of
+    // recoil, with the head bob already zeroed above — and between them they
+    // mean two screenshots of identical code are never the same picture. Held
+    // at zero, a change in the carry numbers is the only thing that can move
+    // anything, which is the whole point of comparing two shots side by side.
+    //
+    // Everything else the rig does is left alone, because everything else is
+    // decided by where the player is standing: lean, stance, the crowd against
+    // a near wall, the dip of a reload. Same position, same picture.
+    if (STILL) {
+      smoothed.sway.x = 0;
+      smoothed.sway.y = 0;
+      smoothed.climb = 0;
+      smoothed.swing = 0;
+      smoothed.push = 0;
+    }
 
     // Carried, not posed. The hip keeps the weapon far enough forward that the
     // stock never crowds the near plane — a gun model straddling the eye reads
