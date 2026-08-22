@@ -255,15 +255,52 @@ for (const s of APARTMENT.stairways ?? []) {
     on.map((b) => `${b.tag} ${JSON.stringify(b.min)}`).join(', '));
 }
 
-// And nothing floats: every piece of furniture has floor directly under it.
+// And nothing floats. Furniture is built out of parts now — a top on legs, a
+// shelf between two sides — so the rule is not "there is floor under the
+// middle of it" but "something that reaches the ground is there at the level
+// this part starts at": the legs under a tabletop, the carcass beside a
+// shelf, the floor under the legs.
+const GAP = 0.03;
 for (const b of world.boxes) {
   if (b.tag !== 'furniture') continue;
   const cx = (b.min.x + b.max.x) / 2;
   const cz = (b.min.z + b.max.z) / 2;
-  const supported = world.boxes.some((o) =>
-    o !== b && cx > o.min.x && cx < o.max.x && cz > o.min.z && cz < o.max.z &&
-    Math.abs(o.max.y - b.min.y) < 0.02);
-  check(`furniture at (${cx.toFixed(1)}, ${cz.toFixed(1)}) rests on a floor`, supported);
+  const held = world.boxes.some((o) =>
+    o !== b
+    && o.max.x > b.min.x + 1e-3 && o.min.x < b.max.x - 1e-3
+    && o.max.z > b.min.z + 1e-3 && o.min.z < b.max.z - 1e-3
+    && o.max.y > b.min.y - GAP && o.min.y < b.min.y + GAP);
+  check(`furniture at (${cx.toFixed(1)}, ${cz.toFixed(1)}) is held up by something`, held,
+    `${(b.max.x - b.min.x).toFixed(2)}x${(b.max.z - b.min.z).toFixed(2)} at y=${b.min.y.toFixed(2)}`);
+}
+
+// Decoration is drawn and never simulated, which is only safe while it stays
+// decoration: a picture hung inside a wall is invisible, and a picture you
+// could mistake for cover is a lie, because a bullet goes straight through it.
+console.log('\nDecoration:');
+{
+  const inside = (p, g) => p.x > g.min.x && p.x < g.max.x
+    && p.y > g.min.y && p.y < g.max.y && p.z > g.min.z && p.z < g.max.z;
+  const buried = (APARTMENT.decor ?? []).filter((d) => {
+    const c = {
+      x: (d.min.x + d.max.x) / 2, y: (d.min.y + d.max.y) / 2, z: (d.min.z + d.max.z) / 2,
+    };
+    return APARTMENT.geometry.some((g) => inside(c, g));
+  });
+  check(`none of the ${(APARTMENT.decor ?? []).length} drawn-only pieces is buried in the building`,
+    buried.length === 0, buried.map((d) => JSON.stringify(d.min)).join(' '));
+
+  // Nothing you would ever crouch behind. Anything standing off the floor
+  // that is wide enough and tall enough to hide a man has to be real.
+  const pretender = (APARTMENT.decor ?? []).filter((d) => {
+    const w = Math.max(d.max.x - d.min.x, d.max.z - d.min.z);
+    const thick = Math.min(d.max.x - d.min.x, d.max.z - d.min.z);
+    const h = d.max.y - d.min.y;
+    const floor = d.min.y % 3.3;
+    return w > 0.7 && thick > 0.25 && h > 0.6 && floor < 0.5;
+  });
+  check('and none of it is big enough to be mistaken for cover',
+    pretender.length === 0, pretender.map((d) => JSON.stringify(d.min)).join(' '));
 }
 
 console.log('\nSurfaces:');

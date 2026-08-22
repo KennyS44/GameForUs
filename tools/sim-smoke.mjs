@@ -1679,6 +1679,10 @@ console.log('\nA door never pushes anyone through a wall:');
     const man = s.players.man;
     const seen = new Map(ids.map((id) => [id, new Set()]));
     const still = new Map(ids.map((id) => [id, 0]));
+    // The closest anybody got to the man all round, which is the question
+    // "did somebody come and look" — where they happen to be standing on the
+    // last frame is not.
+    let closest = Infinity;
     const was = new Map();
     const input = createInput();
     for (let i = 0; i < seconds * TICK_RATE; i++) {
@@ -1695,6 +1699,7 @@ console.log('\nA door never pushes anyone through a wall:');
         const p = s.players[id];
         p.alive = true;
         p.health = PLAYER.maxHealth;
+        closest = Math.min(closest, Math.hypot(p.pos.x - man.pos.x, p.pos.z - man.pos.z));
         seen.get(id).add(`${Math.round(p.pos.x / 3)}:${Math.round(p.pos.y / 3)}:${Math.round(p.pos.z / 3)}`);
         const prev = was.get(id);
         const moved = prev ? Math.hypot(p.pos.x - prev.x, p.pos.z - prev.z) : 9;
@@ -1707,7 +1712,7 @@ console.log('\nA door never pushes anyone through a wall:');
         }
       }
     }
-    return { world: w, state: s, ids, brain, seen, still, man };
+    return { world: w, state: s, ids, brain, seen, still, man, closest };
   }
 
   {
@@ -1738,11 +1743,8 @@ console.log('\nA door never pushes anyone through a wall:');
       && Math.hypot(squad.contacts[squad.contacts.length - 1].pos.x - loud.man.pos.x,
         squad.contacts[squad.contacts.length - 1].pos.z - loud.man.pos.z) < 12,
       `${squad.contacts.length} contacts`);
-    const near = loud.ids
-      .map((id) => Math.hypot(loud.state.players[id].pos.x - loud.man.pos.x,
-        loud.state.players[id].pos.z - loud.man.pos.z));
-    check('somebody has come to find out what the noise was', Math.min(...near) < 12,
-      `nearest ${Math.min(...near).toFixed(0)} m`);
+    check('somebody has come to find out what the noise was', loud.closest < 12,
+      `closest anybody got: ${loud.closest.toFixed(0)} m`);
   }
 
   // ── Shooting the cloud ──

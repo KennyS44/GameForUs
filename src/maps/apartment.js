@@ -338,111 +338,364 @@ const eastStair = [
 ];
 
 
-// ── Furniture ─────────────────────────────────────────────────────────────
-// Blockouts, not decoration: a few solid shapes per room, placed the way a
-// flat is actually furnished — beds and counters against walls, seating and
-// tables out in the floor. Two rules they all obey, and map-check enforces
-// both: nothing stands in a doorway or in the arc a door sweeps, and from any
-// door of a room you can walk to any other door of it. A table across the
-// middle is welcome; a table across a threshold is not.
+// ── Furniture, built out of parts ─────────────────────────────────────────
+//
+// Every piece here used to be one solid block. A table was a metre of wood
+// with nothing under it; a bookcase was a slab. That reads as a crate: you
+// cannot see under anything, you cannot shoot under anything, and a room is a
+// floor with cubes standing on it.
+//
+// So the things that really are frames are built as frames — a top on four
+// legs, a carcass with shelves in it, a mattress on a base — and the things
+// that really are solid, which is most of the cabinetry, stay solid. The
+// footprints are the ones the blocks had, to the centimetre: you still walk
+// round a table exactly as you did, because the top still spans it, and the
+// two rules map-check enforces — nothing in a doorway or in the arc a door
+// sweeps, and every door of a room reachable from every other — go on meaning
+// what they meant. What changes is what a bullet and an eye find at knee
+// height.
+
+const LEG = 0.06;
+// How far a shelf is let into the sides that carry it. A joint, not a gap:
+// boards that only touch hold nothing up, and the map checks are right to say
+// so. FACE is how far it then sits back from the front of the carcass, which
+// is both what a bookcase looks like and what keeps two boards from drawing a
+// face in the same place.
+const HOUSE = 0.012;
+const FACE = 0.012;
+
+// A slab on four legs: tables, desks, consoles, benches.
+function onLegs(x0, z0, x1, z1, y, o = {}) {
+  const h = o.h ?? 0.75;
+  const thick = o.thick ?? 0.045;
+  const mat = o.mat ?? M.wood;
+  const leg = o.leg ?? LEG;
+  const inset = o.inset ?? 0.05;
+  const out = [box(x0, y + h - thick, z0, x1, y + h, z1, mat)];
+  for (const sx of [0, 1]) {
+    for (const sz of [0, 1]) {
+      const lx = sx ? x1 - inset - leg : x0 + inset;
+      const lz = sz ? z1 - inset - leg : z0 + inset;
+      out.push(box(lx, y, lz, lx + leg, y + h - thick, lz + leg, mat));
+    }
+  }
+  return out;
+}
+
+// A desk is a table with somewhere to put your knees on one side and a
+// pedestal of drawers on the other, which is what tells the two apart from
+// across a room.
+function desk(x0, z0, x1, z1, y, o = {}) {
+  const h = o.h ?? 0.78;
+  const mat = o.mat ?? M.wood;
+  const out = onLegs(x0, z0, x1, z1, y, { h, mat });
+  const w = x1 - x0;
+  const px = o.pedestal === 'right' ? x1 - 0.44 : x0;
+  if (w > 1.0) out.push(box(px, y + 0.06, z0 + 0.06, px + 0.44, y + h - 0.05, z1 - 0.06, mat));
+  return out;
+}
+
+// A carcass with shelves in it: two sides, a top, a back panel and the
+// shelves between them. Open at the front, which is the whole point — a
+// bookcase you can see the wall through is not a wardrobe.
+function shelves(x0, z0, x1, z1, y, o = {}) {
+  const h = o.h ?? 1.85;
+  const mat = o.mat ?? M.wood;
+  const t = o.t ?? 0.04;
+  const out = [];
+  // `back` is the side that goes against the wall — the one you never see. Get
+  // it wrong and a bookcase is a brown slab facing the room, which is exactly
+  // the crate this was all meant to stop being.
+  const back = o.back ?? ((x1 - x0) >= (z1 - z0) ? 's' : 'e');
+  const alongX = back === 'n' || back === 's';
+  let in0;
+  if (alongX) {
+    out.push(box(x0, y, z0, x0 + t, y + h, z1, mat));
+    out.push(box(x1 - t, y, z0, x1, y + h, z1, mat));
+    if (back === 's') {
+      out.push(box(x0 + t, y, z1 - t, x1 - t, y + h, z1, mat));
+      in0 = { x0: x0 + t - HOUSE, x1: x1 - t + HOUSE, z0: z0 + FACE, z1: z1 - t + HOUSE };
+    } else {
+      out.push(box(x0 + t, y, z0, x1 - t, y + h, z0 + t, mat));
+      in0 = { x0: x0 + t - HOUSE, x1: x1 - t + HOUSE, z0: z0 + t - HOUSE, z1: z1 - FACE };
+    }
+  } else {
+    out.push(box(x0, y, z0, x1, y + h, z0 + t, mat));
+    out.push(box(x0, y, z1 - t, x1, y + h, z1, mat));
+    if (back === 'e') {
+      out.push(box(x1 - t, y, z0 + t, x1, y + h, z1 - t, mat));
+      in0 = { x0: x0 + FACE, x1: x1 - t + HOUSE, z0: z0 + t - HOUSE, z1: z1 - t + HOUSE };
+    } else {
+      out.push(box(x0, y, z0 + t, x0 + t, y + h, z1 - t, mat));
+      in0 = { x0: x0 + t - HOUSE, x1: x1 - FACE, z0: z0 + t - HOUSE, z1: z1 - t + HOUSE };
+    }
+  }
+  const n = o.shelves ?? 4;
+  // The top board stops a hair short of the top of the sides, for the same
+  // reason the front does: two boards flush with each other draw one face
+  // twice.
+  for (let i = 0; i <= n; i++) {
+    const sy = y + (h - t - FACE) * (i / n);
+    out.push(box(in0.x0, sy, in0.z0, in0.x1, sy + t, in0.z1, mat));
+  }
+  return out;
+}
+
+// Cabinetry: solid, because it is. A plinth set back at the floor and a
+// worktop overhanging the front are what stop it reading as a crate — and it
+// stays cover, which a bookcase does not.
+function cabinet(x0, z0, x1, z1, y, o = {}) {
+  const h = o.h ?? 0.92;
+  const mat = o.mat ?? M.wood;
+  const top = o.top ?? 0.045;
+  const plinth = o.plinth ?? 0.09;
+  const set = 0.05;
+  return [
+    box(x0 + set, y, z0 + set, x1 - set, y + plinth, z1 - set, mat),
+    box(x0, y + plinth, z0, x1, y + h - top, z1, mat),
+    box(x0 - 0.015, y + h - top, z0 - 0.015, x1 + 0.015, y + h, z1 + 0.015, o.worktop ?? mat),
+  ];
+}
+
+// A wardrobe: solid too, with a plinth, a cornice and a line down the middle
+// where the doors meet.
+function wardrobe(x0, z0, x1, z1, y, o = {}) {
+  const h = o.h ?? 1.85;
+  const mat = o.mat ?? M.wood;
+  const out = cabinet(x0, z0, x1, z1, y, { h, mat, top: 0.05, plinth: 0.08 });
+  const long = x1 - x0 > z1 - z0;
+  const mid = long ? (x0 + x1) / 2 : (z0 + z1) / 2;
+  // The handles, on the face that is not against a wall.
+  const grip = 0.02;
+  if (long) {
+    out.push(box(mid - 0.09, y + 0.9, z0 - grip, mid - 0.05, y + 1.1, z0 + 0.02, M.metal));
+    out.push(box(mid + 0.05, y + 0.9, z0 - grip, mid + 0.09, y + 1.1, z0 + 0.02, M.metal));
+  } else {
+    out.push(box(x0 - grip, y + 0.9, mid - 0.09, x0 + 0.02, y + 1.1, mid - 0.05, M.metal));
+    out.push(box(x0 - grip, y + 0.9, mid + 0.05, x0 + 0.02, y + 1.1, mid + 0.09, M.metal));
+  }
+  return out;
+}
+
+// A bed: a base set in under the mattress, the mattress over it, and a
+// headboard standing at one end. `head` is the side it stands on — the side
+// against the wall.
+function bed(x0, z0, x1, z1, y, o = {}) {
+  const head = o.head ?? 'n';
+  const baseH = o.baseH ?? 0.26;
+  const matH = o.matH ?? 0.2;
+  const headH = o.headH ?? 0.9;
+  const t = 0.07;
+  const b = { x0, z0, x1, z1 };
+  const out = [];
+  if (head === 'n') { out.push(box(x0, y, z0, x1, y + headH, z0 + t, M.wood)); b.z0 = z0 + t; }
+  if (head === 's') { out.push(box(x0, y, z1 - t, x1, y + headH, z1, M.wood)); b.z1 = z1 - t; }
+  if (head === 'w') { out.push(box(x0, y, z0, x0 + t, y + headH, z1, M.wood)); b.x0 = x0 + t; }
+  if (head === 'e') { out.push(box(x1 - t, y, z0, x1, y + headH, z1, M.wood)); b.x1 = x1 - t; }
+  out.push(box(b.x0 + 0.05, y, b.z0 + 0.05, b.x1 - 0.05, y + baseH, b.z1 - 0.05, M.wood));
+  out.push(box(b.x0, y + baseH, b.z0, b.x1, y + baseH + matH, b.z1, M.fabric));
+  return out;
+}
+
+// Seating: a base, a back along one side, an arm at each end. Upholstery, so
+// it hides you and stops very little — which is what the penetration table
+// already says about fabric.
+function sofa(x0, z0, x1, z1, y, o = {}) {
+  const back = o.back ?? 'n';
+  const h = o.h ?? 0.85;
+  const seat = o.seat ?? 0.42;
+  const t = 0.16;
+  const b = { x0, z0, x1, z1 };
+  const out = [];
+  if (back === 'n') { out.push(box(x0, y, z0, x1, y + h, z0 + t, M.fabric)); b.z0 = z0 + t; }
+  if (back === 's') { out.push(box(x0, y, z1 - t, x1, y + h, z1, M.fabric)); b.z1 = z1 - t; }
+  if (back === 'w') { out.push(box(x0, y, z0, x0 + t, y + h, z1, M.fabric)); b.x0 = x0 + t; }
+  if (back === 'e') { out.push(box(x1 - t, y, z0, x1, y + h, z1, M.fabric)); b.x1 = x1 - t; }
+  const along = back === 'n' || back === 's';
+  if (o.arms !== false) {
+    const arm = 0.14;
+    const armH = y + seat + 0.16;
+    if (along) {
+      out.push(box(b.x0, y, b.z0, b.x0 + arm, armH, b.z1, M.fabric));
+      out.push(box(b.x1 - arm, y, b.z0, b.x1, armH, b.z1, M.fabric));
+      b.x0 += arm; b.x1 -= arm;
+    } else {
+      out.push(box(b.x0, y, b.z0, b.x1, armH, b.z0 + arm, M.fabric));
+      out.push(box(b.x0, y, b.z1 - arm, b.x1, armH, b.z1, M.fabric));
+      b.z0 += arm; b.z1 -= arm;
+    }
+  }
+  // The frame under the cushion. Without it the seat floats, which the map
+  // checks catch and the eye catches sooner.
+  out.push(box(b.x0 + 0.04, y, b.z0 + 0.04, b.x1 - 0.04, y + 0.1, b.z1 - 0.04, M.wood));
+  out.push(box(b.x0, y + 0.1, b.z0, b.x1, y + seat, b.z1, M.fabric));
+  return out;
+}
+
+// A chair. Six small parts, and the reason a table with four of them round it
+// reads as a dining room rather than a slab in a field.
+function chair(cx, cz, y, o = {}) {
+  const half = 0.22;
+  const seat = o.seat ?? 0.45;
+  const backH = o.backH ?? 0.92;
+  const facing = o.facing ?? 'n'; // which way the back is
+  const out = [
+    box(cx - half, y + seat - 0.04, cz - half, cx + half, y + seat, cz + half, M.wood),
+  ];
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const lx = cx + sx * (half - 0.05) - 0.02;
+      const lz = cz + sz * (half - 0.05) - 0.02;
+      out.push(box(lx, y, lz, lx + 0.04, y + seat - 0.04, lz + 0.04, M.wood));
+    }
+  }
+  const t = 0.04;
+  if (facing === 'n') out.push(box(cx - half, y + seat, cz - half, cx + half, y + backH, cz - half + t, M.wood));
+  if (facing === 's') out.push(box(cx - half, y + seat, cz + half - t, cx + half, y + backH, cz + half, M.wood));
+  if (facing === 'w') out.push(box(cx - half, y + seat, cz - half, cx - half + t, y + backH, cz + half, M.wood));
+  if (facing === 'e') out.push(box(cx + half - t, y + seat, cz - half, cx + half, y + backH, cz + half, M.wood));
+  return out;
+}
+
+// A stack of crates, and the only thing in the flat that is meant to look
+// like a pile of boxes.
+function crates(x0, z0, x1, z1, y, o = {}) {
+  const h = o.h ?? 0.9;
+  const lid = h / 2;
+  return [
+    box(x0, y, z0, x1, y + lid, z1, M.wood),
+    box(x0 + 0.1, y + lid, z0 + 0.06, x1 - 0.18, y + h, z1 - 0.1, M.wood),
+  ];
+}
+
+// A run of lockers: one carcass with the seams between the doors cut into it.
+function lockers(x0, z0, x1, z1, y, o = {}) {
+  const h = o.h ?? 1.85;
+  const out = [box(x0, y, z0, x1, y + h, z1, M.metal)];
+  const long = x1 - x0 > z1 - z0;
+  const span = long ? x1 - x0 : z1 - z0;
+  const n = Math.max(2, Math.round(span / 0.45));
+  for (let i = 1; i < n; i++) {
+    const at = (long ? x0 : z0) + (span * i) / n;
+    // A rib standing a centimetre proud, which is all a seam needs to be.
+    if (long) out.push(box(at - 0.01, y + 0.06, z0 - 0.012, at + 0.01, y + h - 0.06, z0 + 0.02, M.metal));
+    else out.push(box(x0 - 0.012, y + 0.06, at - 0.01, x0 + 0.02, y + h - 0.06, at + 0.01, M.metal));
+  }
+  return out;
+}
+
 const furniture = ([
   // ── Ground floor ──
   // Open court: a bench and a planter along the parapet, clear of the stair.
-  box(-15.6, 0, -16.6, -14.4, 0.45, -13.6, M.wood),
-  box(-7.6, 0, -9.4, -6.0, 0.5, -8.6, M.wood),
+  ...onLegs(-15.6, -16.6, -14.4, -13.6, 0, { h: 0.45 }),
+  ...cabinet(-7.6, -9.4, -6.0, -8.6, 0, { h: 0.5, plinth: 0.06 }), // planter
 
   // Study + guest bedroom (one room, column in the middle).
-  box(-4.4, 0, -17.6, -1.9, 0.78, -16.8, M.wood), // desk on the north wall
-  box(3.0, 0, -17.7, 5.5, 1.85, -17.1, M.wood), // bookcase, north wall
-  box(5.6, 0, -17.6, 7.2, 0.55, -15.8, M.fabric), // bed against the east wall
+  ...desk(-4.4, -17.6, -1.9, -16.8, 0, { pedestal: 'right' }),
+  ...chair(-3.1, -16.3, 0, { facing: 's' }),
+  ...shelves(3.0, -17.7, 5.5, -17.1, 0, { back: 'n' }), // bookcase, north wall
+  ...bed(5.6, -17.6, 7.2, -15.8, 0, { head: 'n' }), // against the east wall
 
-  // Dining: a table in the middle — you walk round it, not through it.
-  box(-3.4, 0, -10.7, -1.2, 0.75, -9.7, M.wood),
-  box(-4.7, 0, -12.2, -3.7, 1.85, -11.0, M.wood), // sideboard in the corner
+  // Dining: a table in the middle — you walk round it, not through it, and
+  // four chairs to say what the table is for.
+  ...onLegs(-3.4, -10.7, -1.2, -9.7, 0),
+  ...chair(-3.0, -11.15, 0, { facing: 'n' }),
+  ...chair(-1.6, -11.15, 0, { facing: 'n' }),
+  ...chair(-3.0, -9.25, 0, { facing: 's' }),
+  ...chair(-1.6, -9.25, 0, { facing: 's' }),
+  ...wardrobe(-4.7, -12.2, -3.7, -11.0, 0), // sideboard in the corner
 
   // Kitchen: counter and fridge on the north wall, island off-centre.
-  box(1.4, 0, -12.3, 6.4, 0.92, -11.7, M.wood),
-  box(6.6, 0, -12.3, 7.3, 1.85, -11.3, M.metal),
-  box(2.6, 0, -10.4, 4.4, 0.92, -9.6, M.wood),
+  ...cabinet(1.4, -12.3, 6.4, -11.7, 0, { worktop: M.tile }),
+  ...cabinet(6.6, -12.3, 7.3, -11.3, 0, { h: 1.85, mat: M.metal, plinth: 0.06 }), // fridge
+  ...cabinet(2.6, -10.4, 4.4, -9.6, 0, { worktop: M.tile }), // island
 
   // Bathroom + utility, split by the bar-height barrier.
-  box(8.2, 0, -17.6, 10.4, 0.9, -17.0, M.metal), // washbasins
-  box(15.1, 0, -16.0, 15.8, 1.85, -13.4, M.metal), // shelving, east wall
-  box(12.0, 0, -10.6, 13.2, 0.9, -9.4, M.wood), // crates in the utility half
+  ...cabinet(8.2, -17.6, 10.4, -17.0, 0, { h: 0.9, mat: M.metal, worktop: M.tile }),
+  ...shelves(15.1, -16.0, 15.8, -13.4, 0, { mat: M.metal, shelves: 5, back: 'e' }),
+  ...crates(12.0, -10.6, 13.2, -9.4, 0),
 
   // Cinema: two rows of seating and a low cabinet under the screen.
-  box(-14.0, 0, -2.7, -11.0, 0.85, -2.0, M.fabric),
-  box(-14.0, 0, -1.1, -11.0, 0.85, -0.4, M.fabric),
-  box(-7.0, 0, -4.3, -4.6, 0.6, -3.7, M.wood),
+  ...sofa(-14.0, -2.7, -11.0, -2.0, 0, { back: 'n', arms: false }),
+  ...sofa(-14.0, -1.1, -11.0, -0.4, 0, { back: 'n', arms: false }),
+  ...cabinet(-7.0, -4.3, -4.6, -3.7, 0, { h: 0.6 }),
 
   // Hall: a bench on the west wall, out of every doorway.
-  box(-2.8, 0, -1.2, -2.2, 0.45, 0.8, M.wood),
+  ...onLegs(-2.8, -1.2, -2.2, 0.8, 0, { h: 0.45 }),
 
-  // Gym.
-  box(5.0, 0, -4.4, 7.4, 1.3, -3.9, M.metal), // weight rack, north wall
+  // Gym: two uprights on their feet with a bar racked across them, mats, a
+  // bench. The footprint is the block's; the middle of it is now air.
+  box(4.94, 0, -4.4, 5.30, 0.14, -3.9, M.metal),
+  box(7.10, 0, -4.4, 7.46, 0.14, -3.9, M.metal),
+  box(5.00, 0.14, -4.35, 5.24, 1.3, -3.95, M.metal),
+  box(7.16, 0.14, -4.35, 7.40, 1.3, -3.95, M.metal),
+  box(5.23, 1.06, -4.24, 7.17, 1.14, -4.06, M.metal),
   box(9.0, 0, -2.6, 12.0, 0.15, -1.2, M.fabric), // mats
-  box(4.2, 0, -1.7, 5.6, 0.5, -1.1, M.wood), // bench
+  ...onLegs(4.2, -1.7, 5.6, -1.1, 0, { h: 0.5 }),
 
   // Cloakroom: lockers on the south wall, bench in the middle.
-  box(-14.0, 0, 5.2, -9.0, 1.85, 5.7, M.metal),
-  box(-12.0, 0, 3.3, -10.0, 0.45, 3.9, M.wood),
+  ...lockers(-14.0, 5.2, -9.0, 5.7, 0),
+  ...onLegs(-12.0, 3.3, -10.0, 3.9, 0, { h: 0.45 }),
 
   // Entrance hall: shoe bench and console, both clear of the front door.
-  box(2.1, 0, 4.6, 2.8, 0.45, 5.6, M.wood),
-  box(-2.8, 0, 1.9, -2.2, 0.8, 2.9, M.wood),
+  ...onLegs(2.1, 4.6, 2.8, 5.6, 0, { h: 0.45 }),
+  ...onLegs(-2.8, 1.9, -2.2, 2.9, 0, { h: 0.8 }),
 
   // Guest room by the entrance hall.
-  box(4.4, 0, 0.3, 6.4, 0.55, 2.4, M.fabric), // bed
-  box(8.2, 0, 0.3, 8.8, 1.85, 2.0, M.wood), // wardrobe
+  ...bed(4.4, 0.3, 6.4, 2.4, 0, { head: 'n' }),
+  ...wardrobe(8.2, 0.3, 8.8, 2.0, 0),
 
   // Spa.
-  box(15.1, 0, 1.5, 15.8, 0.5, 4.5, M.wood), // bench, east wall
-  box(12.5, 0, 4.2, 14.5, 0.6, 5.5, M.metal), // tub block
+  ...onLegs(15.1, 1.5, 15.8, 4.5, 0, { h: 0.5 }),
+  ...cabinet(12.5, 4.2, 14.5, 5.5, 0, { h: 0.6, mat: M.metal, worktop: M.tile }), // tub
 
   // ── Upper floor ──
   // Terrace: loungers along the parapet, nothing near the glass doors.
-  box(-15.6, F2, -9.9, -13.2, F2 + 0.5, -9.1, M.wood),
-  box(-7.6, F2, -16.8, -6.2, F2 + 0.5, -14.4, M.wood),
+  ...onLegs(-15.6, -9.9, -13.2, -9.1, F2, { h: 0.5, thick: 0.12 }),
+  ...onLegs(-7.6, -16.8, -6.2, -14.4, F2, { h: 0.5, thick: 0.12 }),
 
   // Bedroom 2.
-  box(-4.4, F2, -17.6, -2.6, F2 + 0.55, -15.7, M.fabric), // bed
-  box(-1.9, F2, -13.4, -1.3, F2 + 1.85, -12.4, M.wood), // wardrobe
+  ...bed(-4.4, -17.6, -2.6, -15.7, F2, { head: 'n' }),
+  ...wardrobe(-1.9, -13.4, -1.3, -12.4, F2),
 
   // Dressing room: a run of wardrobes along the north wall.
-  box(-4.6, F2, -12.3, -1.4, F2 + 1.85, -11.7, M.wood),
+  ...wardrobe(-4.6, -12.3, -1.4, -11.7, F2),
 
   // Bedroom 3 — the defenders' room, kept roomy.
-  box(1.2, F2, -17.6, 3.2, F2 + 0.55, -15.7, M.fabric), // bed
-  box(3.7, F2, -12.9, 4.9, F2 + 0.78, -12.6, M.wood), // desk
+  ...bed(1.2, -17.6, 3.2, -15.7, F2, { head: 'n' }),
+  ...onLegs(3.7, -12.9, 4.9, -12.6, F2, { h: 0.78 }),
 
   // Study.
-  box(-0.6, F2, -12.3, 1.6, F2 + 0.78, -11.5, M.wood),
-  box(3.4, F2, -12.3, 4.6, F2 + 1.8, -11.9, M.wood),
+  ...desk(-0.6, -12.3, 1.6, -11.5, F2),
+  ...chair(0.5, -10.9, F2, { facing: 'n' }),
+  ...shelves(3.4, -12.3, 4.6, -11.9, F2, { h: 1.8, back: 'n' }),
 
   // Bathroom and store.
-  box(5.3, F2, -17.6, 7.0, F2 + 0.9, -17.0, M.metal),
-  box(9.3, F2, -17.6, 9.9, F2 + 1.85, -16.2, M.wood), // shelving, clear of the hole
-  box(12.6, F2, -14.4, 13.8, F2 + 0.9, -13.2, M.wood),
+  ...cabinet(5.3, -17.6, 7.0, -17.0, F2, { h: 0.9, mat: M.metal, worktop: M.tile }),
+  ...shelves(9.3, -17.6, 9.9, -16.2, F2, { back: 'e' }), // clear of the hole
+  ...cabinet(12.6, -14.4, 13.8, -13.2, F2, { h: 0.9 }),
 
-  // Laundry.
-  box(5.4, F2, -12.3, 8.0, F2 + 1.0, -11.6, M.metal),
+  // Laundry: two machines standing side by side.
+  ...cabinet(5.4, -12.3, 6.6, -11.6, F2, { h: 1.0, mat: M.metal }),
+  ...cabinet(6.8, -12.3, 8.0, -11.6, F2, { h: 1.0, mat: M.metal }),
 
   // Master bedroom and bathroom.
-  box(-13.0, F2, -3.2, -10.6, F2 + 0.6, -1.0, M.fabric), // bed, clear of the door arc
-  box(-15.7, F2, -3.5, -15.1, F2 + 0.9, -1.5, M.wood), // dresser
-  box(-15.6, F2, 4.4, -13.6, F2 + 0.6, 5.6, M.metal), // tub
-  box(-14.4, F2, 1.3, -12.0, F2 + 0.9, 1.9, M.metal), // basins
+  ...bed(-13.0, -3.2, -10.6, -1.0, F2, { head: 'n' }), // clear of the door arc
+  ...cabinet(-15.7, -3.5, -15.1, -1.5, F2, { h: 0.9 }), // dresser
+  ...cabinet(-15.6, 4.4, -13.6, 5.6, F2, { h: 0.6, mat: M.metal, worktop: M.tile }), // tub
+  ...cabinet(-14.4, 1.3, -12.0, 1.9, F2, { h: 0.9, mat: M.metal, worktop: M.tile }),
 
   // Upper lounge and media room.
-  box(-2.4, F2, -1.4, 0.4, F2 + 0.85, -0.6, M.fabric), // sofa
-  box(3.9, F2, -4.3, 5.5, F2 + 0.95, -3.7, M.wood), // bar counter
-  box(-2.6, F2, 4.2, 0.6, F2 + 0.8, 5.2, M.fabric), // sofa
-  box(3.2, F2, 1.3, 5.4, F2 + 0.6, 1.9, M.wood), // media cabinet
+  ...sofa(-2.4, -1.4, 0.4, -0.6, F2, { back: 'n' }),
+  ...cabinet(3.9, -4.3, 5.5, -3.7, F2, { h: 0.95, worktop: M.tile }), // bar counter
+  ...sofa(-2.6, 4.2, 0.6, 5.2, F2, { back: 's', h: 0.8 }),
+  ...cabinet(3.2, 1.3, 5.4, 1.9, F2, { h: 0.6 }), // media cabinet
 
   // Sauna and office.
-  box(6.4, F2, -4.4, 8.4, F2 + 0.45, -3.8, M.wood),
-  box(6.8, F2, 2.6, 9.0, F2 + 0.78, 3.6, M.wood), // desk
-  box(14.6, F2, 3.0, 15.8, F2 + 1.8, 5.0, M.wood), // shelving
+  ...onLegs(6.4, -4.4, 8.4, -3.8, F2, { h: 0.45, thick: 0.1 }),
+  ...desk(6.8, 2.6, 9.0, 3.6, F2, { pedestal: 'right' }),
+  ...chair(7.6, 4.3, F2, { facing: 's' }),
+  ...shelves(14.6, 3.0, 15.8, 5.0, F2, { h: 1.8, back: 'e' }),
 // Tagged so the floor plans can draw it and the checks can tell it from a wall.
 ]).map((b) => ({ ...b, tag: 'furniture' }));
 
@@ -648,21 +901,208 @@ const tiledFloors = rooms
     return box(r.min.x, base - 0.03, r.min.z, r.max.x, base + 0.005, r.max.z, M.tile);
   });
 
+// Everything you can walk into, shoot at or stand on. Assembled here rather
+// than inside the map object below, because the decoration that follows has to
+// be able to find the walls it hangs on.
+const solid = [
+  ...shell, ...courtStair, ...groundWalls, ...upperWalls, ...eastStair,
+  ...blockers, ...furniture, ...tiledFloors, ...mains,
+];
+
+// ── Decoration ────────────────────────────────────────────────────────────
+//
+// Drawn and nothing else. None of this is in `geometry`, so the simulation
+// never sees it: no collision, no bullets stopped, no place in the walkable
+// graph, nothing for a bot to path around. It exists to stop rooms reading as
+// empty boxes with furniture in them.
+//
+// One rule, and it is the whole reason this list is safe: **nothing here may
+// look like something you could hide behind.** Everything is flat against a
+// wall, hanging from a ceiling, lying on a floor, or small enough that no
+// player would ever mistake it for cover. A picture you cannot shoot through
+// is a lie; a picture you would never try to shoot through is furniture for
+// the eye.
+const DECO = {
+  canvas: { name: 'deco-canvas', color: 0x6b7484 },
+  paper: { name: 'deco-paper', color: 0xb9b2a4 },
+  frame: { name: 'deco-frame', color: 0x2a221a },
+  leaf: { name: 'deco-leaf', color: 0x3f5a3a },
+  pot: { name: 'deco-pot', color: 0x6d5a4a },
+  cloth: { name: 'deco-cloth', color: 0x2f333c },
+  rug: { name: 'deco-rug', color: 0x4a4038 },
+  screen: { name: 'deco-screen', color: 0x0e1114 },
+  chrome: { name: 'deco-chrome', color: 0x8b929c },
+  cable: { name: 'deco-cable', color: 0x14161a },
+};
+
+// Where the wall behind a point is. `face` is the way a thing looks, so the
+// search runs the other way until it meets something solid — which means the
+// caller only has to say roughly where in the room it is and which way it
+// faces, and nothing ends up buried in the plaster because a coordinate was
+// out by ten centimetres.
+function wallBehind(x, y, z, face) {
+  const back = { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[face];
+  for (let d = 0; d < 3; d += 0.02) {
+    const px = x + back[0] * d;
+    const pz = z + back[1] * d;
+    const hit = solid.find((b) => px > b.min.x && px < b.max.x
+      && y > b.min.y && y < b.max.y && pz > b.min.z && pz < b.max.z);
+    if (!hit) continue;
+    if (back[0] > 0) return { axis: 'x', at: hit.min.x, out: -1 };
+    if (back[0] < 0) return { axis: 'x', at: hit.max.x, out: 1 };
+    if (back[1] > 0) return { axis: 'z', at: hit.min.z, out: -1 };
+    return { axis: 'z', at: hit.max.z, out: 1 };
+  }
+  return null;
+}
+
+// A picture on a wall: a frame and what is inside it, hung a centimetre proud
+// of whatever wall is behind the point it is given.
+function picture(x, y, z, w, h, face, art = DECO.canvas) {
+  const wall = wallBehind(x, y, z, face);
+  if (!wall) return [];
+  const t = 0.03;
+  const a0 = wall.out > 0 ? wall.at + 0.01 : wall.at - 0.01 - t;
+  const a1 = a0 + t;
+  const along = wall.axis === 'z';
+  const u = along ? x : z;
+  const out = [];
+  const at = (u0, u1, v0, v1, mat) => out.push(along
+    ? box(u0, v0, a0, u1, v1, a1, mat)
+    : box(a0, v0, u0, a1, v1, u1, mat));
+  const f = 0.05;
+  at(u - w / 2, u + w / 2, y - h / 2, y - h / 2 + f, DECO.frame);
+  at(u - w / 2, u + w / 2, y + h / 2 - f, y + h / 2, DECO.frame);
+  at(u - w / 2, u - w / 2 + f, y - h / 2 + f, y + h / 2 - f, DECO.frame);
+  at(u + w / 2 - f, u + w / 2, y - h / 2 + f, y + h / 2 - f, DECO.frame);
+  // The picture itself, a hair shallower than its frame.
+  at(u - w / 2 + f, u + w / 2 - f, y - h / 2 + f, y + h / 2 - f, art);
+  return out;
+}
+
+// A plant: a pot, a stem and a crown of leaves round it. Knee-high to
+// waist-high, which is why nobody will ever try to hide behind one — and the
+// crown is built as a few overlapping slabs at slightly different heights,
+// because four boxes stacked in a staircase read as a staircase.
+function plant(x, z, y, o = {}) {
+  const r = o.r ?? 0.17;
+  const h = o.h ?? 0.34;
+  const top = o.top ?? 0.85;
+  const stem = y + h;
+  const crown = y + top;
+  const leaf = (w, d, dx, dz, y0, y1) =>
+    box(x + dx - w, y0, z + dz - d, x + dx + w, y1, z + dz + d, DECO.leaf);
+  return [
+    box(x - r, y, z - r, x + r, y + h, z + r, DECO.pot),
+    box(x - 0.035, stem, z - 0.035, x + 0.035, crown - 0.06, z + 0.035, DECO.leaf),
+    leaf(r * 1.5, r * 0.9, -r * 0.5, 0, crown - 0.30, crown - 0.24),
+    leaf(r * 0.9, r * 1.5, r * 0.4, r * 0.3, crown - 0.22, crown - 0.16),
+    leaf(r * 1.3, r * 1.2, r * 0.2, -r * 0.5, crown - 0.14, crown - 0.08),
+    leaf(r * 0.8, r * 0.8, -r * 0.2, r * 0.2, crown - 0.08, crown),
+  ];
+}
+
+// A curtain: cloth hanging beside an opening, flat to the wall and thin as
+// cloth. Never wide or deep enough to crouch behind — a curtain in this game
+// hides nothing from anybody, because the simulation cannot see it at all, and
+// something you *think* you are hidden behind is worse than nothing.
+function curtain(x0, z0, x1, z1, yTop, drop) {
+  return [box(x0, yTop - drop, z0, x1, yTop, z1, DECO.cloth)];
+}
+
+// Something flat on the floor. Two centimetres of it, which is a rug.
+function rug(x0, z0, x1, z1, y) {
+  return [box(x0, y + 0.002, z0, x1, y + 0.018, z1, DECO.rug)];
+}
+
+// A screen on a wall — a television, a monitor, the cinema's own.
+function screen(x, y, z, w, h, face) {
+  return picture(x, y, z, w, h, face, DECO.screen);
+}
+
+const decor = [
+  // ── Ground floor ──
+  // Entrance hall: something to look at while the door is being opened.
+  ...picture(-2.5, 1.6, 2.35, 0.7, 0.9, 'e'),
+  ...plant(2.4, 3.6, 0),
+  ...rug(-1.6, 3.2, 1.6, 5.4, 0),
+
+  // Cinema: the screen the seats are pointed at, and a strip light cable.
+  ...screen(-5.8, 1.7, -3.66, 2.0, 1.2, 's'),
+  ...rug(-14.2, -2.0, -10.8, -1.1, 0),
+
+  // Dining and kitchen.
+  ...picture(-2.3, 1.7, -12.44, 1.1, 0.8, 's'),
+  ...rug(-3.8, -11.1, -0.8, -9.3, 0),
+  ...plant(-4.9, -9.6, 0),
+  ...picture(4.0, 1.7, -12.44, 0.6, 0.6, 's', DECO.paper),
+
+  // Study and guest bedroom.
+  ...picture(-3.2, 1.75, -17.84, 0.9, 0.7, 's'),
+  ...rug(5.4, -15.6, 7.4, -13.9, 0),
+  ...plant(-0.6, -17.0, 0),
+
+  // Hall, gym, cloakroom.
+  ...picture(-2.86, 1.6, -0.4, 0.5, 0.8, 'w'),
+  ...picture(9.5, 1.7, -4.54, 1.4, 0.9, 's', DECO.paper),
+  ...plant(-8.6, 4.6, 0),
+  ...rug(-12.6, 2.6, -9.4, 4.4, 0),
+
+  // Spa and guest room.
+  ...plant(11.0, 5.0, 0),
+  ...rug(4.3, 2.55, 6.7, 3.35, 0), // at the foot of the bed, not under it
+
+  // The court is outdoors: a planted corner and the tree in the tub.
+  ...plant(-6.8, -9.0, 0.5, { r: 0.22, top: 1.6 }),
+  ...plant(-15.2, -11.6, 0),
+
+  // ── Upper floor ──
+  // Terrace: cloth by the glass doors, a pot in the corner.
+  ...curtain(-8.94, -10.35, -8.84, -9.85, F2 + 2.5, 2.3), // tied back beside the glass
+  ...plant(-15.4, -7.9, F2),
+  ...plant(-6.6, -11.2, F2),
+
+  // Bedrooms and dressing room.
+  ...rug(-4.6, -15.5, -2.4, -13.8, F2),
+  ...picture(-3.5, F2 + 1.7, -17.84, 1.0, 0.7, 's'),
+  ...rug(1.0, -15.5, 3.4, -13.6, F2),
+  ...picture(2.2, F2 + 1.7, -17.84, 0.8, 0.6, 's', DECO.paper),
+
+  // Master bedroom and bathroom.
+  ...rug(-13.4, -1.0, -10.2, 1.0, F2),
+  ...picture(-11.8, F2 + 1.7, -3.64, 1.2, 0.8, 's'),
+  ...picture(-13.2, F2 + 1.5, 1.24, 0.9, 0.9, 's', DECO.chrome), // the mirror
+  ...plant(-15.3, -0.4, F2),
+
+  // Upper lounge, media room, office.
+  ...screen(-1.0, F2 + 1.6, -4.54, 1.6, 0.95, 's'),
+  ...rug(-2.6, -1.0, 0.6, 1.2, F2),
+  ...picture(4.3, F2 + 1.6, 0.94, 1.0, 0.7, 'n'),
+  ...plant(1.4, 4.6, F2),
+  ...picture(7.9, F2 + 1.7, 2.24, 0.9, 0.6, 's', DECO.paper),
+  ...rug(6.4, 2.4, 9.4, 4.4, F2),
+
+  // A cable run along the utility wall, because a flat has those.
+  box(11.9, 2.35, -9.42, 13.3, 2.39, -9.38, DECO.cable),
+  box(11.9, 2.29, -9.42, 13.3, 2.33, -9.38, DECO.cable),
+].map((b) => ({ ...b, tag: 'decor' }));
+
 export const APARTMENT = {
   id: 'penthouse',
   name: 'Пентхаус',
   bounds: { min: { x: -16.2, y: 0, z: -18.2 }, max: { x: 16.2, y: ROOF + 0.3, z: 9.7 } },
   upperFloorY: F2,
-  geometry: [
-    ...shell, ...courtStair, ...groundWalls, ...upperWalls, ...eastStair,
-    ...blockers, ...furniture, ...tiledFloors, ...mains,
-  ],
+  geometry: solid,
   rooms,
   doors,
   lights,
   switches,
   holes,
   openings,
+  // Drawn, never simulated — see the note above the list. Deliberately not in
+  // `geometry`: everything that decides what happens in a round reads that,
+  // and nothing in here is allowed to decide anything.
+  decor,
   // The volumes the flights occupy. Kept in the data so map-check can prove
   // nothing has been put on them.
   // One entry per flight and landing: the footprint plus the headroom a person

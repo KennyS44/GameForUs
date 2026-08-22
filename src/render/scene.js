@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=db8dde9b';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=db8dde9b';
-import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=db8dde9b';
-import { buildWeaponModel } from './weapons.js?v=db8dde9b';
+import * as THREE from '../../vendor/three.module.js?v=0e7e12c6';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=0e7e12c6';
+import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=0e7e12c6';
+import { buildWeaponModel } from './weapons.js?v=0e7e12c6';
 
 // How much light there is in a room with every lamp in it switched off. Kept
 // here rather than inline because three different places have to agree on it:
@@ -292,6 +292,29 @@ export function buildScene(world) {
     const mesh = new THREE.Mesh(geo, getMat(b.material));
     mesh.position.set(centre.x, centre.y, centre.z);
     mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    staticGroup.add(mesh);
+  }
+
+  // ── Decoration ──
+  //
+  // Pictures, rugs, plants, a curtain, a cable run. These come from a list of
+  // their own rather than from `world.boxes`, which is the whole point: the
+  // simulation is handed the boxes and never hears about these, so nothing
+  // here stops a bullet, blocks a step or appears in the walkable graph.
+  //
+  // They do not cast shadows either. Two hundred more shadow casters for a
+  // picture frame is a poor trade, and the one light that casts is a torch in
+  // somebody's hand.
+  for (const b of world.map.decor ?? []) {
+    const sx = b.max.x - b.min.x;
+    const sy = b.max.y - b.min.y;
+    const sz = b.max.z - b.min.z;
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(sx, sy, sz),
+      getMat(b.material),
+    );
+    mesh.position.set(b.min.x + sx / 2, b.min.y + sy / 2, b.min.z + sz / 2);
     mesh.receiveShadow = true;
     staticGroup.add(mesh);
   }

@@ -8,14 +8,14 @@
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
   GADGETS, DEFAULT_GADGET, BLIND, NVG, FLARE, POWER,
-} from './constants.js?v=db8dde9b';
+} from './constants.js?v=0e7e12c6';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=db8dde9b';
+} from './math.js?v=0e7e12c6';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=db8dde9b';
+} from './world.js?v=0e7e12c6';
 
 const GRAVITY = 18;
 
