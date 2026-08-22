@@ -1,21 +1,21 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=48d5848b';
+import { APARTMENT } from './maps/apartment.js?v=9dde13b4';
 // The same projection tools/floorplan.mjs draws the sheets with, so a mark and
 // the wall it is next to are worked out from one set of numbers.
-import { PLAN, UPPER_FROM } from './maps/plan.js?v=48d5848b';
-import { createGame } from './game.js?v=48d5848b';
-import { createAudio } from './audio/audio.js?v=48d5848b';
-import { createInputSource, saveSettings } from './input/input.js?v=48d5848b';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=48d5848b';
+import { PLAN, UPPER_FROM } from './maps/plan.js?v=9dde13b4';
+import { createGame } from './game.js?v=9dde13b4';
+import { createAudio } from './audio/audio.js?v=9dde13b4';
+import { createInputSource, saveSettings } from './input/input.js?v=9dde13b4';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=9dde13b4';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=48d5848b';
-import { createLoadout } from './ui/loadout.js?v=48d5848b';
-import { createArmoury, savedOptics, saveOptic } from './ui/armoury.js?v=48d5848b';
-import { storageGet, storageSet } from './util/storage.js?v=48d5848b';
-import { DEBUG, AUTO_SOLO, AUTO_RANGE, SOLO_BOTS, SOLO_MATES } from './util/flags.js?v=48d5848b';
-import { swapsSides } from './sim/sim.js?v=48d5848b';
+} from './net/transport.js?v=9dde13b4';
+import { createLoadout } from './ui/loadout.js?v=9dde13b4';
+import { createArmoury, savedOptics, saveOptic } from './ui/armoury.js?v=9dde13b4';
+import { storageGet, storageSet } from './util/storage.js?v=9dde13b4';
+import { DEBUG, AUTO_SOLO, AUTO_RANGE, SOLO_BOTS, SOLO_MATES } from './util/flags.js?v=9dde13b4';
+import { swapsSides } from './sim/sim.js?v=9dde13b4';
 
 const $ = (id) => document.getElementById(id);
 
@@ -294,7 +294,7 @@ async function startRange(weaponId) {
   storageSet(WEAPON_KEY, weaponId);
   let RANGE;
   try {
-    ({ RANGE } = await import('./maps/range.js?v=48d5848b'));
+    ({ RANGE } = await import('./maps/range.js?v=9dde13b4'));
   } catch {
     setStatus($('net-status'), 'Полигон не открылся.', 'error');
     showScreen('armoury');
@@ -373,9 +373,16 @@ function startGame(session) {
       const next = swapping
         ? (mine === 'attackers' ? 'defenders' : 'attackers')
         : mine;
-      $('round-detail').textContent = swapping && mine
+      // The match score, kept per player because the sides swap. In the 1v1
+      // this game is built for, "the others' best" is simply the opponent.
+      const me = session.me;
+      const theirs = Object.values(session.state.players)
+        .filter((p) => p.id !== me?.id)
+        .reduce((best, p) => Math.max(best, p.roundsWon ?? 0), 0);
+      const score = me ? ` Счёт по раундам — вы ${me.roundsWon} : ${theirs} соперник.` : '';
+      $('round-detail').textContent = (swapping && mine
         ? `${how} Меняетесь сторонами: следующий раунд вы за ${next === 'attackers' ? 'штурм' : 'оборону'}.`
-        : how;
+        : how) + score;
       $('btn-next').hidden = session.kind === 'client';
       input.releaseLock();
       showScreen('round');
@@ -621,7 +628,7 @@ showScreen('main');
 // below is never fetched, so `window.__gfu` stays undefined on the live site,
 // and there is nothing to remember to take out again. See src/util/flags.js.
 if (DEBUG) {
-  import('./util/debug.js?v=48d5848b').then(({ installDebug }) => {
+  import('./util/debug.js?v=9dde13b4').then(({ installDebug }) => {
     installDebug({ input, getGame: () => game, startSolo, showMenu });
     // Started only after the handle exists, so a tool that asks for both never
     // races the match into being before it can steer it.

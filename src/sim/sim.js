@@ -8,14 +8,14 @@
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
   GADGETS, DEFAULT_GADGET, BLIND, NVG, FLARE, POWER, OPTICS, defaultOptic, opticFits,
-} from './constants.js?v=48d5848b';
+} from './constants.js?v=9dde13b4';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=48d5848b';
+} from './math.js?v=9dde13b4';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=48d5848b';
+} from './world.js?v=9dde13b4';
 
 const GRAVITY = 18;
 
@@ -86,6 +86,9 @@ function createPlayer(id, team, spawn, name) {
     lastNoise: 0,
     kills: 0,
     deaths: 0,
+    // Rounds this man has won. Survives resetRound on purpose: it is the only
+    // number here that describes the match rather than the round.
+    roundsWon: 0,
   };
 }
 
@@ -1460,6 +1463,13 @@ function stepRound(state, dt) {
   if (winner) {
     state.phase = 'over';
     state.phaseTime = 6;
+    // The match, finally counted — and counted against the *man*, not against
+    // the side he happened to be on. Sides change ends every round, so a tally
+    // kept under "attackers" would say nothing about who is winning; after two
+    // rounds it would say both of them are.
+    for (const p of Object.values(state.players)) {
+      if (p.team === winner) p.roundsWon++;
+    }
     emit(state, { type: 'roundEnd', winner });
   }
 }

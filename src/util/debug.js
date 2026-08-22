@@ -14,7 +14,7 @@
 // when the flag is set, so a visitor to the published site never downloads it
 // and `window.__gfu` is undefined. Nothing else in the game reads it.
 
-import { ROUND, DT, WEAPONS, GADGETS } from '../sim/constants.js?v=48d5848b';
+import { ROUND, DT, WEAPONS, GADGETS } from '../sim/constants.js?v=9dde13b4';
 
 export function installDebug({ input, getGame, startSolo, showMenu }) {
   // Fields forced into every input frame the game samples. The simulation reads

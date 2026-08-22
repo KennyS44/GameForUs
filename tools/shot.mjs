@@ -16,6 +16,8 @@
 //                          nearly all the time goes, so eleven weapons cost
 //                          barely more than one.
 //   --gadget=ID            what is in the other hand
+//   --optic=ID             what is on the rail: iron, dot, reflex, holo,
+//                          prism, scope — see docs/optics.html
 //   --ads                  bring the sights up
 //   --fire                 hold the trigger down
 //   --at=ROOM|X,Z          where to stand — a room id, or coordinates
@@ -88,6 +90,7 @@ function place(v) {
 
 const opts = {
   gadget: typeof args.gadget === 'string' ? args.gadget : null,
+  optic: typeof args.optic === 'string' ? args.optic : null,
   ads: !!args.ads,
   fire: !!args.fire,
   at: place(args.at),
@@ -160,6 +163,8 @@ async function compose(page, shot) {
     g.pause();
     if (o.weapon) g.weapon(o.weapon);
     if (o.gadget) g.gadget(o.gadget);
+    // Fitted before the weapon is drawn, so the model is built with it on.
+    if (o.optic && o.weapon) g.optic(o.weapon, o.optic);
 
     // Skipping the setup clock only takes effect once the round has been run
     // for a tick — that is what tells the menus to get out of the way.

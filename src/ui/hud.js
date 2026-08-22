@@ -1,6 +1,6 @@
 // HUD: reads simulation state, writes DOM. Never the other way round.
 
-import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=48d5848b';
+import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=9dde13b4';
 
 const $ = (id) => document.getElementById(id);
 
@@ -250,15 +250,19 @@ export function createHud() {
   function scoreboard(state, myId, pings, visible) {
     el.scoreboard.hidden = !visible;
     if (!visible) return;
+    // Sorted by rounds first: it is the only column that says who is winning
+    // the match rather than who is winning this one.
     const rows = Object.values(state.players)
-      .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
+      .sort((a, b) => (b.roundsWon ?? 0) - (a.roundsWon ?? 0)
+        || b.kills - a.kills || a.deaths - b.deaths)
       .map((p) => {
         const team = p.team === 'attackers' ? 'Штурм' : 'Оборона';
         const ping = pings?.[p.id];
         return (
           `<tr class="${p.alive ? '' : 'dead'}">` +
           `<td class="team-${p.team}">${escape(p.name)}${p.id === myId ? ' (вы)' : ''}</td>` +
-          `<td>${team}</td><td>${p.kills}</td><td>${p.deaths}</td>` +
+          `<td>${team}</td><td class="rounds">${p.roundsWon ?? 0}</td>` +
+          `<td>${p.kills}</td><td>${p.deaths}</td>` +
           `<td>${ping == null ? '—' : `${Math.round(ping)} мс`}</td></tr>`
         );
       })

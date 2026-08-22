@@ -5,13 +5,13 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=48d5848b';
+import { buildWorld } from '../sim/world.js?v=9dde13b4';
 import {
   createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout, setGadget,
   setOptic,
-} from '../sim/sim.js?v=48d5848b';
-import { createBotBrain } from '../sim/bot.js?v=48d5848b';
-import { DT } from '../sim/constants.js?v=48d5848b';
+} from '../sim/sim.js?v=9dde13b4';
+import { createBotBrain } from '../sim/bot.js?v=9dde13b4';
+import { DT } from '../sim/constants.js?v=9dde13b4';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 
@@ -162,6 +162,7 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
         health: p.health, alive: p.alive, flashlight: p.flashlight,
         aimAmount: p.aimAmount, grounded: p.grounded,
         weapon: p.weapon, loadout: p.loadout, kills: p.kills, deaths: p.deaths,
+        roundsWon: p.roundsWon,
         // What is on each of his guns, so a guest draws the sight the host
         // thinks he is looking through.
         optics: p.optics,

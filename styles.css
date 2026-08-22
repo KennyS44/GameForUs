@@ -787,6 +787,10 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 }
 .dead-sub { margin: 0; font-size: 16px; color: var(--text-dim); }
 
+/* Rounds won: the only column on the scoreboard that describes the match
+   rather than the round, so it is the one that reads first. */
+.scoreboard .rounds { color: var(--text); font-weight: 600; }
+
 /* Whose eyes the picture belongs to once you are out of the round. Low and
    quiet: from here on the screen is his, and this only says whose it is. */
 .spectating {

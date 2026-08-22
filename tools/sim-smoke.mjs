@@ -2170,6 +2170,50 @@ section('sides', () => {
   check('shipped setting is one round a side', ROUND.swapEvery === 1, `${ROUND.swapEvery}`);
 });
 
+// ── Counting the match ────────────────────────────────────────────────────
+//
+// The tally is kept against the man, not against the side he was on, and that
+// is the whole point: the two change ends every round, so a score filed under
+// "attackers" would say both of them were winning after two of them.
+section('score', () => {
+  console.log('\nRounds won:');
+
+  const w = buildWorld(APARTMENT);
+  const s = createState(w, 21);
+  const a = addPlayer(w, s, 'a', 'attackers', 'A');
+  const d = addPlayer(w, s, 'd', 'defenders', 'D');
+
+  check('nobody has won anything yet', a.roundsWon === 0 && d.roundsWon === 0);
+
+  // Wipe the defence out and let the round settle.
+  const idle = { a: createInput(), d: createInput() };
+  s.phase = 'live';
+  s.phaseTime = ROUND.duration;
+  d.health = 0;
+  d.alive = false;
+  stepSim(w, s, idle);
+  check('the round is over', s.phase === 'over', s.phase);
+  check('and the attacker has one', a.roundsWon === 1 && d.roundsWon === 0,
+    `${a.roundsWon}:${d.roundsWon}`);
+
+  // Next round: they change ends. The man who won stays the man who won.
+  resetRound(w, s);
+  check('the tally survives the round', a.roundsWon === 1 && d.roundsWon === 0,
+    `${a.roundsWon}:${d.roundsWon}`);
+  check('...and the two have changed ends',
+    a.team === 'defenders' && d.team === 'attackers');
+
+  // He wins again from the other side. A tally kept by side would now read
+  // one-all; kept by man it reads two-nil, which is what actually happened.
+  s.phase = 'live';
+  s.phaseTime = ROUND.duration;
+  d.health = 0;
+  d.alive = false;
+  stepSim(w, s, idle);
+  check('winning from the other side still counts to him',
+    a.roundsWon === 2 && d.roundsWon === 0, `${a.roundsWon}:${d.roundsWon}`);
+});
+
 // ── A range is not a round ────────────────────────────────────────────────
 //
 // Two rules that only hold where nothing is at stake: the rack never shuts and

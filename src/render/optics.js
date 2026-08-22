@@ -21,8 +21,20 @@
 // dependency runs one way — a weapon knows about sights, a sight knows nothing
 // about weapons.
 
-import * as THREE from '../../vendor/three.module.js?v=48d5848b';
-import { OPTICS as FITTING, OPTICS_BY_CLASS } from '../sim/constants.js?v=48d5848b';
+import * as THREE from '../../vendor/three.module.js?v=9dde13b4';
+import { OPTICS as FITTING, OPTICS_BY_CLASS } from '../sim/constants.js?v=9dde13b4';
+
+
+// How round a round thing is.
+//
+// Twenty segments is fine for a sight seen from the side at hip height, and
+// visibly a polygon once the same tube is magnified and fills a third of the
+// screen: the prism's housing read as a lumpy nut rather than as a tube. The
+// torus was worse — six segments around its own cross-section is a hexagonal
+// ring, and every highlight ran along a flat. This costs a few hundred
+// triangles on one model that is drawn once a frame.
+const ROUND_SEG = 40;
+const TORUS_SEG = 12;
 
 // ── Reticles ───────────────────────────────────────────────────────────────
 //
@@ -184,7 +196,7 @@ const SHAPES = {
       // The body, open at both ends and drawn inside as well as out, so aiming
       // down it shows the room through it rather than a black cylinder.
       const body = new THREE.Mesh(
-        new THREE.CylinderGeometry(T.radius * MM, T.radius * MM, (T.back - T.front) * MM, 20, 1, true),
+        new THREE.CylinderGeometry(T.radius * MM, T.radius * MM, (T.back - T.front) * MM, ROUND_SEG, 1, true),
         MATS.housing,
       );
       body.rotation.x = Math.PI / 2;
@@ -195,7 +207,7 @@ const SHAPES = {
       // sight and not a length of pipe.
       for (const at of [T.front + T.ring, T.back - T.ring]) {
         const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(T.radius * MM, T.ring * MM, 6, 20),
+          new THREE.TorusGeometry(T.radius * MM, T.ring * MM, TORUS_SEG, ROUND_SEG),
           MATS.steel,
         );
         ring.position.set(0, y, z(def.sight[0] + at));
@@ -205,11 +217,11 @@ const SHAPES = {
       // Glass at each end — that is what closed means — and the ring of light
       // where the front one meets the housing.
       for (const at of [T.front + 5, T.back - 5]) {
-        const glass = new THREE.Mesh(new THREE.CircleGeometry(inner, 24), MATS.lens);
+        const glass = new THREE.Mesh(new THREE.CircleGeometry(inner, ROUND_SEG), MATS.lens);
         glass.position.set(0, y, z(def.sight[0] + at));
         group.add(glass);
       }
-      const rim = new THREE.Mesh(new THREE.RingGeometry(inner * 0.86, inner, 28), MATS.rim);
+      const rim = new THREE.Mesh(new THREE.RingGeometry(inner * 0.86, inner, ROUND_SEG), MATS.rim);
       rim.position.set(0, y, z(def.sight[0] + T.front + 7));
       group.add(rim);
 
@@ -326,7 +338,7 @@ const SHAPES = {
       // flared out at the back where the eye goes.
       const bodyBack = P.back - P.ocularLen;
       const body = new THREE.Mesh(
-        new THREE.CylinderGeometry(P.radius * MM, P.radius * MM, (bodyBack - P.front) * MM, 20, 1, true),
+        new THREE.CylinderGeometry(P.radius * MM, P.radius * MM, (bodyBack - P.front) * MM, ROUND_SEG, 1, true),
         MATS.housing,
       );
       body.rotation.x = Math.PI / 2;
@@ -334,7 +346,7 @@ const SHAPES = {
       group.add(body);
 
       const ocular = new THREE.Mesh(
-        new THREE.CylinderGeometry(P.ocular * MM, P.ocular * MM, P.ocularLen * MM, 20, 1, true),
+        new THREE.CylinderGeometry(P.ocular * MM, P.ocular * MM, P.ocularLen * MM, ROUND_SEG, 1, true),
         MATS.housing,
       );
       ocular.rotation.x = Math.PI / 2;
@@ -343,17 +355,17 @@ const SHAPES = {
 
       for (const [at, radius] of [[P.front + P.ring, P.radius], [P.back - P.ring, P.ocular]]) {
         const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(radius * MM, P.ring * MM, 6, 20),
+          new THREE.TorusGeometry(radius * MM, P.ring * MM, TORUS_SEG, ROUND_SEG),
           MATS.steel,
         );
         ring.position.set(0, y, z(def.sight[0] + at));
         group.add(ring);
       }
 
-      const glass = new THREE.Mesh(new THREE.CircleGeometry(inner, 24), MATS.lens);
+      const glass = new THREE.Mesh(new THREE.CircleGeometry(inner, ROUND_SEG), MATS.lens);
       glass.position.set(0, y, z(def.sight[0] + P.front + 6));
       group.add(glass);
-      const rim = new THREE.Mesh(new THREE.RingGeometry(inner * 0.88, inner, 28), MATS.rim);
+      const rim = new THREE.Mesh(new THREE.RingGeometry(inner * 0.88, inner, ROUND_SEG), MATS.rim);
       rim.position.set(0, y, z(def.sight[0] + P.front + 8));
       group.add(rim);
 
@@ -571,13 +583,13 @@ function buildScope(group, def, z, scale, h) {
   const s = 1 / scale;
 
   // Glass across the front of the tube, in front of the mark.
-  const lens = new THREE.Mesh(new THREE.CircleGeometry(inner, 24), MATS.lens);
+  const lens = new THREE.Mesh(new THREE.CircleGeometry(inner, ROUND_SEG), MATS.lens);
   lens.position.set(0, y, z(tube[1] + 10));
   group.add(lens);
 
   // ...and the ring of light where the glass meets the housing. It is the one
   // detail that separates "an optic" from "a hole in a black block".
-  const rim = new THREE.Mesh(new THREE.RingGeometry(inner * 0.88, inner, 28), MATS.rim);
+  const rim = new THREE.Mesh(new THREE.RingGeometry(inner * 0.88, inner, ROUND_SEG), MATS.rim);
   rim.position.set(0, y, z(tube[1] + 12));
   group.add(rim);
 
