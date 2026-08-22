@@ -5,16 +5,23 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=99f3ac0d';
+import { buildWorld } from '../sim/world.js?v=323f1644';
 import {
   createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout, setGadget,
-} from '../sim/sim.js?v=99f3ac0d';
-import { createBotBrain } from '../sim/bot.js?v=99f3ac0d';
-import { DT } from '../sim/constants.js?v=99f3ac0d';
+} from '../sim/sim.js?v=323f1644';
+import { createBotBrain } from '../sim/bot.js?v=323f1644';
+import { DT } from '../sim/constants.js?v=323f1644';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 
-export function createLocalSession({ map, name = 'Игрок', bots = 1, seed = 1337 }) {
+// `bots` is how many are against you; `mates` how many are with you.
+//
+// A team-mate is not decoration in training. Half of what the flat teaches is
+// how two people move through it together, and until there was somebody on
+// your side, dying meant the round was simply over for you — there was nobody
+// whose eyes the view could move to, so the feature that does that had nothing
+// to work with outside a real two-a-side match.
+export function createLocalSession({ map, name = 'Игрок', bots = 1, mates = 0, seed = 1337 }) {
   const world = buildWorld(map);
   const state = createState(world, seed);
   const localId = 'local';
@@ -34,6 +41,16 @@ export function createLocalSession({ map, name = 'Игрок', bots = 1, seed = 
     addPlayer(world, state, id, 'defenders', `Бот ${i + 1}`);
     setLoadout(state, id, botGuns[i % botGuns.length]);
     setGadget(state, id, botKit[i % botKit.length]);
+    botIds.push(id);
+  }
+  // Your own side. Named rather than numbered, because you will be watching
+  // through his eyes and "Бот 2" is not a person to hand your round to.
+  const mateNames = ['Ворон', 'Сокол', 'Беркут'];
+  for (let i = 0; i < mates; i++) {
+    const id = `mate${i}`;
+    addPlayer(world, state, id, 'attackers', mateNames[i % mateNames.length]);
+    setLoadout(state, id, botGuns[(i + 1) % botGuns.length]);
+    setGadget(state, id, i === 0 ? 'charge' : 'smoke');
     botIds.push(id);
   }
 
@@ -65,6 +82,9 @@ export function createLocalSession({ map, name = 'Игрок', bots = 1, seed = 
     },
     nextRound() {
       resetRound(world, state);
+      // The sides have just changed ends, so what a bot remembers is now the
+      // other side's job. See forget() in src/sim/bot.js.
+      brain.forget();
     },
     dispose() {},
   };
@@ -160,6 +180,11 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
       time: state.time,
       phase: state.phase,
       phaseTime: state.phaseTime,
+      // Which round it is, because the sides swap on it. A guest works this
+      // out for itself from the reset messages it receives, and would drift
+      // from the host the first time one went missing; sending it means the
+      // host's count is the only one that decides who is attacking.
+      round: state.round,
       // One switch for the whole building, so it belongs in the snapshot next
       // to the doors: a guest whose lights are still on is playing a different
       // round from everyone else.
@@ -262,6 +287,7 @@ export function createClientSession({ map, transport, myId, seed = 1337 }) {
     state.time = snap.time;
     state.phase = snap.phase;
     state.phaseTime = snap.phaseTime;
+    state.round = snap.round ?? state.round;
     state.doors = snap.doors;
     state.lights = snap.lights;
     state.power = snap.power !== false;

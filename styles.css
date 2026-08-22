@@ -787,6 +787,31 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 }
 .dead-sub { margin: 0; font-size: 16px; color: var(--text-dim); }
 
+/* Whose eyes the picture belongs to once you are out of the round. Low and
+   quiet: from here on the screen is his, and this only says whose it is. */
+.spectating {
+  position: absolute;
+  left: 50%; bottom: var(--s-8);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-4);
+  border-radius: 4px;
+  background: rgba(10, 11, 13, 0.72);
+  animation: rise 0.4s var(--ease) both;
+  white-space: nowrap;
+}
+.spectating[hidden] { display: none; }
+.spectating-eyes {
+  font-size: 14px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.spectating-name { font-size: 20px; color: var(--text); }
+.spectating-hint { font-size: 14px; color: var(--text-dim); }
+
 /* ── Scoreboard ──────────────────────────────────────────────────────── */
 
 .scoreboard {

@@ -1,19 +1,20 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=99f3ac0d';
+import { APARTMENT } from './maps/apartment.js?v=323f1644';
 // The same projection tools/floorplan.mjs draws the sheets with, so a mark and
 // the wall it is next to are worked out from one set of numbers.
-import { PLAN, UPPER_FROM } from './maps/plan.js?v=99f3ac0d';
-import { createGame } from './game.js?v=99f3ac0d';
-import { createAudio } from './audio/audio.js?v=99f3ac0d';
-import { createInputSource, saveSettings } from './input/input.js?v=99f3ac0d';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=99f3ac0d';
+import { PLAN, UPPER_FROM } from './maps/plan.js?v=323f1644';
+import { createGame } from './game.js?v=323f1644';
+import { createAudio } from './audio/audio.js?v=323f1644';
+import { createInputSource, saveSettings } from './input/input.js?v=323f1644';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=323f1644';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=99f3ac0d';
-import { createLoadout } from './ui/loadout.js?v=99f3ac0d';
-import { storageGet, storageSet } from './util/storage.js?v=99f3ac0d';
-import { DEBUG, AUTO_SOLO, SOLO_BOTS } from './util/flags.js?v=99f3ac0d';
+} from './net/transport.js?v=323f1644';
+import { createLoadout } from './ui/loadout.js?v=323f1644';
+import { storageGet, storageSet } from './util/storage.js?v=323f1644';
+import { DEBUG, AUTO_SOLO, SOLO_BOTS, SOLO_MATES } from './util/flags.js?v=323f1644';
+import { swapsSides } from './sim/sim.js?v=323f1644';
 
 const $ = (id) => document.getElementById(id);
 
@@ -268,8 +269,21 @@ function startGame(session) {
     onRoundEnd: (winner) => {
       const iWon = session.me?.team === winner;
       $('round-result').textContent = iWon ? 'Победа' : 'Поражение';
-      $('round-detail').textContent =
-        winner === 'attackers' ? 'Штурмовая группа зачистила пентхаус.' : 'Оборона удержала пентхаус.';
+      const how = winner === 'attackers'
+        ? 'Штурмовая группа зачистила пентхаус.'
+        : 'Оборона удержала пентхаус.';
+      // Which side you are on next is the first thing worth knowing, because
+      // the two share nothing but the walls: one carries a breach charge, the
+      // other wedges and a tripwire. Said here rather than left for the player
+      // to notice on the loadout screen, where the kit row quietly changes.
+      const swapping = swapsSides(session.state.round + 1);
+      const mine = session.me?.team;
+      const next = swapping
+        ? (mine === 'attackers' ? 'defenders' : 'attackers')
+        : mine;
+      $('round-detail').textContent = swapping && mine
+        ? `${how} Меняетесь сторонами: следующий раунд вы за ${next === 'attackers' ? 'штурм' : 'оборону'}.`
+        : how;
       $('btn-next').hidden = session.kind === 'client';
       input.releaseLock();
       showScreen('round');
@@ -293,13 +307,13 @@ canvas.addEventListener('click', () => {
 
 // ── Solo ──────────────────────────────────────────────────────────────────
 
-function startSolo(bots = 2) {
+function startSolo(bots = SOLO_BOTS, mates = SOLO_MATES) {
   audio.resume();
   showScreen('loading');
   $('loading-detail').textContent = 'Собираем пентхаус…';
   // One frame of breathing room so the loading screen actually paints.
   requestAnimationFrame(() => {
-    const session = createLocalSession({ map: APARTMENT, name: playerName(), bots });
+    const session = createLocalSession({ map: APARTMENT, name: playerName(), bots, mates });
     startGame(session);
   });
 }
@@ -503,14 +517,14 @@ showScreen('main');
 // below is never fetched, so `window.__gfu` stays undefined on the live site,
 // and there is nothing to remember to take out again. See src/util/flags.js.
 if (DEBUG) {
-  import('./util/debug.js?v=99f3ac0d').then(({ installDebug }) => {
+  import('./util/debug.js?v=323f1644').then(({ installDebug }) => {
     installDebug({ input, getGame: () => game, startSolo });
     // Started only after the handle exists, so a tool that asks for both never
     // races the match into being before it can steer it.
-    if (AUTO_SOLO) startSolo(SOLO_BOTS);
+    if (AUTO_SOLO) startSolo();
   });
 } else if (AUTO_SOLO) {
-  startSolo(SOLO_BOTS);
+  startSolo();
 }
 
 // Tells the start-up watchdog in crash-banner.js that the game really did boot.

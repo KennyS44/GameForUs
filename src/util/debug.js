@@ -14,7 +14,7 @@
 // when the flag is set, so a visitor to the published site never downloads it
 // and `window.__gfu` is undefined. Nothing else in the game reads it.
 
-import { ROUND, DT, WEAPONS, GADGETS } from '../sim/constants.js?v=99f3ac0d';
+import { ROUND, DT, WEAPONS, GADGETS } from '../sim/constants.js?v=323f1644';
 
 export function installDebug({ input, getGame, startSolo }) {
   // Fields forced into every input frame the game samples. The simulation reads
@@ -162,6 +162,17 @@ export function installDebug({ input, getGame, startSolo }) {
       const yaw = Math.atan2(-dx, -dz);
       const dy = (spot.y ?? p.pos.y) + 1.2 - (p.pos.y + 1.5);
       return api.look(yaw, Math.atan2(dy, Math.hypot(dx, dz)));
+    },
+
+    // Take yourself out of the round, which is the only way to photograph
+    // anything that happens after you are dead. Done by dropping the health
+    // rather than by firing a shot at yourself: no killer, no kill feed, no
+    // waiting for a bullet to arrive.
+    kill() {
+      const p = me();
+      p.health = 0;
+      p.alive = false;
+      return true;
     },
 
     // ── Buttons ──

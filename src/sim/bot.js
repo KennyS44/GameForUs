@@ -18,11 +18,11 @@
 //   · it changes its mind about you. A quiet enemy makes it restless and it
 //     comes looking; a loud one makes it sit down and watch the noise.
 
-import { createInput, eyePosition, aimDirection, litByFlare, burningFlares } from './sim.js?v=99f3ac0d';
-import { raycastGeometry, smokeBlocks } from './world.js?v=99f3ac0d';
-import { nearestNode, nodePos, findPath, smoothPath } from './nav.js?v=99f3ac0d';
-import { distXZ, clamp } from './math.js?v=99f3ac0d';
-import { BLIND, GADGETS } from './constants.js?v=99f3ac0d';
+import { createInput, eyePosition, aimDirection, litByFlare, burningFlares } from './sim.js?v=323f1644';
+import { raycastGeometry, smokeBlocks } from './world.js?v=323f1644';
+import { nearestNode, nodePos, findPath, smoothPath } from './nav.js?v=323f1644';
+import { distXZ, clamp } from './math.js?v=323f1644';
+import { BLIND, GADGETS } from './constants.js?v=323f1644';
 
 // Indoors nobody picks a figure out of the gloom across the whole map.
 const MAX_SIGHT = 24;
@@ -898,7 +898,20 @@ export function createBotBrain(seed = 7) {
     input.gadget = true;
   }
 
-  return { think, memory, squads };
+  // A new round is a new building as far as a bot is concerned.
+  //
+  // None of this used to be cleared, and it mattered less when a bot spent
+  // every round on the same side of the same flat: stale contacts were merely
+  // wrong. Now that the sides change ends, a bot carries the *other* job into
+  // the round — an errand to wedge a door it is now supposed to be breaching,
+  // a map of rooms it walked as the defence, a squad still tense from a
+  // contact that happened to somebody it is now trying to kill.
+  function forget() {
+    memory.clear();
+    squads.clear();
+  }
+
+  return { think, forget, memory, squads };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────

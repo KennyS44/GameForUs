@@ -23,7 +23,7 @@ import { APARTMENT, MATERIALS } from '../src/maps/apartment.js';
 import { buildWorld, hasLineOfSight, doorAngle, raycastGeometry } from '../src/sim/world.js';
 import {
   createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout,
-  setGadget, rangeScale, hitDamage, litByFlare,
+  setGadget, rangeScale, hitDamage, litByFlare, swapsSides, spectateTarget,
 } from '../src/sim/sim.js';
 import {
   TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES, DAMAGE, GADGETS,
@@ -71,8 +71,36 @@ const state = createState(world, 1234);
 // check below that says "staging" means the phase after it — the one where the
 // defenders take the flat — so restart into that. The select phase gets checks
 // of its own at the end of this file.
-function restartRound() {
+//
+// It is also not the same thing as playing the next round of a match, and that
+// difference matters now that the two sides change ends on every reset: `a1` is
+// called the attacker a hundred times below, and a helper that quietly made him
+// the defence would break every one of those checks for a reason that has
+// nothing to do with what they test. So the sides are put back afterwards. The
+// swap itself is checked in a section of its own — `--only=sides`.
+function resetKeepingSides() {
+  // The device is remembered along with the side. resetRound takes a kit off
+  // anyone holding the other team's, and by the time it looks, the swap has
+  // already moved him — so restoring only the team would leave a defender who
+  // chose flares holding a wedge, his choice lost to a swap the test never
+  // asked for.
+  const was = Object.fromEntries(Object.values(state.players)
+    .map((p) => [p.id, { team: p.team, gadget: p.gadget }]));
   resetRound(world, state);
+  for (const p of Object.values(state.players)) {
+    if (p.team === was[p.id].team) continue;
+    p.team = was[p.id].team;
+    p.gadget = was[p.id].gadget;
+    p.gadgetLeft = GADGETS[p.gadget].count;
+    // Back on his own side, so back onto its spawn.
+    const spawn = world.map.spawns[p.team][0];
+    p.pos = { x: spawn.x, y: spawn.y ?? 0, z: spawn.z };
+    p.look = { yaw: spawn.yaw ?? 0, pitch: 0 };
+  }
+}
+
+function restartRound() {
+  resetKeepingSides();
   state.phase = 'prep';
   state.phaseTime = ROUND.prepTime;
 }
@@ -1440,7 +1468,7 @@ section('equipment', () => {
     check('a flare that has burned through is gone', flares().length === 0);
 
     // ── And a new round turns the lights back on.
-    resetRound(world, state);
+    resetKeepingSides();
     check('a new round restores the power', state.power === true);
     check('takes the tube off', state.players.a1.nvg === false);
     check('and hands the flares back',
@@ -1485,7 +1513,7 @@ section('equipment', () => {
     stepSim(world, state, { d1: press({ gadget: true }), a1: createInput() });
     check('the device is really on the door before the round ends',
       state.doors.front.device?.kind === 'wedge');
-    resetRound(world, state);
+    resetKeepingSides();
     const anyDevice = Object.values(state.doors).some((ds) => ds.device || ds.charge);
     check('a new round takes every device off every door', !anyDevice);
     check('and hands the kit back', d.gadgetLeft === GADGETS[d.gadget].count,
@@ -2018,7 +2046,7 @@ section('loadout', () => {
     !ids.some((id) => /mp5|ak|m4|glock|colt|hk|scar|vector|remington|barrett|saiga/i.test(id + WEAPONS[id].name)),
     ids.join(' '));
 
-  resetRound(world, state);
+  resetKeepingSides();
   check('a round opens at the loadout screen',
     state.phase === 'select' && Math.abs(state.phaseTime - ROUND.selectTime) < 1e-9,
     `phase=${state.phase} t=${state.phaseTime}`);
@@ -2070,12 +2098,127 @@ section('loadout', () => {
 
   // Half a magazine gone, then a new round: the choice stays, the gun is new.
   attacker.weapon.ammo = 3;
-  resetRound(world, state);
+  resetKeepingSides();
   check('the choice survives into the next round',
     attacker.loadout === 'sg-12-pump' && attacker.weapon.id === 'sg-12-pump',
     `${attacker.loadout}/${attacker.weapon.id}`);
   check('but the magazine is full again',
     attacker.weapon.ammo === WEAPONS['sg-12-pump'].magSize, `ammo=${attacker.weapon.ammo}`);
+});
+
+// ── The sides change ends ─────────────────────────────────────────────────
+//
+// The half of the game a player never saw. What has to be true is not just
+// that a letter in a field flipped: the man has to be standing on the other
+// side's spawn, holding kit that side is allowed to carry, and he has to end
+// up back where he started after two rounds rather than drifting.
+section('sides', () => {
+  console.log('\nChanging ends:');
+
+  const w = buildWorld(APARTMENT);
+  const s = createState(w, 99);
+  const a = addPlayer(w, s, 'a', 'attackers', 'A');
+  const d = addPlayer(w, s, 'd', 'defenders', 'D');
+
+  // Each takes something only their own side carries, and a gun from the rack
+  // that both sides share.
+  setLoadout(s, 'a', 'sg-12-pump');
+  setGadget(s, 'a', 'charge');
+  setGadget(s, 'd', 'wedge');
+
+  const near = (p, team) => w.map.spawns[team]
+    .some((sp) => Math.hypot(sp.x - p.pos.x, sp.z - p.pos.z) < 0.01);
+
+  check('both start where they were put', near(a, 'attackers') && near(d, 'defenders'));
+
+  resetRound(w, s);
+  check('after a round the two have changed ends',
+    a.team === 'defenders' && d.team === 'attackers', `${a.team}/${d.team}`);
+  check('...and each stands on his new side\'s spawn',
+    near(a, 'defenders') && near(d, 'attackers'));
+  check('the round counter moved with them', s.round === 2, `round ${s.round}`);
+
+  // The rule the swap leans on: a device belonging to the side you just left
+  // is taken off you, because there is no sense in a defender holding a breach
+  // charge. The gun is not touched — the rack is the same for both sides.
+  check('kit that belongs to the other side is taken away',
+    GADGETS[a.gadget].team === 'defenders' && GADGETS[d.gadget].team === 'attackers',
+    `${a.gadget}/${d.gadget}`);
+  check('but the weapon is his own business',
+    a.loadout === 'sg-12-pump' && a.weapon.id === 'sg-12-pump', a.loadout);
+
+  resetRound(w, s);
+  check('and a second round puts them back',
+    a.team === 'attackers' && d.team === 'defenders', `${a.team}/${d.team}`);
+  check('...on the spawns they began on',
+    near(a, 'attackers') && near(d, 'defenders'));
+
+  // The rule itself, at settings other than the one shipped. Asked rather than
+  // arranged: a tool that imports constants.js without the version stamp holds
+  // a second copy of the module, so assigning to ROUND.swapEvery here would
+  // change a number the simulation never reads and prove nothing at all.
+  check('set to zero, nobody ever swaps',
+    ![1, 2, 3, 10, 99].some((r) => swapsSides(r, 0)));
+  check('at one round a side, every round swaps',
+    [1, 2, 3, 4].every((r) => swapsSides(r, 1)));
+  check('at two rounds a side, every other one does',
+    swapsSides(1, 2) && !swapsSides(2, 2) && swapsSides(3, 2) && !swapsSides(4, 2));
+
+  // And the shipped setting is the one the flat was built around.
+  check('shipped setting is one round a side', ROUND.swapEvery === 1, `${ROUND.swapEvery}`);
+});
+
+// ── What a dead man is shown ──────────────────────────────────────────────
+//
+// The rule, not the picture: whose eyes are offered, in what order, and — the
+// part that actually matters — that an enemy is never one of them. A dead
+// player who could see through the other side would know where they are and
+// could say so out loud, which in a game built on one team-mate knowing more
+// than the other is the whole thing given away.
+section('spectate', () => {
+  console.log('\nWatching from a team-mate:');
+
+  const w = buildWorld(APARTMENT);
+  const s = createState(w, 5);
+  const me = addPlayer(w, s, 'me', 'attackers', 'Me');
+  const mate = addPlayer(w, s, 'mate', 'attackers', 'Mate');
+  const other = addPlayer(w, s, 'other', 'attackers', 'Other');
+  const foe = addPlayer(w, s, 'foe', 'defenders', 'Foe');
+
+  check('alive, you watch nobody — you are looking out of your own head',
+    spectateTarget(s, me) === null);
+
+  me.alive = false;
+  check('dead, the view moves to a team-mate',
+    spectateTarget(s, me)?.id === 'mate', spectateTarget(s, me)?.id);
+
+  check('Space steps to the next one',
+    spectateTarget(s, me, 'mate', true)?.id === 'other');
+  check('...and round again from the last',
+    spectateTarget(s, me, 'other', true)?.id === 'mate');
+  check('holding still keeps the same man',
+    spectateTarget(s, me, 'other', false)?.id === 'other');
+
+  // The one being watched is killed. The view has to land on somebody alive
+  // rather than counting from a corpse.
+  other.alive = false;
+  check('when the man you were watching is killed, the view moves on',
+    spectateTarget(s, me, 'other')?.id === 'mate');
+
+  // The check the whole thing exists for.
+  mate.alive = false;
+  check('with your side wiped out, there is nobody to watch',
+    spectateTarget(s, me) === null);
+  check('...and the enemy still standing is never offered',
+    foe.alive && spectateTarget(s, me, 'foe', true) === null);
+
+  // A dead man is not a window either.
+  const s2 = createState(w, 6);
+  const solo = addPlayer(w, s2, 'solo', 'attackers', 'Solo');
+  addPlayer(w, s2, 'enemy', 'defenders', 'Enemy');
+  solo.alive = false;
+  check('alone on your side, you stay where you fell',
+    spectateTarget(s2, solo) === null);
 });
 
 // ── A client's pick reaches the host ──────────────────────────────────────

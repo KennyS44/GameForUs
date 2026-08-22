@@ -557,6 +557,17 @@ export const ROUND = {
   // The penthouse is two storeys and thirty-odd rooms: clearing it carefully,
   // rather than running it, is a quarter of an hour of work.
   duration: 900,
+  // How many rounds a side is held before the two swap over.
+  //
+  // Every round, because a round here is a quarter of an hour. Games that swap
+  // at the half do it because their rounds are two minutes long and a side is
+  // six of them; at this length, holding somebody on one side for two rounds
+  // is half an hour before they find out what the other half of the game is —
+  // and the two halves share nothing but the walls. The attack carries a
+  // charge and breaches; the defence carries wedges and waits.
+  //
+  // Set to 0 and nobody ever swaps.
+  swapEvery: 1,
 };
 
 // Noise a movement style makes, in metres it can be heard.

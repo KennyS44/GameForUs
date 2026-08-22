@@ -8,14 +8,14 @@
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
   GADGETS, DEFAULT_GADGET, BLIND, NVG, FLARE, POWER,
-} from './constants.js?v=99f3ac0d';
+} from './constants.js?v=323f1644';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=99f3ac0d';
+} from './math.js?v=323f1644';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=99f3ac0d';
+} from './world.js?v=323f1644';
 
 const GRAVITY = 18;
 
@@ -117,6 +117,10 @@ export function createState(world, seed = 12345) {
     time: 0,
     phase: ROUND.selectTime > 0 ? 'select' : 'prep',
     phaseTime: ROUND.selectTime > 0 ? ROUND.selectTime : ROUND.prepTime,
+    // Which round this is, counted from one. Sides swap on it — see
+    // resetRound — so it has to be part of the state the host broadcasts
+    // rather than a number the menu keeps to itself.
+    round: 1,
     players: {},
     doors,
     lights,
@@ -1451,8 +1455,71 @@ export function stepSim(world, state, inputs, dt = DT) {
   return state;
 }
 
+// Who a dead player watches, and who he watches next.
+//
+// This lives with the rules rather than with the renderer because it is one:
+// your own side only, the living only, and never a free camera. A dead man who
+// could fly would learn where the enemy is and say so, and in a game where the
+// whole value of a living team-mate is that he is the one who knows, that is
+// worse than showing nothing at all.
+//
+// `step` moves one along; the order is by id, so it is the same on every frame
+// and the same on both machines. Null means there is nobody left to watch, and
+// the caller leaves the camera where the man fell — there is no third thing to
+// show, and a body on the floor is at least honest.
+export function spectateTarget(state, me, currentId = null, step = false) {
+  if (!me || me.alive) return null;
+  const mates = Object.values(state.players)
+    .filter((p) => p.alive && p.team === me.team && p.id !== me.id)
+    .sort((a, b) => (a.id < b.id ? -1 : 1));
+  if (!mates.length) return null;
+  const at = mates.findIndex((p) => p.id === currentId);
+  // Not on the list: either nobody was being watched yet, or the one who was
+  // has since been killed. Either way, start at the top rather than counting
+  // from a man who is no longer standing.
+  if (at < 0) return mates[0];
+  return mates[step ? (at + 1) % mates.length : at];
+}
+
+// Whether the round now starting is one where the two sides change ends.
+//
+// A function rather than the expression written inline, and it takes the
+// interval instead of only reading it, so the rule can be checked at several
+// settings without anybody having to reach in and change a constant to do it.
+// That matters more than it looks: a tool importing `constants.js` without the
+// version stamp gets a *second copy* of the module — Node keys them by URL,
+// query string and all — so a test that assigns to ROUND.swapEvery is writing
+// to an object the simulation has never heard of, and passes while proving
+// nothing. Ask this instead.
+export function swapsSides(round, every = ROUND.swapEvery) {
+  return every > 0 && (round - 1) % every === 0;
+}
+
 // Restart everyone for a new round.
 export function resetRound(world, state) {
+  state.round = (state.round ?? 1) + 1;
+
+  // ── The sides change ends ──
+  //
+  // Until now they did not, and that quietly threw away half the game: whoever
+  // started on the attack stayed on the attack for as long as the two kept
+  // playing. The sides share the flat and nothing else — one carries a breach
+  // charge and has to come through a door somebody is watching, the other
+  // carries wedges and a tripwire and has to decide which door to give up.
+  // A player who only ever did one of those has seen half of what was built.
+  //
+  // Everything downstream already keys off `p.team` and is written to be told
+  // rather than to assume: the spawn is picked from the team's own list right
+  // below, the device is dropped and replaced if it belongs to the other side,
+  // and the host puts the team in every snapshot, so a client changes ends
+  // when the host says so. What is deliberately *not* swapped is the weapon —
+  // the rack is the same for both sides, and a pick is a pick.
+  if (swapsSides(state.round)) {
+    for (const p of Object.values(state.players)) {
+      p.team = p.team === 'attackers' ? 'defenders' : 'attackers';
+    }
+  }
+
   const counts = { attackers: 0, defenders: 0 };
   for (const p of Object.values(state.players)) {
     const spawns = world.map.spawns[p.team];

@@ -1,18 +1,18 @@
 // The runtime: drives a session at a fixed tick rate and turns its state into
 // pictures and sound. Knows nothing about menus or networking.
 
-import * as THREE from '../vendor/three.module.js?v=99f3ac0d';
+import * as THREE from '../vendor/three.module.js?v=323f1644';
 import {
   buildScene, syncDoors, syncLights, syncSmokeFog, makeAvatar, poseAvatar,
   setAvatarWeapon, createEquipmentView,
-} from './render/scene.js?v=99f3ac0d';
-import { createEffects } from './render/effects.js?v=99f3ac0d';
-import { createView } from './render/view.js?v=99f3ac0d';
-import { createHud } from './ui/hud.js?v=99f3ac0d';
-import { DT, NVG } from './sim/constants.js?v=99f3ac0d';
-import { lookTarget, eyePosition, aimDirection } from './sim/sim.js?v=99f3ac0d';
-import { raycastGeometry } from './sim/world.js?v=99f3ac0d';
-import { distXZ } from './sim/math.js?v=99f3ac0d';
+} from './render/scene.js?v=323f1644';
+import { createEffects } from './render/effects.js?v=323f1644';
+import { createView } from './render/view.js?v=323f1644';
+import { createHud } from './ui/hud.js?v=323f1644';
+import { DT, NVG } from './sim/constants.js?v=323f1644';
+import { lookTarget, eyePosition, aimDirection, spectateTarget } from './sim/sim.js?v=323f1644';
+import { raycastGeometry } from './sim/world.js?v=323f1644';
+import { distXZ } from './sim/math.js?v=323f1644';
 
 const MAX_CATCHUP_TICKS = 12; // bound catch-up work after a stall, without
                               // dropping into slow motion on a weak machine
@@ -259,10 +259,11 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
 
   // ── Avatars for everyone but us ─────────────────────────────────────────
 
-  function syncAvatars(dt) {
-    const me = session.me;
+  function syncAvatars(dt, eyes) {
     for (const p of Object.values(session.state.players)) {
-      if (p.id === me?.id) continue;
+      // Never draw the body the camera is inside — your own, or the team-mate
+      // you are watching through. From in there it is a wall of jacket.
+      if (p.id === eyes?.id) continue;
       let av = avatars.get(p.id);
       if (!av) {
         av = makeAvatar(p.team);
@@ -283,10 +284,53 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
     }
   }
 
+  // ── Whose eyes ──────────────────────────────────────────────────────────
+  //
+  // Dying used to leave you looking out of your own corpse: the camera stayed
+  // where you fell and you could turn your head, which in a round that runs a
+  // quarter of an hour is a long time staring at a skirting board. Now the
+  // picture moves to somebody on your side who is still standing.
+  //
+  // It is his view, not a free camera — his position, his aim, his sight
+  // picture — so nothing reaches you that he could not see himself. That is
+  // the whole reason to do it this way round: a camera you could fly through
+  // walls would hand a dead man the enemy's position, and in a game where the
+  // living team-mate is meant to be the one with the information, that is
+  // worse than a black screen.
+  //
+  // Nobody left to watch, and you stay where you fell — there is no third
+  // thing to show, and the body on the floor is at least honest.
+  // Who to watch is a rule, and lives with the rules — see spectateTarget in
+  // src/sim/sim.js. All that belongs here is the key: Space steps to the next
+  // man, on the press rather than for every frame it is held down.
+  let spectateId = null;
+  let cycleHeld = false;
+
+  function viewer() {
+    const me = session.me;
+    if (!me) return null;
+    const wants = input.isDown('jump');
+    const step = wants && !cycleHeld;
+    cycleHeld = wants;
+
+    const mate = spectateTarget(session.state, me, spectateId, step);
+    spectateId = mate?.id ?? null;
+    hud.setSpectateChoice(me.alive ? 0 : mates(me));
+    return mate ?? me;
+  }
+
+  // Only for the hint: whether there is more than one man to choose between.
+  function mates(me) {
+    let n = 0;
+    for (const p of Object.values(session.state.players)) {
+      if (p.alive && p.team === me.team && p.id !== me.id) n++;
+    }
+    return n;
+  }
+
   // ── Prompt ──────────────────────────────────────────────────────────────
 
-  function updatePrompt() {
-    const me = session.me;
+  function updatePrompt(me) {
     if (!me?.alive) {
       hud.setPrompt(null);
       return;
@@ -395,30 +439,37 @@ export function createGame({ canvas, session, audio, input, onPause, onRoundEnd,
 
   function present(dtReal) {
     const me = session.me;
-    if (me) {
-      const moving = Math.hypot(me.vel.x, me.vel.z) > 0.4;
-      view.update(me, dtReal, moving, wallAhead(me));
-      // Whatever the sight is magnifying, the mouse is divided by.
-      input.setZoom(view.zoom);
+    // Whose eyes the picture comes from. Yours while you are alive; a living
+    // team-mate's once you are not.
+    const eyes = viewer();
+    const watching = eyes && me && eyes.id !== me.id;
+    if (eyes) {
+      const moving = Math.hypot(eyes.vel.x, eyes.vel.z) > 0.4;
+      view.update(eyes, dtReal, moving, wallAhead(eyes));
+      // Whatever the sight is magnifying, the mouse is divided by. Not while
+      // watching somebody else — the mouse is not moving that view.
+      input.setZoom(watching ? 1 : view.zoom);
       // ...and if that glass is a scope, the screen becomes the eyepiece.
       hud.setScope(view.scoped);
       audio.setListener(view.camera.position, forwardOf(view.camera));
-      listenToRoom(me, dtReal);
-      hud.update(session.state, me, dtReal);
-      updatePrompt();
+      listenToRoom(eyes, dtReal);
+      // The vitals belong to the man whose eyes these are, or the bar would
+      // read empty over a picture of somebody very much alive.
+      hud.update(session.state, eyes, dtReal, watching ? eyes.name : null);
+      updatePrompt(watching ? null : me);
     }
     hud.setClickToPlay(!input.locked);
 
     syncDoors(built, session.state);
-    syncLights(built, session.state, me ? me.pos.y : 0, !!me?.nvg);
+    syncLights(built, session.state, eyes ? eyes.pos.y : 0, !!eyes?.nvg);
     // Smoke you are standing in is not an object in front of the camera, it is
     // the air the camera is in — so it is the scene's fog that draws it.
     syncSmokeFog(built, session.state, view.camera.position);
     // A tube also opens the iris: everything already lit reads brighter, which
     // is why a lamp through night vision is painful and a flare is worse.
-    renderer.toneMappingExposure = me?.nvg ? NVG.exposure : 1.0;
+    renderer.toneMappingExposure = eyes?.nvg ? NVG.exposure : 1.0;
     equipment.sync(session.state, session.world, view.camera);
-    syncAvatars(dtReal);
+    syncAvatars(dtReal, eyes);
     effects.update(dtReal);
 
     const wantScoreboard = input.isDown('scoreboard');

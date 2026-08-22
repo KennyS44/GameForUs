@@ -1,6 +1,6 @@
 // HUD: reads simulation state, writes DOM. Never the other way round.
 
-import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=99f3ac0d';
+import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=323f1644';
 
 const $ = (id) => document.getElementById(id);
 
@@ -33,11 +33,17 @@ export function createHud() {
     clickToPlay: $('click-to-play'),
     deadNotice: $('dead-notice'),
     deadSub: $('dead-sub'),
+    spectating: $('spectating'),
+    spectatingName: $('spectating-name'),
+    spectatingHint: $('spectating-hint'),
     scoreboard: $('scoreboard'),
     scoreboardBody: $('scoreboard-body'),
   };
 
   let lastHealth = PLAYER.maxHealth;
+  // Whose health `lastHealth` is a reading of, so a change of view is not
+  // mistaken for a wound.
+  let vitalsOf = null;
   let vignetteTimer = 0;
   let bannerTimer = 0;
 
@@ -80,7 +86,11 @@ export function createHud() {
     el.scope.style.opacity = amount > 0.002 ? String(Math.min(1, amount)) : '0';
   }
 
-  function update(state, me, dt) {
+  // `watching` is the name of the team-mate whose eyes these are, or null when
+  // the picture is your own. Everything on screen then describes him — his
+  // health, his magazine, his stance — because it is his view, and a bar that
+  // read 0 over a picture of a man walking about would be nonsense.
+  function update(state, me, dt, watching = null) {
     if (!me) return;
 
     // ── Vitals ──
@@ -89,10 +99,13 @@ export function createHud() {
     el.healthFill.style.transform = `scaleX(${hp / PLAYER.maxHealth})`;
     el.healthFill.classList.toggle('hurt', hp <= 40);
 
-    if (me.health < lastHealth) {
-      vignetteTimer = 0.9;
-    }
+    // The red flash is "you were hit", so it must not fire when the numbers
+    // change because the view moved to somebody else. Stepping from your own
+    // corpse to a team-mate on 100 is a jump of a hundred points that nobody
+    // felt.
+    if (me.health < lastHealth && me.id === vitalsOf) vignetteTimer = 0.9;
     lastHealth = me.health;
+    vitalsOf = me.id;
     if (vignetteTimer > 0) {
       vignetteTimer -= dt;
       el.vignette.style.opacity = String(Math.min(0.9, vignetteTimer));
@@ -169,7 +182,22 @@ export function createHud() {
     el.aliveCount.textContent = `Штурм ${alive.attackers}/${total.attackers}   ·   Оборона ${alive.defenders}/${total.defenders}`;
 
     // ── Death ──
-    el.deadNotice.hidden = me.alive;
+    //
+    // "Вы убиты" belongs on your own last picture, not over somebody else's:
+    // once the view has moved to a team-mate the big red word would be reading
+    // his screen wrong. The quiet line at the bottom takes over instead.
+    el.deadNotice.hidden = me.alive || !!watching;
+    el.spectating.hidden = !watching;
+    if (watching) {
+      el.spectatingName.textContent = watching;
+      el.spectatingHint.textContent = spectateHint;
+    }
+  }
+
+  // Only worth saying when there is somewhere else to look.
+  let spectateHint = '';
+  function setSpectateChoice(count) {
+    spectateHint = count > 1 ? '· Space — следующий' : '';
   }
 
   function setClickToPlay(show) {
@@ -238,7 +266,7 @@ export function createHud() {
 
   return {
     show, blindFlash, banner, setScope, update, setPrompt, setClickToPlay, hitMark, killFeed,
-    scoreboard, setDeathInfo, el,
+    scoreboard, setDeathInfo, setSpectateChoice, el,
   };
 }
 

@@ -29,6 +29,9 @@
 //                          be won or lost, but it also holds each side on its
 //                          own half of the flat, so --at will not stick
 //   --bots=N               how many opponents exist at all (default 1)
+//   --mates=N              ...and how many are on your side (default 0)
+//   --dead                 take yourself out of the round first, which is how
+//                          to photograph what a dead player is shown
 //   --hud                  keep the crosshair and health bar in shot
 //   --wobble               let the weapon breathe and sway (default: held still)
 //   --size=WxH             default 1280x720
@@ -90,12 +93,14 @@ const opts = {
   look: typeof args.look === 'string' ? args.look.split(',').map(Number) : null,
   phase: typeof args.phase === 'string' ? args.phase : 'live',
   hud: !!args.hud,
+  dead: !!args.dead,
   ticks: args.seconds !== undefined
     ? Math.round(Number(args.seconds) * 60)
     : num(args.ticks, 60),
 };
 
 const bots = num(args.bots, 1);
+const mates = num(args.mates, 0);
 const still = !args.wobble;
 const [width, height] = (typeof args.size === 'string' ? args.size : '1280x720')
   .split('x').map(Number);
@@ -161,6 +166,10 @@ async function compose(page, shot) {
     const asked = o.at ? g.at(o.at, o.y ?? undefined) : null;
     if (o.face) g.face(o.face);
     else if (o.look) g.look(o.look[0], o.look[1] ?? 0);
+
+    // Dying is done before the clock runs, so the picture is of the round
+    // carrying on without you rather than of the moment you fell.
+    if (o.dead) g.kill();
 
     g.release();
     const held = {};
@@ -296,6 +305,7 @@ if (still) query.set('still', '1');
 // nobody defending, the round is won the moment it starts and the screen
 // becomes a scoreboard.
 query.set('bots', String(bots));
+query.set('mates', String(mates));
 
 await page.goto(`http://localhost:${port}/?${query}`, { waitUntil: 'domcontentloaded' });
 // The match is built behind a loading screen, and under a software renderer
