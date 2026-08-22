@@ -344,10 +344,24 @@ ${roomLabels(floor)}
 
 mkdirSync(join(ROOT, 'docs'), { recursive: true });
 const tag = APARTMENT.draft ? ' — ПРОЕКТ, в игру не внесён' : '';
+// The line under the title describes *this* building. It used to describe the
+// flat whatever it was drawing, so the range came out captioned with a front
+// door it does not have; a map may say its own instead.
 const ground = plan(0, `${APARTMENT.name}: первый этаж (y = 0)${tag}`,
-  'Вход снизу по плану: площадка за входной дверью — спавн штурма. Бежевым — мебель.');
+  APARTMENT.planNote
+  ?? 'Вход снизу по плану: площадка за входной дверью — спавн штурма. Бежевым — мебель.');
 const upper = plan(1, `${APARTMENT.name}: второй этаж (y = ${F2})${tag}`,
   'Зелёным — то, что открыто небу; штриховкой — проём вниз; бежевым — мебель. Жёлтым — электрощит.');
 writeFileSync(join(ROOT, `docs/${outName}-ground.svg`), ground);
-writeFileSync(join(ROOT, `docs/${outName}-upper.svg`), upper);
-console.log(`docs/${outName}-{ground,upper}.svg — ${n(W)} × ${n(H)} px, ${APARTMENT.rooms.length} rooms, ${world.doors.length} doors`);
+
+// A storey nobody built anything on gets no sheet. The flat has two; the range
+// has one, and drawing its empty first floor produced a blank page with a
+// title on it — which reads as a map that failed to render rather than as a
+// building that is one storey tall.
+const hasUpper = APARTMENT.rooms.some((r) => r.floor === 1);
+if (hasUpper) writeFileSync(join(ROOT, `docs/${outName}-upper.svg`), upper);
+
+console.log(
+  `docs/${outName}-${hasUpper ? '{ground,upper}' : 'ground'}.svg`
+  + ` — ${n(W)} × ${n(H)} px, ${APARTMENT.rooms.length} rooms, ${world.doors.length} doors`,
+);

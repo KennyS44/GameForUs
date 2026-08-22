@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GameForUs — прицелы</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 32px 16px 64px;
+    background: #0a0b0d; color: #e8e6e3;
+    font: 16px/1.6 system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 66rem; margin: 0 auto; }
+  h1 { font-size: 32px; letter-spacing: 0.06em; margin: 0 0 8px; text-transform: uppercase; }
+  .lead { color: #a5a29c; margin: 0 0 32px; max-width: 44rem; }
+  .optic {
+    margin: 0 0 32px; padding: 0 0 32px;
+    border-bottom: 1px solid #24262b;
+    display: grid; gap: 16px;
+  }
+  @media (min-width: 60rem) { .optic { grid-template-columns: 3fr 2fr; align-items: start; } }
+  .optic img { width: 100%; height: auto; display: block; border-radius: 4px; background: #000; }
+  .optic h2 { font-size: 24px; margin: 0 0 8px; }
+  .blurb { color: #a5a29c; margin: 0 0 16px; }
+  dl { margin: 0; display: grid; gap: 8px; }
+  dl div { display: flex; gap: 8px; }
+  dt { color: #a5a29c; min-width: 9.5rem; }
+  dd { margin: 0; }
+  footer { color: #a5a29c; font-size: 14px; margin-top: 32px; }
+  a { color: #e08b3c; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Прицелы</h1>
+<p class="lead">
+  Что можно поставить на планку и как это выглядит через прицельное окно.
+  Снимки сделаны в самой игре с одного и того же места, при полностью поднятом
+  прицеле. Ни одна цифра здесь не написана руками: они читаются из той же
+  таблицы, по которой работает игра.
+</p>
+<p class="lead">
+  Прицел не меняет ни урона, ни разброса, ни отдачи. Он решает, что вы видите
+  и сколько времени уходит на вскидку — увеличение стоит времени, механика
+  экономит его.
+</p>
+<figure class="optic">
+  <img src="ref/optics/iron.png" alt="Механический — вид через прицел" loading="lazy">
+  <figcaption>
+    <h2>Механический</h2>
+    <p class="blurb">Мушка и целик. Ничего не заслоняет, вскидывается быстрее всего.</p>
+    <dl>
+      <div><dt>Увеличение</dt><dd>1× (без увеличения)</dd></div>
+      <div><dt>Вскидка</dt><dd>вскидка быстрее на 15%</dd></div>
+      <div><dt>Ставится на</dt><dd>ПП, дробовики, автоматы</dd></div>
+      <div><dt>На снимке</dt><dd>AV-74</dd></div>
+    </dl>
+  </figcaption>
+</figure>
+<figure class="optic">
+  <img src="ref/optics/dot.png" alt="Коллиматор закрытый — вид через прицел" loading="lazy">
+  <figcaption>
+    <h2>Коллиматор закрытый</h2>
+    <p class="blurb">Труба с точкой. Стекло защищено, окно узкое.</p>
+    <dl>
+      <div><dt>Увеличение</dt><dd>1× (без увеличения)</dd></div>
+      <div><dt>Вскидка</dt><dd>вскидка обычная</dd></div>
+      <div><dt>Ставится на</dt><dd>ПП, дробовики, автоматы, крупный калибр</dd></div>
+      <div><dt>На снимке</dt><dd>AV-74</dd></div>
+    </dl>
+  </figcaption>
+</figure>
+<figure class="optic">
+  <img src="ref/optics/reflex.png" alt="Коллиматор открытый — вид через прицел" loading="lazy">
+  <figcaption>
+    <h2>Коллиматор открытый</h2>
+    <p class="blurb">Открытая рамка, самое широкое окно. Видно, что происходит вокруг метки.</p>
+    <dl>
+      <div><dt>Увеличение</dt><dd>1× (без увеличения)</dd></div>
+      <div><dt>Вскидка</dt><dd>вскидка обычная</dd></div>
+      <div><dt>Ставится на</dt><dd>ПП, дробовики, автоматы</dd></div>
+      <div><dt>На снимке</dt><dd>AV-74</dd></div>
+    </dl>
+  </figcaption>
+</figure>
+<figure class="optic">
+  <img src="ref/optics/holo.png" alt="Голографический — вид через прицел" loading="lazy">
+  <figcaption>
+    <h2>Голографический</h2>
+    <p class="blurb">Квадратное окно, кольцо с точкой. Кольцо само находит силуэт в проёме.</p>
+    <dl>
+      <div><dt>Увеличение</dt><dd>1× (без увеличения)</dd></div>
+      <div><dt>Вскидка</dt><dd>вскидка дольше на 5%</dd></div>
+      <div><dt>Ставится на</dt><dd>ПП, дробовики, автоматы, крупный калибр</dd></div>
+      <div><dt>На снимке</dt><dd>AV-74</dd></div>
+    </dl>
+  </figcaption>
+</figure>
+<figure class="optic">
+  <img src="ref/optics/prism.png" alt="Призматический 1,8× — вид через прицел" loading="lazy">
+  <figcaption>
+    <h2>Призматический 1,8×</h2>
+    <p class="blurb">Ближе на треть, метка вытравлена на стекле. Дороже по времени вскидки.</p>
+    <dl>
+      <div><dt>Увеличение</dt><dd>1,8×</dd></div>
+      <div><dt>Вскидка</dt><dd>вскидка дольше на 30%</dd></div>
+      <div><dt>Ставится на</dt><dd>автоматы, крупный калибр</dd></div>
+      <div><dt>На снимке</dt><dd>AV-74</dd></div>
+    </dl>
+  </figcaption>
+</figure>
+<figure class="optic">
+  <img src="ref/optics/scope.png" alt="Оптический 2,4× — вид через прицел" loading="lazy">
+  <figcaption>
+    <h2>Оптический 2,4×</h2>
+    <p class="blurb">Марксманская труба. В коридоре мешает, через двор — решает.</p>
+    <dl>
+      <div><dt>Увеличение</dt><dd>2,4×</dd></div>
+      <div><dt>Вскидка</dt><dd>вскидка дольше на 50%</dd></div>
+      <div><dt>Ставится на</dt><dd>крупный калибр</dd></div>
+      <div><dt>На снимке</dt><dd>DMR-762</dd></div>
+    </dl>
+  </figcaption>
+</figure>
+<footer>
+  Собрано <code>node tools/opticplan.mjs</code>. Обратно в
+  <a href="../README.md">README</a>.
+</footer>
+</div>
+</body>
+</html>

@@ -32,6 +32,7 @@
 //   --mates=N              ...and how many are on your side (default 0)
 //   --dead                 take yourself out of the round first, which is how
 //                          to photograph what a dead player is shown
+//   --range                shoot on the range rather than in the flat
 //   --hud                  keep the crosshair and health bar in shot
 //   --wobble               let the weapon breathe and sway (default: held still)
 //   --size=WxH             default 1280x720
@@ -39,6 +40,8 @@
 //   --diff=PATH            compare against an earlier picture: prints how much
 //                          moved and where, and writes a three-panel sheet
 //                          (before, after, what changed) next to --out
+//   --menu=NAME            photograph a menu screen instead of the game:
+//                          main, armoury, loadout, plan, round, lobby
 //   --list                 print the room and weapon names and stop
 //
 // Everything it drives is behind ?debug=1 — see src/util/debug.js.
@@ -298,7 +301,11 @@ const problems = [];
 page.on('pageerror', (e) => problems.push(String(e)));
 page.on('requestfailed', (r) => problems.push(`не загрузилось: ${r.url()}`));
 
-const query = new URLSearchParams({ debug: '1', solo: '1' });
+const menu = typeof args.menu === 'string' ? args.menu : null;
+
+// A menu is not a round: no match is started, because most of these screens
+// exist precisely when one is not running.
+const query = new URLSearchParams(menu ? { debug: '1' } : { debug: '1', solo: '1' });
 if (still) query.set('still', '1');
 // Bots are a knob because they are the only thing in an empty flat that can
 // move while the picture is being set up. One is the floor, not zero: with
@@ -306,11 +313,17 @@ if (still) query.set('still', '1');
 // becomes a scoreboard.
 query.set('bots', String(bots));
 query.set('mates', String(mates));
+if (args.range) query.set('range', '1');
 
 await page.goto(`http://localhost:${port}/?${query}`, { waitUntil: 'domcontentloaded' });
 // The match is built behind a loading screen, and under a software renderer
 // building it is the slowest thing that happens all run.
-await page.waitForFunction(() => window.__gfu?.info().running === true, null, { timeout: 180000 });
+if (menu) {
+  await page.waitForFunction(() => !!window.__gfu, null, { timeout: 180000 });
+  await page.evaluate((name) => window.__gfu.screen(name), menu);
+} else {
+  await page.waitForFunction(() => window.__gfu?.info().running === true, null, { timeout: 180000 });
+}
 
 await mkdir(resolve(ROOT, dirname(outPattern.replace(/\{[^}]+\}/g, 'x'))), { recursive: true });
 
@@ -323,7 +336,9 @@ for (const weapon of weapons) {
   const path = resolve(ROOT, out);
   await mkdir(dirname(path), { recursive: true });
 
-  const info = await compose(page, { ...opts, weapon });
+  const info = menu
+    ? { phase: `меню:${menu}`, me: null, asked: null }
+    : await compose(page, { ...opts, weapon });
   // Thirty seconds is Playwright's default and this scene outgrew it: under a
   // software renderer a single frame of a lit two-storey flat can take longer
   // than that when the machine is busy.

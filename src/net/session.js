@@ -5,12 +5,13 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=323f1644';
+import { buildWorld } from '../sim/world.js?v=b574760e';
 import {
   createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout, setGadget,
-} from '../sim/sim.js?v=323f1644';
-import { createBotBrain } from '../sim/bot.js?v=323f1644';
-import { DT } from '../sim/constants.js?v=323f1644';
+  setOptic,
+} from '../sim/sim.js?v=b574760e';
+import { createBotBrain } from '../sim/bot.js?v=b574760e';
+import { DT } from '../sim/constants.js?v=b574760e';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 
@@ -80,6 +81,9 @@ export function createLocalSession({ map, name = 'Игрок', bots = 1, mates =
     chooseGadget(gadgetId) {
       return setGadget(state, localId, gadgetId);
     },
+    chooseOptic(weaponId, opticId) {
+      return setOptic(state, localId, weaponId, opticId);
+    },
     nextRound() {
       resetRound(world, state);
       // The sides have just changed ends, so what a bot remembers is now the
@@ -136,6 +140,11 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
       setLoadout(state, peerId, msg.id);
     } else if (msg.t === 'gadget') {
       setGadget(state, peerId, msg.id);
+    } else if (msg.t === 'optic') {
+      // Same rule as the weapon: the host decides, so a guest asking for a
+      // marksman tube on a shotgun is simply told no by the same function that
+      // tells the host no.
+      setOptic(state, peerId, msg.w, msg.o);
     } else if (msg.t === 'ping') {
       transport.sendTo(peerId, { t: 'pong', c: msg.c, s: performance.now() });
     } else if (msg.t === 'rtt') {
@@ -153,6 +162,9 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
         health: p.health, alive: p.alive, flashlight: p.flashlight,
         aimAmount: p.aimAmount, grounded: p.grounded,
         weapon: p.weapon, loadout: p.loadout, kills: p.kills, deaths: p.deaths,
+        // What is on each of his guns, so a guest draws the sight the host
+        // thinks he is looking through.
+        optics: p.optics,
         gadget: p.gadget, gadgetLeft: p.gadgetLeft, blind: p.blind,
         // Night vision is worn where everyone can see it, so it travels with
         // everything else a guest's screen has to agree with the host about.
@@ -228,6 +240,9 @@ export function createHostSession({ map, name, transport, seed = 1337, onRoster 
     },
     chooseGadget(gadgetId) {
       return setGadget(state, localId, gadgetId);
+    },
+    chooseOptic(weaponId, opticId) {
+      return setOptic(state, localId, weaponId, opticId);
     },
     nextRound() {
       resetRound(world, state);
@@ -419,6 +434,10 @@ export function createClientSession({ map, transport, myId, seed = 1337 }) {
     chooseGadget(gadgetId) {
       transport.send({ t: 'gadget', id: gadgetId });
       return setGadget(state, localId, gadgetId);
+    },
+    chooseOptic(weaponId, opticId) {
+      transport.send({ t: 'optic', w: weaponId, o: opticId });
+      return setOptic(state, localId, weaponId, opticId);
     },
     nextRound() {
       // Only the host may start a round; clients wait for the reset message.

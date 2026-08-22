@@ -1,6 +1,6 @@
 // HUD: reads simulation state, writes DOM. Never the other way round.
 
-import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=323f1644';
+import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=b574760e';
 
 const $ = (id) => document.getElementById(id);
 

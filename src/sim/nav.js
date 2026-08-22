@@ -13,8 +13,8 @@
 // Pure like the rest of the simulation: boxes in, numbers out. No engine, no
 // clock, no Math.random.
 
-import { PLAYER } from './constants.js?v=323f1644';
-import { columnHitsBox } from './math.js?v=323f1644';
+import { PLAYER } from './constants.js?v=b574760e';
+import { columnHitsBox } from './math.js?v=b574760e';
 
 // Fine enough that a 1 m doorway is two or three cells wide, coarse enough
 // that the whole building is a few thousand of them.

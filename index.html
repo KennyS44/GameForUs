@@ -10,8 +10,8 @@
 <meta name="description" content="Хардкорный тактический шутер в тёмном двухэтажном пентхаусе: свет, звук и двери решают больше, чем реакция.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <!-- Written by tools/stamp-version.mjs; the page checks it against version.txt. -->
-<meta name="gameforus-version" content="323f1644">
-<link rel="stylesheet" href="styles.css?v=323f1644">
+<meta name="gameforus-version" content="b574760e">
+<link rel="stylesheet" href="styles.css?v=b574760e">
 </head>
 <body>
 
@@ -148,6 +148,7 @@
       <div class="actions">
         <button class="btn btn-primary" id="btn-solo">Тренировка (2 на 2)</button>
         <button class="btn" id="btn-host">Создать комнату</button>
+        <button class="btn" id="btn-armoury">Оружейная</button>
       </div>
 
       <div class="join">
@@ -232,6 +233,29 @@
   </section>
 
   <!-- Weapon selection: cards are built from the roster by src/ui/loadout.js -->
+  <!-- Armoury: the rack, set up before a match rather than under a clock.
+       The choices live in localStorage and are handed to the simulation when a
+       round starts; the range next door is where you find out whether the
+       choice was any good. -->
+  <section class="screen" id="screen-armoury" hidden>
+    <header class="brand">
+      <h1>Оружейная</h1>
+      <p class="tagline">Что стоит на каждом стволе. Сохраняется между матчами.</p>
+    </header>
+    <div class="panel">
+      <div class="loadout-grid" id="armoury-grid"></div>
+      <section class="loadout-class">
+        <h3>Прицел — <span id="armoury-weapon">оружие</span></h3>
+        <div class="loadout-row" id="armoury-optic-row"></div>
+      </section>
+      <p class="hint" id="armoury-note"></p>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-armoury-range">Пристрелять на полигоне</button>
+        <button class="btn" id="btn-armoury-back">В меню</button>
+      </div>
+    </div>
+  </section>
+
   <section class="screen" id="screen-loadout" hidden>
     <header class="brand">
       <h1>Выбор оружия</h1>
@@ -239,6 +263,14 @@
     </header>
     <div class="panel">
       <div class="loadout-grid" id="loadout-grid"></div>
+      <!-- What is on the rail. Rebuilt whenever the weapon changes, because
+           what a gun may take depends on what it is for. The real setting-up
+           happens before the match, in Оружейная, where there is a range to
+           try it on; this row is for changing your mind. -->
+      <section class="loadout-class" id="loadout-optic">
+        <h3>Прицел — <span id="loadout-optic-weapon">оружие</span></h3>
+        <div class="loadout-row" id="loadout-optic-row"></div>
+      </section>
       <!-- Equipment: the row is filled by src/ui/loadout.js with your own
            side's kit, so an attacker never sees a defender's wedge. -->
       <section class="loadout-class" id="loadout-kit">
@@ -498,6 +530,6 @@
   window.addEventListener('load', function () { window.setTimeout(offerUpdate, 1200); });
 })();
 </script>
-<script type="module" src="src/main.js?v=323f1644"></script>
+<script type="module" src="src/main.js?v=b574760e"></script>
 </body>
 </html>

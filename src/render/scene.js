@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=323f1644';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=323f1644';
-import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=323f1644';
-import { buildWeaponModel } from './weapons.js?v=323f1644';
+import * as THREE from '../../vendor/three.module.js?v=b574760e';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=b574760e';
+import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=b574760e';
+import { buildWeaponModel } from './weapons.js?v=b574760e';
 
 // How much light there is in a room with every lamp in it switched off. Kept
 // here rather than inline because three different places have to agree on it:
@@ -248,7 +248,8 @@ function makeFixture(l) {
 export function buildScene(world) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x05060a);
-  scene.fog = new THREE.Fog(0x05060a, 11, 42);
+  const air = world.map.fog ?? CLEAR_FOG;
+  scene.fog = new THREE.Fog(0x05060a, air.near, air.far);
 
   // Barely-there ambient. Everything else comes from lamps and torches — and
   // this is also the one dial night vision turns: a tube does not add light to
@@ -660,6 +661,14 @@ function litness(state, world, pos) {
 // The weapon is drawn in its own pass with its own camera, so your hands stay
 // where they are — which is exactly right. In smoke you can see your rifle and
 // nothing past it.
+// How far you can see when the air is clear.
+//
+// Tuned for the flat, which is 32 m corner to corner: at 42 m the far wall of
+// the longest sightline has just started to go. That is atmosphere in a
+// building and a defect on a shooting range — the lane there is 52 m, so the
+// last twelve of it, targets included, disappeared into the dark. A map may
+// therefore say how far its own air is worth seeing through, and one built to
+// be looked down says a long way.
 const CLEAR_FOG = { near: 11, far: 42, color: new THREE.Color(0x05060a) };
 const SMOKE_FOG = { near: 0.12, far: 1.7, color: new THREE.Color(0x8f959e) };
 
@@ -677,8 +686,9 @@ export function syncSmokeFog(view, state, camPos) {
   // A cloud is as dark as the room it is in, and so is the inside of it.
   const lit = inside > 0 ? litness(state, view.world, camPos) : 1;
   const fog = view.scene.fog;
-  fog.near = CLEAR_FOG.near + (SMOKE_FOG.near - CLEAR_FOG.near) * inside;
-  fog.far = CLEAR_FOG.far + (SMOKE_FOG.far - CLEAR_FOG.far) * inside;
+  const air = view.world.map.fog ?? CLEAR_FOG;
+  fog.near = air.near + (SMOKE_FOG.near - air.near) * inside;
+  fog.far = air.far + (SMOKE_FOG.far - air.far) * inside;
   fog.color.copy(CLEAR_FOG.color).lerp(
     SMOKE_FOG.color.clone().multiplyScalar(Math.min(1, lit)), inside,
   );

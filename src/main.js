@@ -1,20 +1,21 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=323f1644';
+import { APARTMENT } from './maps/apartment.js?v=b574760e';
 // The same projection tools/floorplan.mjs draws the sheets with, so a mark and
 // the wall it is next to are worked out from one set of numbers.
-import { PLAN, UPPER_FROM } from './maps/plan.js?v=323f1644';
-import { createGame } from './game.js?v=323f1644';
-import { createAudio } from './audio/audio.js?v=323f1644';
-import { createInputSource, saveSettings } from './input/input.js?v=323f1644';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=323f1644';
+import { PLAN, UPPER_FROM } from './maps/plan.js?v=b574760e';
+import { createGame } from './game.js?v=b574760e';
+import { createAudio } from './audio/audio.js?v=b574760e';
+import { createInputSource, saveSettings } from './input/input.js?v=b574760e';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=b574760e';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=323f1644';
-import { createLoadout } from './ui/loadout.js?v=323f1644';
-import { storageGet, storageSet } from './util/storage.js?v=323f1644';
-import { DEBUG, AUTO_SOLO, SOLO_BOTS, SOLO_MATES } from './util/flags.js?v=323f1644';
-import { swapsSides } from './sim/sim.js?v=323f1644';
+} from './net/transport.js?v=b574760e';
+import { createLoadout } from './ui/loadout.js?v=b574760e';
+import { createArmoury, savedOptics, saveOptic } from './ui/armoury.js?v=b574760e';
+import { storageGet, storageSet } from './util/storage.js?v=b574760e';
+import { DEBUG, AUTO_SOLO, AUTO_RANGE, SOLO_BOTS, SOLO_MATES } from './util/flags.js?v=b574760e';
+import { swapsSides } from './sim/sim.js?v=b574760e';
 
 const $ = (id) => document.getElementById(id);
 
@@ -22,6 +23,7 @@ const canvas = $('game');
 const overlay = $('overlay');
 const screens = {
   main: $('screen-main'),
+  armoury: $('screen-armoury'),
   lobby: $('screen-lobby'),
   loadout: $('screen-loadout'),
   plan: $('screen-plan'),
@@ -44,6 +46,8 @@ let game = null;
 let transport = null;
 let pendingWelcome = null;
 const NAME_KEY = 'gameforus.name';
+// The gun the armoury and the range were last pointed at.
+const WEAPON_KEY = 'gameforus.lastWeapon';
 
 // ── Screens ───────────────────────────────────────────────────────────────
 
@@ -65,9 +69,16 @@ function hideOverlay() {
 const loadout = createLoadout({
   // The one place a choice reaches the game. Both roads lead here: the button
   // and the countdown running out.
-  onConfirm: ({ weapon, gadget, reason }) => {
+  onConfirm: ({ weapon, gadget, optic, reason }) => {
     game?.session.chooseWeapon?.(weapon);
     game?.session.chooseGadget?.(gadget);
+    // A sight is not handed back at the end of the round the way the gun and
+    // the device are, and it outlives the match as well: changing your mind
+    // here writes it into the armoury, so the rifle stays set up next time.
+    if (optic) {
+      game?.session.chooseOptic?.(weapon, optic);
+      saveOptic(weapon, optic);
+    }
     stopLoadoutPolling();
     // Confirmed by hand, with time still on the clock: the minute that follows
     // is the defence taking the flat, and there is nothing for an attacker to
@@ -237,6 +248,66 @@ function playerName() {
   return n || 'Игрок';
 }
 
+// ── The armoury, and the range next door ──────────────────────────────────
+//
+// Setting a rack up is not the same job as picking a gun with a round about to
+// start, so it gets a room of its own with no clock in it. The range is a
+// second map with nobody else on it: one man, one weapon, and something to
+// shoot at until the sight either makes sense or does not.
+
+const armoury = createArmoury({
+  onRange: (weaponId) => startRange(weaponId),
+  onBack: () => showScreen('main'),
+});
+
+$('btn-armoury').addEventListener('click', () => showMenu('armoury'));
+
+// Opening a menu screen from outside, which is what a screenshot tool needs:
+// some of them have to be filled in before they mean anything, and only this
+// file knows which.
+function showMenu(name) {
+  if (name === 'armoury') armoury.open(lastWeapon());
+  showScreen(name);
+}
+
+// Whatever is in hand, so the armoury opens on the gun you were last using
+// rather than on the top of the list.
+function lastWeapon() {
+  return game?.session.me?.loadout ?? storageGet(WEAPON_KEY) ?? null;
+}
+
+async function startRange(weaponId) {
+  audio.resume();
+  showScreen('loading');
+  $('loading-detail').textContent = 'Открываем полигон…';
+  storageSet(WEAPON_KEY, weaponId);
+  let RANGE;
+  try {
+    ({ RANGE } = await import('./maps/range.js?v=b574760e'));
+  } catch {
+    setStatus($('net-status'), 'Полигон не открылся.', 'error');
+    showScreen('armoury');
+    return;
+  }
+  requestAnimationFrame(() => {
+    // Nobody to fight: no defenders means the round cannot be won or lost, so
+    // it simply runs, which is what a range is.
+    const session = createLocalSession({ map: RANGE, name: playerName(), bots: 0, mates: 0 });
+    session.chooseWeapon?.(weaponId);
+    for (const [w, o] of Object.entries(savedOptics())) session.chooseOptic?.(w, o);
+    onRange = true;
+    startGame(session);
+    // Past the racks and the staging minute: on a range there is nothing to
+    // stage and nobody to hide from.
+    session.state.phase = 'live';
+    session.state.phaseTime = 3600;
+  });
+}
+
+// Leaving the range goes back to the armoury rather than to the main menu,
+// because you came from there to answer a question about a sight.
+let onRange = false;
+
 // ── Starting a match ──────────────────────────────────────────────────────
 
 function startGame(session) {
@@ -289,6 +360,12 @@ function startGame(session) {
       showScreen('round');
     },
   });
+  // The armoury's choices are a preference, not simulation state, so they have
+  // to be handed over at the start of every match. The simulation is still the
+  // authority: anything it refuses simply stays as the weapon shipped.
+  for (const [weaponId, opticId] of Object.entries(savedOptics())) {
+    session.chooseOptic?.(weaponId, opticId);
+  }
   audio.setVolume(Number(volEl.value) / 100);
   game.start();
   if (session.state.phase === 'select') {
@@ -488,6 +565,12 @@ function quitToMenu() {
   hostSession = null;
   transport?.close();
   transport = null;
+  if (onRange) {
+    onRange = false;
+    armoury.open(storageGet(WEAPON_KEY));
+    showScreen('armoury');
+    return;
+  }
   showScreen('main');
 }
 
@@ -517,12 +600,15 @@ showScreen('main');
 // below is never fetched, so `window.__gfu` stays undefined on the live site,
 // and there is nothing to remember to take out again. See src/util/flags.js.
 if (DEBUG) {
-  import('./util/debug.js?v=323f1644').then(({ installDebug }) => {
-    installDebug({ input, getGame: () => game, startSolo });
+  import('./util/debug.js?v=b574760e').then(({ installDebug }) => {
+    installDebug({ input, getGame: () => game, startSolo, showMenu });
     // Started only after the handle exists, so a tool that asks for both never
     // races the match into being before it can steer it.
-    if (AUTO_SOLO) startSolo();
+    if (AUTO_RANGE) startRange(storageGet(WEAPON_KEY) ?? 'ar-545-piston');
+    else if (AUTO_SOLO) startSolo();
   });
+} else if (AUTO_RANGE) {
+  startRange(storageGet(WEAPON_KEY) ?? 'ar-545-piston');
 } else if (AUTO_SOLO) {
   startSolo();
 }

@@ -4,9 +4,9 @@
 
 import {
   rayBox, rayTurnedBox, boxOverlaps, pointInBox, pushOutOfBox, clamp,
-} from './math.js?v=323f1644';
-import { DOOR } from './constants.js?v=323f1644';
-import { buildNav } from './nav.js?v=323f1644';
+} from './math.js?v=b574760e';
+import { DOOR } from './constants.js?v=b574760e';
+import { buildNav } from './nav.js?v=b574760e';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;

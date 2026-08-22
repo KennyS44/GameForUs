@@ -190,6 +190,84 @@ const gun = (def) => ({
   recoilSettle: settle(def.peak),
 });
 
+// ── What you can put on the rail ──────────────────────────────────────────
+//
+// The rail was drawn on every blueprint from the start and never did anything:
+// each weapon wore one sight, decided for it. This is the choice, and it is a
+// real one because magnification is not free — glass that pulls the room in
+// takes longer to get your eye behind, so `aimScale` stretches the weapon's own
+// aim time. Iron sights are the other end of that trade: nothing to line your
+// eye up with, so they come up quickest of anything here.
+//
+// Nothing on this table touches damage, spread or recoil. A sight decides what
+// you can see and how long it takes to see it, and that is all — a game where
+// the optic makes the bullet hit harder is a game about shopping.
+//
+// The shapes live in src/render/optics.js. This is the half the simulation
+// needs, which is why it is here: the rules must run in plain Node with no
+// renderer, the same as everything else in this file.
+export const OPTICS = {
+  iron: {
+    name: 'Механический', short: 'мушка',
+    blurb: 'Мушка и целик. Ничего не заслоняет, вскидывается быстрее всего.',
+    zoom: 1, aimScale: 0.85,
+  },
+  dot: {
+    name: 'Коллиматор закрытый', short: 'точка',
+    blurb: 'Труба с точкой. Стекло защищено, окно узкое.',
+    zoom: 1, aimScale: 1.0,
+  },
+  reflex: {
+    name: 'Коллиматор открытый', short: 'рефлекс',
+    blurb: 'Открытая рамка, самое широкое окно. Видно, что происходит вокруг метки.',
+    zoom: 1, aimScale: 1.0,
+  },
+  holo: {
+    name: 'Голографический', short: 'голо',
+    blurb: 'Квадратное окно, кольцо с точкой. Кольцо само находит силуэт в проёме.',
+    zoom: 1, aimScale: 1.05,
+  },
+  prism: {
+    name: 'Призматический 1,8×', short: 'призма',
+    blurb: 'Ближе на треть, метка вытравлена на стекле. Дороже по времени вскидки.',
+    zoom: 1.8, aimScale: 1.3,
+  },
+  scope: {
+    name: 'Оптический 2,4×', short: 'оптика',
+    blurb: 'Марксманская труба. В коридоре мешает, через двор — решает.',
+    zoom: 2.4, aimScale: 1.5,
+  },
+};
+
+// Which sights a class of weapon may take.
+//
+// Not everything on everything: a submachine gun with a marksman tube on it is
+// a joke, and a .50 with iron sights is a different one. The rule is what the
+// weapon is *for* — close work gets the wide fast glass, the two heavy rifles
+// get the magnification and keep a red dot as the answer to somebody who has
+// already reached them.
+export const OPTICS_BY_CLASS = {
+  smg: ['iron', 'dot', 'reflex', 'holo'],
+  shotgun: ['iron', 'dot', 'reflex', 'holo'],
+  rifle: ['iron', 'dot', 'reflex', 'holo', 'prism'],
+  heavy: ['dot', 'holo', 'prism', 'scope'],
+};
+
+// What a weapon wears when nobody has chosen: whatever it shipped with.
+export function defaultOptic(weaponId) {
+  const def = WEAPONS[weaponId];
+  if (!def) return 'reflex';
+  return def.optic ?? 'reflex';
+}
+
+// May this sight go on this weapon at all? Every path that changes a fitting
+// asks, including the one the network trusts least.
+export function opticFits(weaponId, opticId) {
+  const def = WEAPONS[weaponId];
+  if (!def || !OPTICS[opticId]) return false;
+  return (OPTICS_BY_CLASS[def.cls] ?? []).includes(opticId);
+}
+
 export const WEAPONS = {
   // ── Submachine guns ──
   // MP5: 27 damage at 799 rpm, the middle of Siege's SMG class in every stat.
@@ -321,6 +399,11 @@ export const WEAPONS = {
     name: 'AMR-50', cls: 'heavy', blurb: '.50, однозарядная, пробивает одну стену',
     from: 'Rainbow Six Siege — CSRX 300 (135 dmg, 52 rpm, one-shot down)',
     damage: 190, oneShot: true, fireMode: 'semi', rpm: 60, magSize: 1, reserve: 14, maxWalls: 1,
+    // Which sight it comes out of the locker wearing. Lives here rather than
+    // only in the model, because "what this weapon ships with" is a rule the
+    // simulation has to answer — it is the fallback for a player who has never
+    // been near the armoury.
+    optic: 'scope',
     reloadTime: 3.4, reloadTimeEmpty: 3.4,
     range: { near: 40, far: 60, floor: 0.85 },
     peak: 0.227, spreadHip: 0.075, spreadAim: 0.0016, spreadMoving: 0.070,
@@ -333,6 +416,7 @@ export const WEAPONS = {
     name: 'DMR-762', cls: 'heavy', blurb: '7,62×51, марксманская, магазин 20',
     from: 'Rainbow Six Siege — 417 / CAMRS (69 dmg, 444 rpm, 20+1)',
     damage: 54, fireMode: 'semi', rpm: 300, magSize: 20, reserve: 80,
+    optic: 'scope',
     reloadTime: 2.7, reloadTimeEmpty: 3.5,
     range: { near: 30, far: 40, floor: 0.7 },
     peak: 0.0803, spreadHip: 0.055, spreadAim: 0.0018, spreadMoving: 0.050,

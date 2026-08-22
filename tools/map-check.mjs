@@ -5,12 +5,26 @@
 // walks the map data and proves none of that happened.
 //
 //   node tools/map-check.mjs
+//   node tools/map-check.mjs --map=src/maps/range.js
+//
+// There is more than one map now, and nothing about these rules was ever
+// specific to the flat — so the map is an argument, spelled the way
+// tools/floorplan.mjs already spells it. Everything the checks used to know by
+// heart (which storeys exist, where a flood fill may start, how far out the
+// world goes) is read from the map instead.
 
-import { APARTMENT } from '../src/maps/apartment.js';
 import { buildWorld, doorFrame, localToWorld } from '../src/sim/world.js';
 import { createState, addPlayer, stepSim, createInput } from '../src/sim/sim.js';
 import { PLAYER, TICK_RATE } from '../src/sim/constants.js';
 import { pointInBox } from '../src/sim/math.js';
+
+const arg = (name, fallback) => {
+  const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.slice(name.length + 3) : fallback;
+};
+const mapPath = arg('map', '../src/maps/apartment.js');
+const module = await import(mapPath.startsWith('.') ? mapPath : `../${mapPath}`);
+const MAP = Object.values(module).find((v) => v && v.geometry && v.rooms);
 
 let failures = 0;
 function check(name, cond, detail = '') {
@@ -21,11 +35,14 @@ function check(name, cond, detail = '') {
   }
 }
 
-const world = buildWorld(APARTMENT);
-const F2 = 3.3;
+const world = buildWorld(MAP);
+const F2 = MAP.upperFloorY ?? 3.3;
 const CELL = 0.25;
+// A metre of air outside the shell, so a flood fill can round a cell outwards
+// without walking off the end of the numbers.
+const EDGE = 1;
 
-console.log(`map: ${world.boxes.length} boxes, ${world.doors.length} doors, ${world.lights.length} lights`);
+console.log(`map "${MAP.id}": ${world.boxes.length} boxes, ${world.doors.length} doors, ${world.lights.length} lights`);
 
 // A box may be turned about its own centre, so "is this point inside it" is
 // the simulation's own answer rather than a comparison of corners.
@@ -68,7 +85,8 @@ function flood(startX, startZ, floorY) {
       if (seen.has(key(ni, nj))) continue;
       const x = ni * CELL;
       const z = nj * CELL;
-      if (Math.abs(x) > 17 || z < -19 || z > 10) continue;
+      if (x < MAP.bounds.min.x - EDGE || x > MAP.bounds.max.x + EDGE) continue;
+      if (z < MAP.bounds.min.z - EDGE || z > MAP.bounds.max.z + EDGE) continue;
       if (!standable(x, z, floorY)) continue;
       seen.add(key(ni, nj));
       queue.push([ni, nj]);
@@ -77,8 +95,8 @@ function flood(startX, startZ, floorY) {
   return seen;
 }
 
-// Every room must be reachable from where its team starts: the ground floor
-// from the front door, the upper storey from the top of a staircase.
+// Somewhere inside a room that a player could actually stand — the spot the
+// reachability checks below aim at.
 function anySpot(r) {
   const floorY = r.floor ? F2 : 0;
   for (let x = r.min.x + 0.5; x < r.max.x; x += 0.5) {
@@ -94,34 +112,43 @@ function reachableFrom(startX, startZ, floorY) {
   return (x, z) => !!seen && seen.has(`${Math.round(x / CELL)},${Math.round(z / CELL)}`);
 }
 
-console.log('\nGround floor reachability (from the front door):');
-const onGround = reachableFrom(0, 5, 0);
-for (const r of APARTMENT.rooms) {
-  if (r.floor !== 0 || r.shaft || r.outside) continue;
-  const p = anySpot(r);
-  check(`reach ${r.id}`, !!p && onGround(p.x, p.z), p ? `(${p.x}, ${p.z})` : 'nowhere to stand');
-}
+// A storey is walked from where somebody actually starts on it, which is the
+// only place the map itself guarantees is a real standing spot. A storey
+// nobody spawns on has nothing to walk from, so it is not walked.
+const allSpawns = Object.values(MAP.spawns).flat();
+const spawnOn = (floor) =>
+  allSpawns.find((s) => ((s.y ?? 0) > 0.1 ? 1 : 0) === floor);
 
-console.log('\nUpper floor reachability (from the top of the east stairs):');
-const onUpper = reachableFrom(14.8, -0.6, F2);
-for (const r of APARTMENT.rooms) {
-  if (r.floor !== 1 || r.shaft || r.hole) continue;
-  const p = anySpot(r);
-  check(`reach ${r.id}`, !!p && onUpper(p.x, p.z), p ? `(${p.x}, ${p.z})` : 'nowhere to stand');
+for (const floor of [0, 1]) {
+  const here = MAP.rooms.filter((r) => r.floor === floor);
+  if (!here.length) continue;
+  const start = spawnOn(floor);
+  const storey = floor === 0 ? 'Ground floor' : 'Upper floor';
+  if (!start) {
+    console.log(`\n${storey} reachability: no spawn on this storey, nothing to walk from.`);
+    continue;
+  }
+  console.log(`\n${storey} reachability (from where a team spawns):`);
+  const reached = reachableFrom(start.x, start.z, floor ? F2 : 0);
+  for (const r of here) {
+    if (r.shaft || r.hole || r.outside) continue;
+    const p = anySpot(r);
+    check(`reach ${r.id}`, !!p && reached(p.x, p.z), p ? `(${p.x}, ${p.z})` : 'nowhere to stand');
+  }
 }
 
 console.log('\nRooms:');
 // The room list is what the floor plans are drawn from. If a rectangle in it
 // stops matching the walls around it, the plan starts lying — so every room
 // has to be a place a player can actually stand.
-for (const r of APARTMENT.rooms) {
+for (const r of MAP.rooms) {
   if (r.shaft || r.hole) continue; // a shaft is stairs, a void has no floor
   check(`room "${r.id}" is a real space on floor ${r.floor}`, !!anySpot(r), 'nowhere to stand in it');
 }
 
 console.log('\nSpawns and fittings:');
 for (const team of ['attackers', 'defenders']) {
-  APARTMENT.spawns[team].forEach((s, i) => {
+  MAP.spawns[team].forEach((s, i) => {
     check(`${team} spawn ${i + 1} stands clear`, standable(s.x, s.z, s.y ?? 0),
       `(${s.x}, ${s.z}, y=${s.y ?? 0})`);
   });
@@ -205,7 +232,7 @@ for (const d of world.doors) {
 // doors off from each other: from any door of a room you must be able to walk
 // to any other door of it without leaving the room.
 console.log('\nEvery room joins its own doors:');
-for (const r of APARTMENT.rooms) {
+for (const r of MAP.rooms) {
   if (r.shaft || r.hole || r.split) continue; // the corridor is caved in on purpose
   const floorY = r.floor ? F2 : 0;
   const mine = world.doors.filter((d) => {
@@ -251,7 +278,7 @@ console.log('\nStairs stay clear, furniture stands on something:');
 // A flight of stairs is a route. Anything standing on one is something to get
 // stuck on — and a rail across the top of one seals the floor above off
 // entirely, which is exactly what happened.
-for (const s of APARTMENT.stairways ?? []) {
+for (const s of MAP.stairways ?? []) {
   const on = world.boxes.filter((b) =>
     b.tag && b.max.x > s.min.x + 1e-3 && b.min.x < s.max.x - 1e-3 &&
     b.max.y > s.min.y + 1e-3 && b.min.y < s.max.y - 1e-3 &&
@@ -289,18 +316,18 @@ console.log('\nDecoration:');
 {
   const inside = (p, g) => p.x > g.min.x && p.x < g.max.x
     && p.y > g.min.y && p.y < g.max.y && p.z > g.min.z && p.z < g.max.z;
-  const buried = (APARTMENT.decor ?? []).filter((d) => {
+  const buried = (MAP.decor ?? []).filter((d) => {
     const c = {
       x: (d.min.x + d.max.x) / 2, y: (d.min.y + d.max.y) / 2, z: (d.min.z + d.max.z) / 2,
     };
-    return APARTMENT.geometry.some((g) => inside(c, g));
+    return MAP.geometry.some((g) => inside(c, g));
   });
-  check(`none of the ${(APARTMENT.decor ?? []).length} drawn-only pieces is buried in the building`,
+  check(`none of the ${(MAP.decor ?? []).length} drawn-only pieces is buried in the building`,
     buried.length === 0, buried.map((d) => JSON.stringify(d.min)).join(' '));
 
   // Nothing you would ever crouch behind. Anything standing off the floor
   // that is wide enough and tall enough to hide a man has to be real.
-  const pretender = (APARTMENT.decor ?? []).filter((d) => {
+  const pretender = (MAP.decor ?? []).filter((d) => {
     const w = Math.max(d.max.x - d.min.x, d.max.z - d.min.z);
     const thick = Math.min(d.max.x - d.min.x, d.max.z - d.min.z);
     const h = d.max.y - d.min.y;
@@ -369,7 +396,6 @@ for (const d of world.doors) {
     `${Math.round((d.maxAngle * 180) / Math.PI)}°, tip ${gap.toFixed(2)} m off the wall`);
 }
 
-console.log('\nStairs:');
 // Walk a player up each staircase for real, through the simulation.
 // Walks a player through a list of waypoints the way a person would: face the
 // next corner, walk until you reach it, turn. Proves the route is passable
@@ -400,19 +426,35 @@ function walk(id, from, waypoints, expectY) {
     stuck ?? `ended at y=${p.pos.y.toFixed(2)}, highest ${top.toFixed(2)}`);
 }
 
-// The court stair is a switchback: north up the west flight, east across the
-// half-landing, south up the east flight, out onto the terrace.
-walk('court stair', { x: -11.6, y: 0, z: -10.4 }, [
-  { x: -11.6, z: -13.8 },
-  { x: -10.0, z: -13.8 },
-  { x: -10.0, z: -10.9 },
-  { x: -10.0, z: -9.5 },
-], F2);
+// The one thing about a staircase that cannot be read out of the geometry is
+// the way a person would actually go up it, so the routes are written down —
+// per map, because a map without stairs has none to write.
+const STAIR_WALKS = {
+  // The court stair is a switchback: north up the west flight, east across the
+  // half-landing, south up the east flight, out onto the terrace.
+  penthouse: [
+    ['court stair', { x: -11.6, y: 0, z: -10.4 }, [
+      { x: -11.6, z: -13.8 },
+      { x: -10.0, z: -13.8 },
+      { x: -10.0, z: -10.9 },
+      { x: -10.0, z: -9.5 },
+    ], 16],
+    ['east stairs', { x: 14.8, y: 0, z: -6.9 }, [{ x: 14.8, z: -0.5 }], 16],
+  ],
+};
 
-walk('east stairs', { x: 14.8, y: 0, z: -6.9 }, [{ x: 14.8, z: -0.5 }], F2);
-
-// Steps must stay under the step-up height, or they become a wall.
-check('every step is climbable', F2 / 16 < PLAYER.stepHeight, `${(F2 / 16).toFixed(3)} m`);
+const walks = STAIR_WALKS[MAP.id] ?? [];
+if (walks.length) {
+  console.log('\nStairs:');
+  for (const [id, from, waypoints, steps] of walks) {
+    walk(id, from, waypoints, F2);
+    // Steps must stay under the step-up height, or they become a wall.
+    check(`${id}: every step is climbable`, F2 / steps < PLAYER.stepHeight,
+      `${(F2 / steps).toFixed(3)} m`);
+  }
+} else {
+  console.log(`\nStairs: none on "${MAP.id}".`);
+}
 
 console.log(failures === 0 ? '\nAll map checks passed.' : `\n${failures} check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

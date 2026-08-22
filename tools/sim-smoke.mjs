@@ -23,7 +23,8 @@ import { APARTMENT, MATERIALS } from '../src/maps/apartment.js';
 import { buildWorld, hasLineOfSight, doorAngle, raycastGeometry } from '../src/sim/world.js';
 import {
   createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout,
-  setGadget, rangeScale, hitDamage, litByFlare, swapsSides, spectateTarget,
+  setGadget, rangeScale, hitDamage, litByFlare, swapsSides, spectateTarget, setOptic,
+  opticOn,
 } from '../src/sim/sim.js';
 import {
   TICK_RATE, PLAYER, ROUND, WEAPONS, DEFAULT_WEAPON, WEAPON_CLASSES, DAMAGE, GADGETS,
@@ -2166,6 +2167,76 @@ section('sides', () => {
 
   // And the shipped setting is the one the flat was built around.
   check('shipped setting is one round a side', ROUND.swapEvery === 1, `${ROUND.swapEvery}`);
+});
+
+// ── What goes on the rail ─────────────────────────────────────────────────
+//
+// A sight is the first thing in this game a player bolts onto a weapon, so the
+// checks are about the two ways that could go wrong: a fitting that should not
+// be allowed getting through, and the choice costing nothing.
+//
+// The second is the one that decides whether this is a choice at all.
+// Magnification with no price on it is not a decision, it is an upgrade, and a
+// game where the answer is always the biggest glass has nothing in it to weigh.
+section('optics', () => {
+  console.log('\nSights:');
+
+  const w2 = buildWorld(APARTMENT);
+  const s2 = createState(w2, 11);
+  const p2 = addPlayer(w2, s2, 'p', 'attackers', 'P');
+  s2.phase = 'select';
+
+  check('a rifle may wear a red dot', setOptic(s2, 'p', 'ar-545-piston', 'dot'));
+  check('...and the choice is remembered against that weapon',
+    opticOn(p2, 'ar-545-piston') === 'dot', opticOn(p2, 'ar-545-piston'));
+  check('a weapon nobody has touched wears what it shipped with',
+    opticOn(p2, 'dmr-762') === 'scope', opticOn(p2, 'dmr-762'));
+
+  check('a submachine gun is refused a marksman tube',
+    !setOptic(s2, 'p', 'smg-9-roller', 'scope'));
+  check('...and a .50 is refused iron sights', !setOptic(s2, 'p', 'amr-50', 'iron'));
+  check('a sight that does not exist is refused',
+    !setOptic(s2, 'p', 'ar-545-piston', 'нетакого'));
+
+  s2.phase = 'live';
+  check('the rail is shut once the shooting starts',
+    !setOptic(s2, 'p', 'ar-545-piston', 'holo'));
+  check('...so what was fitted stays fitted', opticOn(p2, 'ar-545-piston') === 'dot');
+
+  // ── What the magnification costs ──
+  //
+  // Measured rather than asserted about the table: hold the aim down and count
+  // the ticks until the sights are all the way up.
+  const ticksToAim = (weaponId, opticId) => {
+    const t = createState(w2, 3);
+    const man = addPlayer(w2, t, 'm', 'attackers', 'M');
+    t.phase = 'select';
+    setLoadout(t, 'm', weaponId);
+    setOptic(t, 'm', weaponId, opticId);
+    t.phase = 'live';
+    const aim = { ...createInput(), aim: true };
+    let n = 0;
+    while (man.aimAmount < 0.999 && n < 600) {
+      stepSim(w2, t, { m: aim });
+      n++;
+    }
+    return n;
+  };
+
+  const iron = ticksToAim('ar-545-piston', 'iron');
+  const dot = ticksToAim('ar-545-piston', 'dot');
+  const prism = ticksToAim('ar-545-piston', 'prism');
+  check('iron sights come up quickest', iron < dot, `${iron} против ${dot}`);
+  check('...and magnified glass slowest', prism > dot, `${prism} против ${dot}`);
+  check('the difference is worth noticing, not a rounding error',
+    prism - iron >= 6, `${prism - iron} тиков`);
+
+  // And the thing a sight must never touch.
+  const before = WEAPONS['ar-545-piston'].damage;
+  s2.phase = 'select';
+  setOptic(s2, 'p', 'ar-545-piston', 'prism');
+  check('fitting a sight changes nothing about the round it fires',
+    WEAPONS['ar-545-piston'].damage === before);
 });
 
 // ── What a dead man is shown ──────────────────────────────────────────────

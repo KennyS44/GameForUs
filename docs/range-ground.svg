@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1627.2" height="459.2" viewBox="0 0 1627.2 459.2">
+<style>
+  .bg { fill: #f7f5f1; }
+  .grid { stroke: #dcd8d0; stroke-width: 1; }
+  .tick { fill: #8d8880; font: 11px ui-monospace, monospace; text-anchor: middle; }
+  /* Every label is drawn with the page colour behind its own strokes, so a
+     door id that lands on a wall or a room name is still readable. */
+  text { paint-order: stroke; stroke: #f7f5f1; stroke-width: 3px; stroke-linejoin: round; }
+  .room { fill: #ffffff; stroke: #e4e0d8; stroke-width: 1; }
+  .open { fill: #eef4ec; stroke: #cadbc8; stroke-width: 1; }
+  .void { fill: #e2e6ec; stroke: #b6bcc6; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  .wall.low { fill: #a09a90; }
+  .wall.glass.low { fill: #7fa8bd; }
+  .blocker { fill: #d8c9a8; stroke: #9b8a63; stroke-width: 1; }
+  .blocker.blocked { fill: #d9b8a0; stroke: #a5744f; }
+  .blocker.rubble { fill: #b9b2a6; stroke: #6f6a61; stroke-width: 1.5; }
+  .blocker.furniture { fill: #e8e0d2; stroke: #b3a892; stroke-width: 1; }
+  .hole { fill: none; stroke: #2f6f4f; stroke-width: 2.5; stroke-dasharray: 5 4; }
+  .opening { fill: #d7e6dc; stroke: #2f6f4f; stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .switch { fill: #f2d24b; stroke: #7a5f05; stroke-width: 2; }
+  .hole.under { stroke: #7fa39a; stroke-width: 1.5; }
+  .note { font: 10px system-ui, sans-serif; fill: #4d6a5c; text-anchor: middle; }
+  .shaft { fill: #eceef3; stroke: #c9cdd6; stroke-width: 1; }
+  .outside { fill: #f0ece4; stroke: #ddd8ce; stroke-dasharray: 4 3; }
+  .wall { fill: #2f3136; }
+  .wall.drywall { fill: #7c766c; }
+  .wall.glass { fill: #7fa8bd; }
+  .room-name { font: 600 13px system-ui, sans-serif; fill: #22242a; text-anchor: middle; }
+  .room-size { font: 11px ui-monospace, monospace; fill: #8d8880; text-anchor: middle; }
+  .shaft-label { font: 600 12px system-ui, sans-serif; fill: #4a5568; text-anchor: middle; }
+  .door-shut { stroke: #c8531f; stroke-width: 3; fill: none; }
+  .door-open { stroke: #c8531f; stroke-width: 3; fill: none; opacity: 0.35; }
+  .door-arc { stroke: #c8531f; stroke-width: 1; fill: none; stroke-dasharray: 3 3; opacity: 0.7; }
+  .hinge { fill: #c8531f; }
+  .door-id { font: 9px ui-monospace, monospace; fill: #a8511f; text-anchor: middle; }
+  .tread { fill: #ded5c6; stroke: #b9ac97; stroke-width: 0.8; }
+  .up-arrow { stroke: #4a5568; stroke-width: 1.5; fill: none; }
+  .up-label { font: 10px system-ui, sans-serif; fill: #4a5568; text-anchor: middle; }
+  .spawn { stroke: #ffffff; stroke-width: 1.5; }
+  .spawn.attackers { fill: #2e6fbf; }
+  .spawn.defenders { fill: #c2452f; }
+  .title { font: 600 22px system-ui, sans-serif; fill: #22242a; }
+  .subtitle { font: 13px system-ui, sans-serif; fill: #6b6660; }
+  .legend { font: 12px system-ui, sans-serif; fill: #3d3f45; }
+</style>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5568"/>
+  </marker>
+</defs>
+<rect class="bg" width="1627.2" height="459.2"/>
+<text x="64" y="34" class="title">Полигон: первый этаж (y = 0)</text>
+<text x="64" y="54" class="subtitle">Огневой рубеж слева, мишени по директрисе, за 50 м — пулеулавливатель. Столбики — отметки дистанции.</text>
+<text x="64" y="417.2" class="legend">Сетка 2 м. Оси в метрах: +X вправо, +Z вниз. Под названием комнаты — размер и её id в коде.</text>
+<text x="64" y="435.2" class="legend">Оранжевым — двери: сплошная створка закрыта, пунктир — куда открывается, точка — петля. Синие точки — спавн штурма, красные — обороны.</text>
+<text x="64" y="453.2" class="legend">Стены: тёмные — бетон (не простреливается), серые — гипсокартон (простреливается), голубые — стекло (бьётся с двух попаданий).</text>
+<line x1="105.6" y1="92" x2="105.6" y2="383.2" class="grid"/>
+<text x="105.6" y="84" class="tick">-28</text>
+<line x1="157.6" y1="92" x2="157.6" y2="383.2" class="grid"/>
+<line x1="209.6" y1="92" x2="209.6" y2="383.2" class="grid"/>
+<text x="209.6" y="84" class="tick">-24</text>
+<line x1="261.6" y1="92" x2="261.6" y2="383.2" class="grid"/>
+<line x1="313.6" y1="92" x2="313.6" y2="383.2" class="grid"/>
+<text x="313.6" y="84" class="tick">-20</text>
+<line x1="365.6" y1="92" x2="365.6" y2="383.2" class="grid"/>
+<line x1="417.6" y1="92" x2="417.6" y2="383.2" class="grid"/>
+<text x="417.6" y="84" class="tick">-16</text>
+<line x1="469.6" y1="92" x2="469.6" y2="383.2" class="grid"/>
+<line x1="521.6" y1="92" x2="521.6" y2="383.2" class="grid"/>
+<text x="521.6" y="84" class="tick">-12</text>
+<line x1="573.6" y1="92" x2="573.6" y2="383.2" class="grid"/>
+<line x1="625.6" y1="92" x2="625.6" y2="383.2" class="grid"/>
+<text x="625.6" y="84" class="tick">-8</text>
+<line x1="677.6" y1="92" x2="677.6" y2="383.2" class="grid"/>
+<line x1="729.6" y1="92" x2="729.6" y2="383.2" class="grid"/>
+<text x="729.6" y="84" class="tick">-4</text>
+<line x1="781.6" y1="92" x2="781.6" y2="383.2" class="grid"/>
+<line x1="833.6" y1="92" x2="833.6" y2="383.2" class="grid"/>
+<text x="833.6" y="84" class="tick">0</text>
+<line x1="885.6" y1="92" x2="885.6" y2="383.2" class="grid"/>
+<line x1="937.6" y1="92" x2="937.6" y2="383.2" class="grid"/>
+<text x="937.6" y="84" class="tick">4</text>
+<line x1="989.6" y1="92" x2="989.6" y2="383.2" class="grid"/>
+<line x1="1041.6" y1="92" x2="1041.6" y2="383.2" class="grid"/>
+<text x="1041.6" y="84" class="tick">8</text>
+<line x1="1093.6" y1="92" x2="1093.6" y2="383.2" class="grid"/>
+<line x1="1145.6" y1="92" x2="1145.6" y2="383.2" class="grid"/>
+<text x="1145.6" y="84" class="tick">12</text>
+<line x1="1197.6" y1="92" x2="1197.6" y2="383.2" class="grid"/>
+<line x1="1249.6" y1="92" x2="1249.6" y2="383.2" class="grid"/>
+<text x="1249.6" y="84" class="tick">16</text>
+<line x1="1301.6" y1="92" x2="1301.6" y2="383.2" class="grid"/>
+<line x1="1353.6" y1="92" x2="1353.6" y2="383.2" class="grid"/>
+<text x="1353.6" y="84" class="tick">20</text>
+<line x1="1405.6" y1="92" x2="1405.6" y2="383.2" class="grid"/>
+<line x1="1457.6" y1="92" x2="1457.6" y2="383.2" class="grid"/>
+<text x="1457.6" y="84" class="tick">24</text>
+<line x1="1509.6" y1="92" x2="1509.6" y2="383.2" class="grid"/>
+<line x1="1561.6" y1="92" x2="1561.6" y2="383.2" class="grid"/>
+<text x="1561.6" y="84" class="tick">28</text>
+<line x1="64" y1="133.6" x2="1603.2" y2="133.6" class="grid"/>
+<text x="54" y="137.6" class="tick" text-anchor="end">-4</text>
+<line x1="64" y1="185.6" x2="1603.2" y2="185.6" class="grid"/>
+<line x1="64" y1="237.6" x2="1603.2" y2="237.6" class="grid"/>
+<text x="54" y="241.6" class="tick" text-anchor="end">0</text>
+<line x1="64" y1="289.6" x2="1603.2" y2="289.6" class="grid"/>
+<line x1="64" y1="341.6" x2="1603.2" y2="341.6" class="grid"/>
+<text x="54" y="345.6" class="tick" text-anchor="end">4</text>
+<rect x="83.5" y="111.5" width="152.1" height="252.2" class="room"/>
+<rect x="235.6" y="111.5" width="572" height="252.2" class="room"/>
+<rect x="807.6" y="111.5" width="707.2" height="252.2" class="room"/>
+
+<rect x="79.6" y="103.7" width="1508" height="7.8" class="wall concrete"/>
+<rect x="79.6" y="363.7" width="1508" height="7.8" class="wall concrete"/>
+<rect x="75.7" y="107.6" width="7.8" height="260" class="wall concrete"/>
+<rect x="1583.7" y="107.6" width="7.8" height="260" class="wall concrete"/>
+<rect x="1514.8" y="111.5" width="68.9" height="252.2" class="wall concrete"/>
+<rect x="121.2" y="190.8" width="15.6" height="93.6" class="blocker furniture"/>
+<rect x="122.5" y="192.1" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="122.5" y="281.5" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="133.9" y="192.1" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="133.9" y="281.5" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="286.6" y="143.7" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="286.6" y="160.4" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="289.7" y="145.3" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="289.7" y="161.9" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="288.6" y="145" width="1.6" height="18.7" class="blocker furniture"/>
+<rect x="287.6" y="148.7" width="1.6" height="11.4" class="blocker furniture"/>
+<text x="288.4" y="174.1" class="note">5 м</text>
+<rect x="416.6" y="310.1" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="416.6" y="326.8" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="419.7" y="311.7" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="419.7" y="328.3" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="418.6" y="311.4" width="1.6" height="18.7" class="blocker furniture"/>
+<rect x="417.6" y="315.1" width="1.6" height="11.4" class="blocker furniture"/>
+<text x="418.4" y="340.5" class="note">10 м</text>
+<rect x="546.6" y="169.7" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="546.6" y="186.4" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="549.7" y="171.3" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="549.7" y="187.9" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="548.6" y="171" width="1.6" height="18.7" class="blocker furniture"/>
+<rect x="547.6" y="174.7" width="1.6" height="11.4" class="blocker furniture"/>
+<text x="548.4" y="200.1" class="note">15 м</text>
+<rect x="806.6" y="284.1" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="806.6" y="300.8" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="809.7" y="285.7" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="809.7" y="302.3" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="808.6" y="285.4" width="1.6" height="18.7" class="blocker furniture"/>
+<rect x="807.6" y="289.1" width="1.6" height="11.4" class="blocker furniture"/>
+<text x="808.4" y="314.5" class="note">25 м</text>
+<rect x="1066.6" y="195.7" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="1066.6" y="212.4" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="1069.7" y="197.3" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="1069.7" y="213.9" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="1068.6" y="197" width="1.6" height="18.7" class="blocker furniture"/>
+<rect x="1067.6" y="200.7" width="1.6" height="11.4" class="blocker furniture"/>
+<text x="1068.4" y="226.1" class="note">35 м</text>
+<rect x="1456.6" y="226.9" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="1456.6" y="243.6" width="7.8" height="4.7" class="blocker furniture"/>
+<rect x="1459.7" y="228.5" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="1459.7" y="245.1" width="1.6" height="1.6" class="blocker furniture"/>
+<rect x="1458.6" y="228.2" width="1.6" height="18.7" class="blocker furniture"/>
+<rect x="1457.6" y="231.9" width="1.6" height="11.4" class="blocker furniture"/>
+<text x="1458.4" y="257.3" class="note">50 м</text>
+<rect x="286.3" y="120.6" width="2.6" height="2.6" class="blocker furniture"/>
+<rect x="285.3" y="119.6" width="4.7" height="4.7" class="blocker furniture"/>
+<text x="287.6" y="138.2" class="note">5 м</text>
+<rect x="286.3" y="352" width="2.6" height="2.6" class="blocker furniture"/>
+<rect x="285.3" y="351" width="4.7" height="4.7" class="blocker furniture"/>
+<text x="287.6" y="369.6" class="note">5 м</text>
+<rect x="416.3" y="120.6" width="2.6" height="2.6" class="blocker furniture"/>
+<rect x="415.3" y="119.6" width="4.7" height="4.7" class="blocker furniture"/>
+<text x="417.6" y="138.2" class="note">10 м</text>
+<rect x="416.3" y="352" width="2.6" height="2.6" class="blocker furniture"/>
+<rect x="415.3" y="351" width="4.7" height="4.7" class="blocker furniture"/>
+<text x="417.6" y="369.6" class="note">10 м</text>
+<rect x="806.3" y="120.6" width="2.6" height="2.6" class="blocker furniture"/>
+<rect x="805.3" y="119.6" width="4.7" height="4.7" class="blocker furniture"/>
+<text x="807.6" y="138.2" class="note">25 м</text>
+<rect x="806.3" y="352" width="2.6" height="2.6" class="blocker furniture"/>
+<rect x="805.3" y="351" width="4.7" height="4.7" class="blocker furniture"/>
+<text x="807.6" y="369.6" class="note">25 м</text>
+<rect x="1456.3" y="120.6" width="2.6" height="2.6" class="blocker furniture"/>
+<rect x="1455.3" y="119.6" width="4.7" height="4.7" class="blocker furniture"/>
+<text x="1457.6" y="138.2" class="note">50 м</text>
+<rect x="1456.3" y="352" width="2.6" height="2.6" class="blocker furniture"/>
+<rect x="1455.3" y="351" width="4.7" height="4.7" class="blocker furniture"/>
+<text x="1457.6" y="369.6" class="note">50 м</text>
+
+
+
+
+<circle cx="157.6" cy="155.7" r="5" class="spawn attackers"/>
+<circle cx="157.6" cy="179.1" r="5" class="spawn attackers"/>
+<circle cx="157.6" cy="202.5" r="5" class="spawn attackers"/>
+<circle cx="157.6" cy="225.9" r="5" class="spawn attackers"/>
+<circle cx="157.6" cy="249.3" r="5" class="spawn defenders"/>
+<circle cx="157.6" cy="272.7" r="5" class="spawn defenders"/>
+<circle cx="157.6" cy="296.1" r="5" class="spawn defenders"/>
+<circle cx="157.6" cy="319.5" r="5" class="spawn defenders"/>
+<text x="159.6" y="233.6" class="room-name">Огневой рубеж</text>
+<text x="159.6" y="250.6" class="room-size">5.9 × 9.7 м · bay</text>
+<text x="521.6" y="233.6" class="room-name">Директриса, 0–25 м</text>
+<text x="521.6" y="250.6" class="room-size">22 × 9.7 м · lane-near</text>
+<text x="1161.2" y="233.6" class="room-name">Директриса, 25–50 м</text>
+<text x="1161.2" y="250.6" class="room-size">27.2 × 9.7 м · lane-far</text>
+</svg>

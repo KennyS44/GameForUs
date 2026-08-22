@@ -75,14 +75,22 @@ function runTool(script, args = []) {
 
 // The two that only need Node run side by side: one takes two seconds and the
 // other nineteen, and there is no reason to spend twenty-one.
-const [geometry, rules] = await Promise.all([
+const [geometry, range, rules] = await Promise.all([
   runTool('map-check.mjs'),
+  // The range is a map like any other and breaks like any other. It was
+  // invisible to this command for exactly as long as it took to notice.
+  runTool('map-check.mjs', ['--map=src/maps/range.js']),
   runTool('sim-smoke.mjs'),
 ]);
 
 note('geometry', geometry.code === 0,
   geometry.code === 0
     ? `${(geometry.out.match(/ok /g) ?? []).length} проверок`
+    : 'см. вывод ниже');
+
+note('полигон', range.code === 0,
+  range.code === 0
+    ? `${(range.out.match(/ok /g) ?? []).length} проверок`
     : 'см. вывод ниже');
 
 note('rules', rules.code === 0,
@@ -153,5 +161,6 @@ if (!bad.length) {
 
 console.log(`\nНе прошло: ${bad.map((r) => r.name).join(', ')}\n`);
 if (geometry.code !== 0) console.log(geometry.out.split('\n').slice(-25).join('\n'));
+if (range.code !== 0) console.log(range.out.split('\n').slice(-25).join('\n'));
 if (rules.code !== 0) console.log(rules.out.split('\n').slice(-25).join('\n'));
 process.exit(1);

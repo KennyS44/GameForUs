@@ -7,15 +7,15 @@
 
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
-  GADGETS, DEFAULT_GADGET, BLIND, NVG, FLARE, POWER,
-} from './constants.js?v=323f1644';
+  GADGETS, DEFAULT_GADGET, BLIND, NVG, FLARE, POWER, OPTICS, defaultOptic, opticFits,
+} from './constants.js?v=b574760e';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=323f1644';
+} from './math.js?v=b574760e';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=323f1644';
+} from './world.js?v=b574760e';
 
 const GRAVITY = 18;
 
@@ -51,6 +51,11 @@ function createPlayer(id, team, spawn, name) {
     // What they picked at the loadout screen. `weapon` is this round's gun and
     // is rebuilt every round; `loadout` is the choice and outlives it.
     loadout: DEFAULT_WEAPON,
+    // Which sight is on which gun, keyed by weapon. Keyed that way because the
+    // fitting belongs to the weapon rather than to the man: you set a rifle up
+    // once and it stays set up, the same as it would in a locker. Absent means
+    // whatever that weapon shipped with.
+    optics: {},
     weapon: {
       id: DEFAULT_WEAPON,
       ammo: w.magSize,
@@ -609,6 +614,31 @@ export function setGadget(state, id, gadgetId) {
   return true;
 }
 
+// What sight this player has on this weapon, falling back to the one it was
+// built with. Every reader goes through here rather than touching p.optics, so
+// "not chosen yet" means the same thing everywhere.
+export function opticOn(p, weaponId) {
+  return p?.optics?.[weaponId] ?? defaultOptic(weaponId);
+}
+
+// Fitting a sight. The same shape as choosing a weapon, and refused for the
+// same reasons: an unknown pairing, a sight that does not belong on that class,
+// or a request that arrives after the shooting has started. The host runs a
+// guest's request through this exact function, so a client cannot bolt a
+// marksman tube onto a shotgun by asking nicely.
+//
+// Unlike a weapon or a device, this is not reset between rounds — a rifle you
+// set up once stays set up, which is the whole point of setting it up before
+// the match rather than during it.
+export function setOptic(state, id, weaponId, opticId) {
+  const p = state.players[id];
+  if (!p || !opticFits(weaponId, opticId)) return false;
+  if (state.phase !== 'select' && state.phase !== 'prep') return false;
+
+  p.optics[weaponId] = opticId;
+  return true;
+}
+
 // Which face of the panel the man fitting a wire is standing on.
 function wireSide(found, p) {
   const frame = doorFrame(found.door, found.state.open);
@@ -1016,9 +1046,12 @@ function stepPlayer(world, state, p, input, dt) {
   const wantLean = clamp(input.lean, -1, 1);
   p.lean = approach(p.lean, wantLean, PLAYER.leanSpeed * dt);
 
-  // Aim-down-sights blend.
+  // Aim-down-sights blend. What is bolted to the rail stretches or shortens it:
+  // getting an eye behind a magnified tube takes longer than putting a post on
+  // a doorway, and that difference is the whole cost of the magnification.
   const wantAim = input.aim && p.weapon.reloading <= 0 ? 1 : 0;
-  p.aimAmount = approach(p.aimAmount, wantAim, dt / weapon.aimTime);
+  const glass = OPTICS[opticOn(p, p.weapon.id)];
+  p.aimAmount = approach(p.aimAmount, wantAim, dt / (weapon.aimTime * (glass?.aimScale ?? 1)));
 
   // ── Movement ──
   p.sneaking = !!input.sneak;

@@ -8,7 +8,9 @@
 // mind as often as you like, press "В бой" when you mean it, and if the clock
 // runs out first the highlighted set is taken as your answer.
 
-import { WEAPONS, WEAPON_CLASSES, GADGETS } from '../sim/constants.js?v=323f1644';
+import {
+  WEAPONS, WEAPON_CLASSES, GADGETS, OPTICS, OPTICS_BY_CLASS, defaultOptic,
+} from '../sim/constants.js?v=b574760e';
 
 const $ = (id) => document.getElementById(id);
 
@@ -40,13 +42,15 @@ export function createLoadout({ onConfirm }) {
     kit: $('loadout-kit'),
     kitRow: $('loadout-kit-row'),
     kitSide: $('loadout-kit-side'),
+    opticRow: $('loadout-optic-row'),
+    opticWeapon: $('loadout-optic-weapon'),
     timer: $('loadout-timer'),
     confirm: $('btn-loadout-ready'),
     status: $('loadout-status'),
   };
 
   // What the player is pointing at, which is not yet what they carry.
-  let pending = { weapon: null, gadget: null };
+  let pending = { weapon: null, gadget: null, optic: null };
   let team = null;
   let confirmed = false;
 
@@ -118,6 +122,55 @@ export function createLoadout({ onConfirm }) {
     }
   }
 
+  // ── Sights ──
+  //
+  // The list depends on the weapon, so this row cannot be built once the way
+  // the racks are — a submachine gun has no business offering a marksman tube.
+  // What it must never do is quietly change a fitting: coming back to a rifle
+  // you set up in the armoury has to show that rifle's own sight still on it,
+  // which is why the pick is looked up per weapon rather than carried across
+  // from whatever happened to be highlighted a moment ago.
+  const opticCards = new Map();
+  let opticFor = null; // which weapon the row currently describes
+
+  function buildOptics(weaponId, chosen) {
+    const def = WEAPONS[weaponId];
+    if (!def) return;
+    opticFor = weaponId;
+    el.opticWeapon.textContent = def.name;
+    el.opticRow.textContent = '';
+    opticCards.clear();
+    for (const id of OPTICS_BY_CLASS[def.cls] ?? []) {
+      const o = OPTICS[id];
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'weapon-card kit-card';
+      card.dataset.optic = id;
+      card.innerHTML =
+        '<span class="weapon-head">'
+        + `<span class="weapon-code">${o.name}</span>`
+        + `<span class="weapon-mode">${o.zoom > 1 ? `${String(o.zoom).replace('.', ',')}×` : '1×'}</span>`
+        + '</span>'
+        + `<span class="weapon-blurb">${o.blurb}</span>`
+        + `<span class="weapon-stats"><span class="stat">${aimWord(o.aimScale)}</span></span>`;
+      card.addEventListener('click', () => {
+        pending.optic = id;
+        paint();
+      });
+      el.opticRow.appendChild(card);
+      opticCards.set(id, card);
+    }
+    pending.optic = chosen;
+  }
+
+  // The one figure a sight moves, put the way a player thinks about it rather
+  // than as the multiplier it is in the table.
+  function aimWord(scale) {
+    if (scale < 1) return 'вскидка быстрее';
+    if (scale > 1) return `вскидка на ${Math.round((scale - 1) * 100)}% дольше`;
+    return 'вскидка обычная';
+  }
+
   function paint() {
     for (const [id, card] of cards) {
       const on = id === pending.weapon;
@@ -129,11 +182,18 @@ export function createLoadout({ onConfirm }) {
       card.classList.toggle('selected', on);
       card.setAttribute('aria-pressed', String(on));
     }
+    for (const [id, card] of opticCards) {
+      const on = id === pending.optic;
+      card.classList.toggle('selected', on);
+      card.setAttribute('aria-pressed', String(on));
+    }
     const w = WEAPONS[pending.weapon];
     const g = GADGETS[pending.gadget];
+    const o = OPTICS[pending.optic];
     el.status.textContent = confirmed
       ? 'Выбор принят.'
-      : `Выбрано: ${w ? w.name : '—'} и ${g ? g.name.toLowerCase() : '—'}. Подтвердите, иначе выбор примут за вас.`;
+      : `Выбрано: ${w ? w.name : '—'}${o ? ` с прицелом «${o.short}»` : ''}`
+        + ` и ${g ? g.name.toLowerCase() : '—'}. Подтвердите, иначе выбор примут за вас.`;
   }
 
   // Hand the pending set to the game. Called by the button and by the clock.
@@ -157,6 +217,13 @@ export function createLoadout({ onConfirm }) {
     if (!pending.weapon) pending.weapon = me.loadout;
     if (!pending.gadget) pending.gadget = me.gadget;
 
+    // The sight row follows the weapon. Rebuilt only when the weapon actually
+    // changes, or every tenth of a second would throw away the row the player
+    // is in the middle of clicking.
+    if (pending.weapon !== opticFor) {
+      buildOptics(pending.weapon, me.optics?.[pending.weapon] ?? defaultOptic(pending.weapon));
+    }
+
     const t = Math.max(0, state.phaseTime);
     el.timer.textContent = `0:${String(Math.ceil(t)).padStart(2, '0')}`;
     // The clock is the second way to confirm: when staging starts, whatever is
@@ -168,7 +235,10 @@ export function createLoadout({ onConfirm }) {
   // A new round means a new decision.
   function reset() {
     confirmed = false;
-    pending = { weapon: null, gadget: null };
+    pending = { weapon: null, gadget: null, optic: null };
+    // Force the sight row to be rebuilt from what the player actually has on
+    // the gun, rather than from what was highlighted last round.
+    opticFor = null;
   }
 
   // Coming back to change your mind, which is a different thing. What you

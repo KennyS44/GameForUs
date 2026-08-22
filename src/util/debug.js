@@ -14,9 +14,9 @@
 // when the flag is set, so a visitor to the published site never downloads it
 // and `window.__gfu` is undefined. Nothing else in the game reads it.
 
-import { ROUND, DT, WEAPONS, GADGETS } from '../sim/constants.js?v=323f1644';
+import { ROUND, DT, WEAPONS, GADGETS } from '../sim/constants.js?v=b574760e';
 
-export function installDebug({ input, getGame, startSolo }) {
+export function installDebug({ input, getGame, startSolo, showMenu }) {
   // Fields forced into every input frame the game samples. The simulation reads
   // input through one function, so wrapping it is enough to hold a button down
   // — and it works with no pointer lock, which a headless browser has no way to
@@ -87,6 +87,13 @@ export function installDebug({ input, getGame, startSolo }) {
 
     // ── Setting things up ──
 
+    // Put a menu screen up without clicking through to it. Menus are the one
+    // part of this game a screenshot tool cannot reach by playing.
+    screen(name) {
+      showMenu?.(name);
+      return name;
+    },
+
     // Start a solo match without touching the menu.
     solo(bots = 2) {
       startSolo(bots);
@@ -122,6 +129,18 @@ export function installDebug({ input, getGame, startSolo }) {
       const was = s.phase;
       s.phase = 'select';
       const ok = game().session.chooseGadget(id);
+      s.phase = was;
+      return ok;
+    },
+
+    // Bolt a sight to a weapon. Same trick as choosing one: the rail is only
+    // open before the round starts, and a caller wanting a picture of a sight
+    // should not have to know that.
+    optic(weaponId, opticId) {
+      const s = state();
+      const was = s.phase;
+      s.phase = 'select';
+      const ok = game().session.chooseOptic?.(weaponId, opticId);
       s.phase = was;
       return ok;
     },

@@ -1,11 +1,13 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=323f1644';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=323f1644';
-import { lerp } from '../sim/math.js?v=323f1644';
-import { STILL } from '../util/flags.js?v=323f1644';
-import { buildWeaponModel } from './weapons.js?v=323f1644';
+import * as THREE from '../../vendor/three.module.js?v=b574760e';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=b574760e';
+import { lerp } from '../sim/math.js?v=b574760e';
+import { defaultOptic } from '../sim/constants.js?v=b574760e';
+import { opticOn } from '../sim/sim.js?v=b574760e';
+import { STILL } from '../util/flags.js?v=b574760e';
+import { buildWeaponModel } from './weapons.js?v=b574760e';
 
 // ── Where the weapon is held ───────────────────────────────────────────────
 //
@@ -134,17 +136,26 @@ export function createView(scene) {
   // when that id actually changes.
   let weapon = buildWeaponModel(DEFAULT_WEAPON);
   let weaponId = DEFAULT_WEAPON;
+  let opticId = defaultOptic(DEFAULT_WEAPON);
   weapon.group.scale.setScalar(weapon.scale);
   viewScene.add(weapon.group);
 
-  function carry(id) {
-    if (id === weaponId || !id) return;
+  // Rebuilt when the weapon changes — and when what is bolted to it does.
+  //
+  // Only the weapon used to count, which was true for exactly as long as a gun
+  // wore one sight for life. The moment sights became a choice, that made the
+  // model a liar: fitting iron sights to a rifle changed the aim time, the
+  // magnification and the entry in the menu, and left the reflex sitting on the
+  // rail because the weapon id had not moved.
+  function carry(id, optic) {
+    if (!id || (id === weaponId && optic === opticId)) return;
     viewScene.remove(weapon.group);
     // Materials are shared across the roster; geometry is not. Drop it, or a
     // player who tries all eleven leaves eleven models on the graphics card.
     weapon.group.traverse((o) => o.geometry?.dispose());
-    weapon = buildWeaponModel(id);
+    weapon = buildWeaponModel(id, { optic });
     weaponId = id;
+    opticId = optic;
     weapon.group.scale.setScalar(weapon.scale);
     viewScene.add(weapon.group);
   }
@@ -217,7 +228,7 @@ export function createView(scene) {
   const CLEARANCE = 1.15;
 
   function update(player, dt, moving, wallDistance = Infinity) {
-    carry(player.weapon?.id);
+    carry(player.weapon?.id, opticOn(player, player.weapon?.id));
     const height = PLAYER.heightCrouch + (PLAYER.heightStand - PLAYER.heightCrouch) * player.stance;
     const eyeY = player.pos.y + height - PLAYER.eyeOffset;
 
