@@ -1,16 +1,19 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=76a1d3ce';
-import { createGame } from './game.js?v=76a1d3ce';
-import { createAudio } from './audio/audio.js?v=76a1d3ce';
-import { createInputSource, saveSettings } from './input/input.js?v=76a1d3ce';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=76a1d3ce';
+import { APARTMENT } from './maps/apartment.js?v=99f3ac0d';
+// The same projection tools/floorplan.mjs draws the sheets with, so a mark and
+// the wall it is next to are worked out from one set of numbers.
+import { PLAN, UPPER_FROM } from './maps/plan.js?v=99f3ac0d';
+import { createGame } from './game.js?v=99f3ac0d';
+import { createAudio } from './audio/audio.js?v=99f3ac0d';
+import { createInputSource, saveSettings } from './input/input.js?v=99f3ac0d';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=99f3ac0d';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=76a1d3ce';
-import { createLoadout } from './ui/loadout.js?v=76a1d3ce';
-import { storageGet, storageSet } from './util/storage.js?v=76a1d3ce';
-import { DEBUG, AUTO_SOLO, SOLO_BOTS } from './util/flags.js?v=76a1d3ce';
+} from './net/transport.js?v=99f3ac0d';
+import { createLoadout } from './ui/loadout.js?v=99f3ac0d';
+import { storageGet, storageSet } from './util/storage.js?v=99f3ac0d';
+import { DEBUG, AUTO_SOLO, SOLO_BOTS } from './util/flags.js?v=99f3ac0d';
 
 const $ = (id) => document.getElementById(id);
 
@@ -116,12 +119,6 @@ function closeLoadout() {
 //
 // Two sheets and your own side's positions on them. Open while the round is
 // still getting ready; gone the moment it starts.
-
-// The map tool's own projection, copied here because these are its drawings:
-// 26 pixels to the metre on a sheet that starts at the flat's north-west
-// corner. See tools/floorplan.mjs — if that changes, this does.
-const PLAN = { scale: 26, left: 64, top: 92, x0: -16.6, z0: -18.6, w: 951.2, h: 914.2 };
-const UPPER_FROM = 1.65; // above this and a man is on the second floor
 
 let planPoll = 0;
 
@@ -506,7 +503,7 @@ showScreen('main');
 // below is never fetched, so `window.__gfu` stays undefined on the live site,
 // and there is nothing to remember to take out again. See src/util/flags.js.
 if (DEBUG) {
-  import('./util/debug.js?v=76a1d3ce').then(({ installDebug }) => {
+  import('./util/debug.js?v=99f3ac0d').then(({ installDebug }) => {
     installDebug({ input, getGame: () => game, startSolo });
     // Started only after the handle exists, so a tool that asks for both never
     // races the match into being before it can steer it.

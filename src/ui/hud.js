@@ -1,6 +1,6 @@
 // HUD: reads simulation state, writes DOM. Never the other way round.
 
-import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=76a1d3ce';
+import { WEAPONS, GADGETS, PLAYER } from '../sim/constants.js?v=99f3ac0d';
 
 const $ = (id) => document.getElementById(id);
 
@@ -54,10 +54,20 @@ export function createHud() {
     bannerTimer = 2.6;
   }
 
+  // How much white a given amount of blindness puts on the screen. Two places
+  // ask — the flash as it lands, and every frame afterwards while it fades —
+  // and they have to agree, or the moment the simulation takes over from the
+  // immediate paint the screen jumps.
+  //
+  // Over one, because the worst of a flash should be a wall of white rather
+  // than a bright grey; short of full opacity, because a player who cannot see
+  // the edges of their own screen cannot tell blinded from broken.
+  const blindfold = (amount) => String(Math.min(0.97, amount * 1.15));
+
   // A flash lands between two HUD updates, so paint the white immediately
   // rather than waiting for the next frame to read the simulation.
   function blindFlash(amount = 1) {
-    el.blindfold.style.opacity = String(Math.min(0.97, amount * 1.15));
+    el.blindfold.style.opacity = blindfold(amount);
   }
 
   function show(on) {
@@ -128,7 +138,7 @@ export function createHud() {
 
     // Being flashed is the simulation's business, so the screen just reads it.
     // A blast of white, then a long climb back to seeing anything.
-    el.blindfold.style.opacity = String(Math.min(0.97, (me.blind ?? 0) * 1.15));
+    el.blindfold.style.opacity = blindfold(me.blind ?? 0);
 
     // ── Crosshair opens up with your actual cone of fire ──
     const moving = Math.hypot(me.vel.x, me.vel.z) > 1.2;

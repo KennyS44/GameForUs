@@ -1,0 +1,25 @@
+#!/bin/sh
+# Refuse a commit whose module URLs do not match its contents.
+#
+# GitHub Pages serves every file with a ten-minute cache and no way to change
+# it, so a build without fresh `?v=` stamps can reach a returning player as new
+# code running the old map. Nothing local breaks — which is exactly why it was
+# the easiest step to forget.
+#
+# This does not stamp for you on purpose. Stamping rewrites a dozen source
+# files, and a hook that quietly stages files you were still editing is worse
+# than the problem it solves. It says what to run instead.
+#
+# Armed by `node tools/check.mjs`, which sets core.hooksPath. That same command
+# stamps as part of its own run, so the usual order — check, then commit —
+# never reaches this message.
+
+if ! node tools/stamp-version.mjs | grep -q '0 file(s) rewritten'; then
+  echo
+  echo 'Коммит остановлен: версия не проставлена.'
+  echo 'Файлы уже переписаны — добавьте их и повторите:'
+  echo
+  echo '    git add -A && git commit ...'
+  echo
+  exit 1
+fi

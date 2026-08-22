@@ -14,7 +14,7 @@
 // when the flag is set, so a visitor to the published site never downloads it
 // and `window.__gfu` is undefined. Nothing else in the game reads it.
 
-import { ROUND, DT, WEAPONS, GADGETS } from '../sim/constants.js?v=76a1d3ce';
+import { ROUND, DT, WEAPONS, GADGETS } from '../sim/constants.js?v=99f3ac0d';
 
 export function installDebug({ input, getGame, startSolo }) {
   // Fields forced into every input frame the game samples. The simulation reads
@@ -189,6 +189,20 @@ export function installDebug({ input, getGame, startSolo }) {
     // Seconds instead of ticks, for when that reads better.
     run(seconds) {
       return api.tick(Math.round(seconds / DT));
+    },
+
+    // Draw again without moving the round on.
+    //
+    // Not decoration: a scene's lighting does not arrive in one frame. Three.js
+    // uploads a light's contribution when it next draws with that light in
+    // hand, and a flat with this many bulbs takes a few passes to settle — the
+    // first picture of a freshly built world comes out with the room black and
+    // only the weapon lit, which reads exactly like a bug in whatever was being
+    // photographed. Cheap insurance: the round does not move, so nothing about
+    // the picture changes except that it is finished.
+    redraw(n = 1) {
+      for (let i = 0; i < n; i++) game().advance(0);
+      return n;
     },
 
     // Stop and start the loop that paces itself. A tool pauses first and then

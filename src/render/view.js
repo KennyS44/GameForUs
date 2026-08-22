@@ -1,11 +1,11 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=76a1d3ce';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=76a1d3ce';
-import { lerp } from '../sim/math.js?v=76a1d3ce';
-import { STILL } from '../util/flags.js?v=76a1d3ce';
-import { buildWeaponModel } from './weapons.js?v=76a1d3ce';
+import * as THREE from '../../vendor/three.module.js?v=99f3ac0d';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=99f3ac0d';
+import { lerp } from '../sim/math.js?v=99f3ac0d';
+import { STILL } from '../util/flags.js?v=99f3ac0d';
+import { buildWeaponModel } from './weapons.js?v=99f3ac0d';
 
 // ── Where the weapon is held ───────────────────────────────────────────────
 //
@@ -39,6 +39,59 @@ const CARRY = {
 // along a real rifle.
 const ADS_SIGHT_DIST = 0.255;
 const ADS_FOV = 30;
+
+// ── How the weapon answers to being carried ────────────────────────────────
+//
+// Everything below used to be a bare number in the middle of an expression,
+// its neighbours forty lines away — `dt * 9` here, `0.022` there, three
+// separate ceilings on the recoil springs scattered down one function. They
+// are not independent: the climb and the swing have to settle together or the
+// muzzle walks in a curve, and the bob and the sway have to stay in proportion
+// or a walking man looks like he is on a boat. Numbers that only mean anything
+// against each other belong next to each other.
+//
+// So: one table, and "recoil a bit weaker" is one line rather than a search.
+// The comments carry their weight here, because the value alone tells you
+// nothing — 0.11 is a ceiling in radians on how far the muzzle may climb, and
+// there is no way to know that from `0.11`.
+const FEEL = {
+  // Head bob while walking: height of the rise, how much aiming takes out of
+  // it, how far it swings sideways against the vertical, and how fast it walks.
+  bob: { rise: 0.022, aimCut: 0.85, sideways: 0.6, rate: 3.4 },
+
+  // The gun lagging behind a fast turn. `chase` is how hard it gets dragged,
+  // `settle` how quickly it catches up, and the rest is how much of the lag
+  // survives into the rotation — none of it once the sights are up.
+  sway: { chase: 1.6, settle: 10, intoYaw: 0.6, intoRoll: 0.5, atHip: 0.8 },
+
+  // Recoil, as the muzzle moving rather than the hands shaking. Each spring
+  // has a ceiling it cannot pass, a gain on what the simulation just did, and
+  // a rate it comes back at. The shove is the only one that invents anything,
+  // because it is the only motion that cannot move where the rounds go.
+  climb: { cap: 0.11, gain: 2.4, perShot: 0.012, settle: 9 },
+  walk: { cap: 0.09, gain: 2.4, settle: 9 },
+  push: { cap: 0.05, perShot: 0.018, settle: 11 },
+
+  // How fast the body follows the lean key.
+  lean: { settle: 12 },
+
+  // Up against a wall: pull in and raise the muzzle, the way you would carry
+  // it in a doorway. Not decoration — it is what keeps the barrel out of the
+  // wall instead of hanging through it.
+  crowd: { settle: 11, back: 0.26, down: 0.02, across: 0.10, lift: 0.34, roll: 0.12 },
+
+  // Aiming folds the arms down and behind the weapon, which on a screen means
+  // gone. Mostly a drop: swung about the grip much further and the far end of
+  // the support forearm comes back up into the sight picture.
+  arms: { fold: 0.5, drop: 0.30, back: 0.16 },
+
+  // Reloading dips the weapon out of view and tips it toward you.
+  reload: { dip: 0.16, tip: 0.7 },
+
+  // Where a scope's own eyepiece takes the screen over from the model: starts
+  // past halfway into the aim, and is complete before the end of it.
+  scope: { from: 0.55, over: 0.4, gone: 0.98 },
+};
 
 export function createView(scene) {
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.02, 120);
@@ -168,7 +221,7 @@ export function createView(scene) {
     const height = PLAYER.heightCrouch + (PLAYER.heightStand - PLAYER.heightCrouch) * player.stance;
     const eyeY = player.pos.y + height - PLAYER.eyeOffset;
 
-    smoothed.lean = lerp(smoothed.lean, player.lean, Math.min(1, dt * 12));
+    smoothed.lean = lerp(smoothed.lean, player.lean, Math.min(1, dt * FEEL.lean.settle));
     smoothed.aim = player.aimAmount;
 
     // Marksman glass pulls the room in. The weapon carries its own figure —
@@ -192,11 +245,12 @@ export function createView(scene) {
 
     // Head bob while walking — subtle, and it stops when you aim.
     const speed = Math.hypot(player.vel.x, player.vel.z);
-    if (moving && player.grounded) smoothed.bob += dt * speed * 3.4;
+    if (moving && player.grounded) smoothed.bob += dt * speed * FEEL.bob.rate;
     const bobAmount = STILL ? 0
-      : (1 - smoothed.aim * 0.85) * Math.min(speed / PLAYER.speedRun, 1) * 0.022;
+      : (1 - smoothed.aim * FEEL.bob.aimCut)
+        * Math.min(speed / PLAYER.speedRun, 1) * FEEL.bob.rise;
     const bobY = Math.sin(smoothed.bob * 2) * bobAmount;
-    const bobX = Math.cos(smoothed.bob) * bobAmount * 0.6;
+    const bobX = Math.cos(smoothed.bob) * bobAmount * FEEL.bob.sideways;
 
     camera.position.set(
       player.pos.x + rightX * leanOffset + rightX * bobX,
@@ -210,8 +264,8 @@ export function createView(scene) {
     if (dYaw > Math.PI) dYaw -= Math.PI * 2;
     if (dYaw < -Math.PI) dYaw += Math.PI * 2;
     lastYaw = yaw;
-    smoothed.sway.x = lerp(smoothed.sway.x, -dYaw * 1.6, Math.min(1, dt * 10));
-    smoothed.sway.y = lerp(smoothed.sway.y, 0, Math.min(1, dt * 10));
+    smoothed.sway.x = lerp(smoothed.sway.x, -dYaw * FEEL.sway.chase, Math.min(1, dt * FEEL.sway.settle));
+    smoothed.sway.y = lerp(smoothed.sway.y, 0, Math.min(1, dt * FEEL.sway.settle));
 
     // Recoil, as the muzzle moving rather than as the hands shaking.
     //
@@ -231,16 +285,18 @@ export function createView(scene) {
     lastRecoilYaw = player.recoil.yaw;
 
     smoothed.climb = lerp(
-      Math.min(0.11, smoothed.climb + kickedPitch * 2.4 + (fired ? 0.012 : 0)),
-      0, Math.min(1, dt * 9),
+      Math.min(FEEL.climb.cap,
+        smoothed.climb + kickedPitch * FEEL.climb.gain + (fired ? FEEL.climb.perShot : 0)),
+      0, Math.min(1, dt * FEEL.climb.settle),
     );
     smoothed.swing = lerp(
-      Math.max(-0.09, Math.min(0.09, smoothed.swing + kickedYaw * 2.4)),
-      0, Math.min(1, dt * 9),
+      Math.max(-FEEL.walk.cap,
+        Math.min(FEEL.walk.cap, smoothed.swing + kickedYaw * FEEL.walk.gain)),
+      0, Math.min(1, dt * FEEL.walk.settle),
     );
     smoothed.push = lerp(
-      Math.min(0.05, smoothed.push + (fired ? 0.018 : 0)),
-      0, Math.min(1, dt * 11),
+      Math.min(FEEL.push.cap, smoothed.push + (fired ? FEEL.push.perShot : 0)),
+      0, Math.min(1, dt * FEEL.push.settle),
     );
 
     // Taking a picture rather than playing. Five numbers on this rig move on
@@ -284,8 +340,8 @@ export function createView(scene) {
     // to *sit* depends on it.
     weapon.group.rotation.set(
       lerp(CARRY.pitch, 0, t) + smoothed.climb,
-      lerp(CARRY.yaw, 0, t) + smoothed.sway.x * 0.6 * (1 - t) + smoothed.swing,
-      lerp(CARRY.roll, 0, t) + smoothed.swing * 0.5 * (1 - t),
+      lerp(CARRY.yaw, 0, t) + smoothed.sway.x * FEEL.sway.intoYaw * (1 - t) + smoothed.swing,
+      lerp(CARRY.roll, 0, t) + smoothed.swing * FEEL.sway.intoRoll * (1 - t),
     );
 
     // ...and the sight goes on the middle of the screen and stays there.
@@ -310,8 +366,8 @@ export function createView(scene) {
     const ads = { x: -pinned.x, y: -pinned.y, z: -ADS_SIGHT_DIST - pinned.z };
     const loose = 1 - t;
     weapon.group.position.set(
-      lerp(hip.x, ads.x, t) + (smoothed.sway.x + bobX * 0.8) * loose,
-      lerp(hip.y, ads.y, t) + (smoothed.sway.y + bobY * 0.8) * loose,
+      lerp(hip.x, ads.x, t) + (smoothed.sway.x + bobX * FEEL.sway.atHip) * loose,
+      lerp(hip.y, ads.y, t) + (smoothed.sway.y + bobY * FEEL.sway.atHip) * loose,
       lerp(hip.z, ads.z, t) + smoothed.push,
     );
 
@@ -319,15 +375,15 @@ export function createView(scene) {
     // would actually carry it in a doorway. This is what keeps the barrel out
     // of the wall rather than hanging through it.
     const wantCrowd = Math.max(0, Math.min(1, 1 - wallDistance / CLEARANCE));
-    smoothed.crowd = lerp(smoothed.crowd, wantCrowd, Math.min(1, dt * 11));
+    smoothed.crowd = lerp(smoothed.crowd, wantCrowd, Math.min(1, dt * FEEL.crowd.settle));
     if (smoothed.crowd > 0.001 && loose > 0.001) {
       // ...but not while aiming. Nothing moves the sight off the axis.
       const c = smoothed.crowd * loose;
-      weapon.group.position.z += c * 0.26;
-      weapon.group.position.y -= c * 0.02;
-      weapon.group.position.x += c * 0.10;
-      weapon.group.rotation.x -= c * 0.34;
-      weapon.group.rotation.z += c * 0.12;
+      weapon.group.position.z += c * FEEL.crowd.back;
+      weapon.group.position.y -= c * FEEL.crowd.down;
+      weapon.group.position.x += c * FEEL.crowd.across;
+      weapon.group.rotation.x -= c * FEEL.crowd.lift;
+      weapon.group.rotation.z += c * FEEL.crowd.roll;
     }
 
     // Aiming folds the arms down and back and out of frame.
@@ -343,17 +399,17 @@ export function createView(scene) {
     // the bottom corner of the screen with a black slab, and on the shorter
     // weapons it filled the window.
     if (weapon.arms) {
-      weapon.arms.rotation.x = t * 0.5;
-      weapon.arms.position.y = -t * 0.30;
-      weapon.arms.position.z = t * 0.16;
+      weapon.arms.rotation.x = t * FEEL.arms.fold;
+      weapon.arms.position.y = -t * FEEL.arms.drop;
+      weapon.arms.position.z = t * FEEL.arms.back;
     }
 
     // Reloading dips the weapon out of view.
     const w = player.weapon;
     if (w.reloading > 0) {
       const phase = 1 - Math.abs(w.reloading / w.reloadTotal - 0.5) * 2;
-      weapon.group.position.y -= phase * 0.16;
-      weapon.group.rotation.x += phase * 0.7;
+      weapon.group.position.y -= phase * FEEL.reload.dip;
+      weapon.group.rotation.x += phase * FEEL.reload.tip;
     }
 
     // Torch follows the camera, offset toward the weapon so shadows look right.
@@ -372,9 +428,10 @@ export function createView(scene) {
     // eye — a circle of picture with black around it, which the HUD draws —
     // and a rifle drawn across the middle of that is a rifle in the way. Every
     // game with a real scope does this; ours just does it a frame earlier.
-    scoped = weapon.optic === 'scope' ? Math.max(0, (t - 0.55) / 0.4) : 0;
+    scoped = weapon.optic === 'scope'
+      ? Math.max(0, (t - FEEL.scope.from) / FEEL.scope.over) : 0;
     scoped = Math.min(1, scoped);
-    weapon.group.visible = player.alive && scoped < 0.98;
+    weapon.group.visible = player.alive && scoped < FEEL.scope.gone;
 
     if (viewMuzzleLife > 0) {
       viewMuzzleLife -= dt;

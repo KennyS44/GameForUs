@@ -33,6 +33,9 @@
 //   --wobble               let the weapon breathe and sway (default: held still)
 //   --size=WxH             default 1280x720
 //   --out=PATH             where to write. {weapon} and {n} are filled in.
+//   --diff=PATH            compare against an earlier picture: prints how much
+//                          moved and where, and writes a three-panel sheet
+//                          (before, after, what changed) next to --out
 //   --list                 print the room and weapon names and stop
 //
 // Everything it drives is behind ?debug=1 — see src/util/debug.js.
@@ -41,7 +44,7 @@
 // is a static site with no package.json and no dependencies, and it stays that
 // way. Only the tools reach outside.
 import playwright from '/usr/local/lib/node_modules/playwright/index.js';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from './serve.mjs';
@@ -134,6 +137,8 @@ const outPattern = typeof args.out === 'string'
   ? args.out
   : `docs/shots/${weapons.length > 1 ? '{weapon}' : 'shot'}.png`;
 
+const diffPattern = typeof args.diff === 'string' ? args.diff : null;
+
 // ── What happens inside the page ──────────────────────────────────────────
 //
 // One round trip per picture: set the scene, run the clock forward by hand,
@@ -165,11 +170,96 @@ async function compose(page, shot) {
 
     g.tick(Math.max(1, o.ticks));
     g.hud(o.hud);
+    // Let the lighting finish arriving before the shutter — see redraw().
+    g.redraw(4);
     await g.frame();
     // Where he was put, as well as where he ended up: the two come apart more
     // often than you would think, and silently. See the check below.
     return { ...g.info(), asked };
   }, shot);
+}
+
+// ── Comparing two pictures ────────────────────────────────────────────────
+//
+// The whole reason the frames are held still: two shots either side of an edit
+// differ only where the edit did, so the difference between them is a direct
+// readout of what the change actually touched. Eyeballing that was the slow
+// part of every carry-position round — "is the stock lower, or do I want it to
+// be?" — and a percentage with a bounding box answers it in one line.
+//
+// Done in the browser because it already has a PNG decoder and a canvas, and
+// this project has no image library and is not getting one for this.
+async function diffImages(page, beforeBuf, afterBuf) {
+  return page.evaluate(async ([a64, b64]) => {
+    const load = (b64) => new Promise((done, fail) => {
+      const img = new Image();
+      img.onload = () => done(img);
+      img.onerror = () => fail(new Error('картинка не читается'));
+      img.src = `data:image/png;base64,${b64}`;
+    });
+    const [before, after] = await Promise.all([load(a64), load(b64)]);
+    if (before.width !== after.width || before.height !== after.height) {
+      return { sizeMismatch: `${before.width}x${before.height} против ${after.width}x${after.height}` };
+    }
+
+    const { width: w, height: h } = after;
+    const grab = (img) => {
+      const c = new OffscreenCanvas(w, h);
+      const x = c.getContext('2d');
+      x.drawImage(img, 0, 0);
+      return x.getImageData(0, 0, w, h).data;
+    };
+    const A = grab(before);
+    const B = grab(after);
+
+    // A threshold, not equality: two runs of the same code are byte-identical,
+    // so anything above the noise floor is a real change rather than dither.
+    const THRESHOLD = 8;
+    let changed = 0;
+    let minX = w; let minY = h; let maxX = -1; let maxY = -1;
+    const mask = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < A.length; i += 4) {
+      const d = Math.max(
+        Math.abs(A[i] - B[i]), Math.abs(A[i + 1] - B[i + 1]), Math.abs(A[i + 2] - B[i + 2]),
+      );
+      if (d <= THRESHOLD) { mask[i + 3] = 255; continue; }
+      changed++;
+      const p = i / 4;
+      const x = p % w; const y = (p / w) | 0;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      mask[i] = 255;
+      mask[i + 1] = 40;
+      mask[i + 2] = 40;
+      mask[i + 3] = 255;
+    }
+
+    // Three panels: what it was, what it is, and only what moved.
+    const sheet = new OffscreenCanvas(w * 3 + 8, h);
+    const g = sheet.getContext('2d');
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, sheet.width, h);
+    g.drawImage(before, 0, 0);
+    g.drawImage(after, w + 4, 0);
+    const maskCanvas = new OffscreenCanvas(w, h);
+    maskCanvas.getContext('2d').putImageData(new ImageData(mask, w, h), 0, 0);
+    g.drawImage(maskCanvas, w * 2 + 8, 0);
+
+    const blob = await sheet.convertToBlob({ type: 'image/png' });
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let bin = '';
+    for (const byte of buf) bin += String.fromCharCode(byte);
+
+    return {
+      changed,
+      total: w * h,
+      percent: +((changed / (w * h)) * 100).toFixed(2),
+      box: maxX < 0 ? null : { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 },
+      sheet: btoa(bin),
+    };
+  }, [beforeBuf.toString('base64'), afterBuf.toString('base64')]);
 }
 
 // ── Run ───────────────────────────────────────────────────────────────────
@@ -224,7 +314,10 @@ for (const weapon of weapons) {
   await mkdir(dirname(path), { recursive: true });
 
   const info = await compose(page, { ...opts, weapon });
-  await page.screenshot({ path });
+  // Thirty seconds is Playwright's default and this scene outgrew it: under a
+  // software renderer a single frame of a lit two-storey flat can take longer
+  // than that when the machine is busy.
+  const png = await page.screenshot({ path, timeout: 180000, animations: 'disabled' });
 
   const where = info.me
     ? `${info.me.pos.x},${info.me.pos.z} эт.${info.me.pos.y > 1.65 ? 2 : 1}`
@@ -255,6 +348,32 @@ for (const weapon of weapons) {
   }
   if (opts.ads && info.me && info.me.aim < 0.99) {
     console.error(`  ! прицел поднят не до конца (${info.me.aim}) — добавь тиков`);
+  }
+
+  if (diffPattern) {
+    const beforePath = resolve(ROOT, diffPattern
+      .replace('{weapon}', weapon ?? 'shot')
+      .replace('{n}', String(n)));
+    let before = null;
+    try {
+      before = await readFile(beforePath);
+    } catch {
+      console.error(`  ! не с чем сравнивать: нет ${beforePath.slice(ROOT.length)}`);
+    }
+    if (before) {
+      const d = await diffImages(page, before, png);
+      if (d.sizeMismatch) {
+        console.error(`  ! кадры разного размера (${d.sizeMismatch}) — сравнивать нечего`);
+      } else {
+        const sheet = path.replace(/\.png$/, '-diff.png');
+        await writeFile(sheet, Buffer.from(d.sheet, 'base64'));
+        console.log(
+          `  ${d.percent}% пикселей изменилось`
+          + (d.box ? `, всё в области ${d.box.w}×${d.box.h} от ${d.box.x},${d.box.y}` : ', кадры совпадают')
+          + ` → ${sheet.slice(ROOT.length)}`,
+        );
+      }
+    }
   }
 }
 

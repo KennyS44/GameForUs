@@ -13,6 +13,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { buildWorld, doorFrame, localToWorld } from '../src/sim/world.js';
+import { planFor } from '../src/maps/plan.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -28,19 +29,16 @@ const APARTMENT = Object.values(module).find((v) => v && v.geometry && v.rooms);
 const world = buildWorld(APARTMENT);
 
 const F2 = APARTMENT.upperFloorY ?? 3.3;
-const SCALE = 26; // pixels per metre
-const PAD = { left: 64, top: 92, right: 24, bottom: 76 };
 
-// Plan extents: the flat plus the landing outside the front door.
-const X0 = -16.6;
-const X1 = 16.6;
-const Z0 = -18.6;
-const Z1 = 10.1;
-
-const px = (x) => PAD.left + (x - X0) * SCALE;
-const pz = (z) => PAD.top + (z - Z0) * SCALE;
-const W = PAD.left + (X1 - X0) * SCALE + PAD.right;
-const H = PAD.top + (Z1 - Z0) * SCALE + PAD.bottom;
+// The projection lives in src/maps/plan.js because the game reads it too: the
+// planning screen lays its marks over these very sheets, and a mark is in the
+// right room only while both agree to the pixel. It works the extents out from
+// the map's own bounds, so moving an outside wall moves the paper with it.
+const PLAN = planFor(APARTMENT);
+const {
+  scale: SCALE, x0: X0, x1: X1, z0: Z0, z1: Z1, w: W, h: H, px, pz,
+} = PLAN;
+const PAD = { left: PLAN.left, top: PLAN.top, right: PLAN.right, bottom: PLAN.bottom };
 
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const n = (v) => Math.round(v * 10) / 10;

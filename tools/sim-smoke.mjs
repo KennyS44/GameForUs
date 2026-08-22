@@ -5,6 +5,19 @@
 // server later by swapping the transport only.
 //
 //   node tools/sim-smoke.mjs
+//
+// The checks are grouped into named sections, and you can run just the ones you
+// are working on. Matching is case-insensitive on a substring, so `--only=bot`
+// finds `bots`; several names may be given, separated by commas.
+//
+//   node tools/sim-smoke.mjs --list              # the section names
+//   node tools/sim-smoke.mjs --only=bots
+//   node tools/sim-smoke.mjs --only=bots,turned
+//
+// A run always ends with a per-section timing table, slowest first, so it is
+// obvious where the time goes. `core` is the one section that is not about a
+// single subsystem: it is the long order-dependent opening run, where one check
+// kicks a door open and a later one walks through it, so it lives or dies whole.
 
 import { APARTMENT, MATERIALS } from '../src/maps/apartment.js';
 import { buildWorld, hasLineOfSight, doorAngle, raycastGeometry } from '../src/sim/world.js';
@@ -31,6 +44,26 @@ function check(name, cond, detail = '') {
   }
 }
 
+// Sections are flat — a section() call never nests inside another one — so the
+// name list below is simply the order they appear in the file.
+const listOnly = process.argv.includes('--list');
+const only = process.argv
+  .filter((arg) => arg.startsWith('--only='))
+  .flatMap((arg) => arg.slice('--only='.length).split(','))
+  .map((name) => name.trim().toLowerCase())
+  .filter(Boolean);
+const sectionNames = [];
+const timings = [];
+
+function section(name, body) {
+  sectionNames.push(name);
+  if (listOnly) return;
+  if (only.length && !only.some((want) => name.includes(want))) return;
+  const t0 = process.hrtime.bigint();
+  body();
+  timings.push([name, Number(process.hrtime.bigint() - t0) / 1e6]);
+}
+
 const world = buildWorld(APARTMENT);
 const state = createState(world, 1234);
 
@@ -49,6 +82,13 @@ const attacker = addPlayer(world, state, 'a1', 'attackers', 'Alpha');
 const defender = addPlayer(world, state, 'd1', 'defenders', 'Bravo');
 
 console.log('world:', world.boxes.length, 'boxes,', world.doors.length, 'doors');
+
+// ══ section: core ═════════════════════════════════════════════════════════
+// Everything down to the closing `});` is one section. The checks in it run in
+// order and hand the shared `state` on to each other, so they are not separable.
+// The body is deliberately left at its original indentation: re-indenting it
+// would rewrite six hundred lines to no effect.
+section('core', () => {
 
 // ── Gravity settles the player on the floor ───────────────────────────────
 const idle = { a1: createInput(), d1: createInput() };
@@ -654,13 +694,15 @@ console.log('\nA door never pushes anyone through a wall:');
   check('a swinging door never flings anyone across the map', worstJump < 0.6, farthest ?? '');
 }
 
+}); // ══ end of section: core ═══════════════════════════════════════════════
+
 // ── Eleven weapons that behave like eleven weapons ────────────────────────
 //
 // The roster carries real figures now, so what matters is that the differences
 // between entries reach the simulation: a self-loader is not an automatic, a
 // shotgun is not a rifle with a big number, and a heavy round goes through a
 // wall a 9 mm dies in.
-{
+section('ballistics', () => {
   console.log('\nBallistics:');
 
   // Two players facing each other on the landing, nothing in between.
@@ -965,7 +1007,7 @@ console.log('\nA door never pushes anyone through a wall:');
 
   restartRound();
   setLoadout(state, 'a1', DEFAULT_WEAPON);
-}
+});
 
 // ── Equipment ─────────────────────────────────────────────────────────────
 //
@@ -973,7 +1015,7 @@ console.log('\nA door never pushes anyone through a wall:');
 // doorway costs. What matters here is that they belong to the right side, that
 // they go off when they should and not when they should not, and that none of
 // them breaks the rule the guns keep: no single hit kills.
-{
+section('equipment', () => {
   console.log('\nEquipment:');
 
   // The front door of the flat, with the attacker on the landing facing it.
@@ -1452,14 +1494,14 @@ console.log('\nA door never pushes anyone through a wall:');
 
   restartRound();
   setLoadout(state, 'a1', DEFAULT_WEAPON);
-}
+});
 
 // ── What each weapon shoots through ───────────────────────────────────────
 //
 // Not arithmetic about the table — a man stood behind a slab, and a shot fired
 // at him. Every weapon against every surface the flat is built from, on a
 // range with one wall in the middle of it.
-{
+section('penetration', () => {
   console.log('\nThrough the wall:');
 
   // Every surface says both things, or it is quietly using a default for one
@@ -1610,7 +1652,7 @@ console.log('\nA door never pushes anyone through a wall:');
         && SHOTGUNS.every((id) => cushion[id] === 0),
       `${SMGS.filter((id) => !cushion[id]).join(', ')} ${SHOTGUNS.filter((id) => cushion[id]).join(', ')}`);
   }
-}
+});
 
 // ── Things that stand at an angle ─────────────────────────────────────────
 //
@@ -1619,7 +1661,7 @@ console.log('\nA door never pushes anyone through a wall:');
 // building. Now a box may be turned about its own centre, and the claim worth
 // testing is that the whole engine believes it — the bullet, the boot, and the
 // graph the bots walk — rather than just the picture.
-{
+section('turned', () => {
   console.log('\nTurned boxes:');
 
   // A room with one wall through the middle of it, at forty-five degrees.
@@ -1714,7 +1756,7 @@ console.log('\nA door never pushes anyone through a wall:');
     }
     check('and not one standing place in it is inside the wall', inWall === 0, `${inWall} of ${nav.count}`);
   }
-}
+});
 
 // ── Bots that walk the flat ───────────────────────────────────────────────
 //
@@ -1723,7 +1765,7 @@ console.log('\nA door never pushes anyone through a wall:');
 // found out. Everything here runs the simulation and looks at what came out —
 // there is no way to assert "feels alive", but "left the room it spawned in"
 // and "did not spend the round leaning on a wall" are checkable.
-{
+section('bots', () => {
   console.log('\nBots:');
 
   const nav = world.nav;
@@ -1957,13 +1999,13 @@ console.log('\nA door never pushes anyone through a wall:');
     check('never so far out that it points at another flat', worstError < 8,
       `worst ${worstError.toFixed(1)} m`);
   }
-}
+});
 
 // ── Choosing a weapon ─────────────────────────────────────────────────────
 //
 // Beyond the numbers: that the choice is refused when it should be, that it
 // really lands in the player's hands, and that it survives into the next round.
-{
+section('loadout', () => {
   console.log('\nWeapon selection:');
 
   const ids = Object.keys(WEAPONS);
@@ -2034,14 +2076,14 @@ console.log('\nA door never pushes anyone through a wall:');
     `${attacker.loadout}/${attacker.weapon.id}`);
   check('but the magazine is full again',
     attacker.weapon.ammo === WEAPONS['sg-12-pump'].magSize, `ammo=${attacker.weapon.ammo}`);
-}
+});
 
 // ── A client's pick reaches the host ──────────────────────────────────────
 //
 // The host is the only authority on who carries what, so the round trip is
 // worth a check of its own: drive a host session through the same seam the
 // real transport plugs into and watch a guest's choice land.
-{
+section('netloadout', () => {
   console.log('\nWeapon selection over the wire:');
   const handlers = {};
   const sent = [];
@@ -2075,21 +2117,42 @@ console.log('\nA door never pushes anyone through a wall:');
     snap?.players?.guest?.loadout === 'sg-12-double'
       && snap.players.guest.weapon.id === 'sg-12-double',
     JSON.stringify(snap?.players?.guest?.loadout));
+});
+
+// ── A tick has to fit in the frame budget ─────────────────────────────────
+section('perf', () => {
+  restartRound();
+  const t0 = process.hrtime.bigint();
+  const N = 3000;
+  for (let i = 0; i < N; i++) {
+    stepSim(world, state, {
+      a1: { ...createInput(), moveZ: -1, fire: i % 5 === 0, yaw: 0 },
+      d1: { ...createInput(), moveX: 1 },
+    });
+  }
+  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  const perTick = ms / N;
+  console.log(`  perf: ${perTick.toFixed(3)} ms/tick (budget ${(1000 / TICK_RATE).toFixed(2)} ms)`);
+  check('tick fits comfortably in the frame budget', perTick < 1000 / TICK_RATE / 4);
+});
+
+if (listOnly) {
+  console.log('sections: ' + sectionNames.join(', '));
+  process.exit(0);
 }
 
-restartRound();
-const t0 = process.hrtime.bigint();
-const N = 3000;
-for (let i = 0; i < N; i++) {
-  stepSim(world, state, {
-    a1: { ...createInput(), moveZ: -1, fire: i % 5 === 0, yaw: 0 },
-    d1: { ...createInput(), moveX: 1 },
-  });
+if (only.length && timings.length === 0) {
+  console.log(`\nNothing matched --only=${only.join(',')}.`);
+  console.log('sections: ' + sectionNames.join(', '));
+  process.exit(2);
 }
-const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-const perTick = ms / N;
-console.log(`  perf: ${perTick.toFixed(3)} ms/tick (budget ${(1000 / TICK_RATE).toFixed(2)} ms)`);
-check('tick fits comfortably in the frame budget', perTick < 1000 / TICK_RATE / 4);
+
+console.log('\nSection times:');
+for (const [name, took] of [...timings].sort((x, y) => y[1] - x[1])) {
+  console.log(`  ${name.padEnd(12)}${took.toFixed(0).padStart(6)} ms`);
+}
+const total = timings.reduce((sum, [, took]) => sum + took, 0);
+console.log(`  ${'total'.padEnd(12)}${total.toFixed(0).padStart(6)} ms`);
 
 console.log(failures === 0 ? '\nAll simulation checks passed.' : `\n${failures} check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);
