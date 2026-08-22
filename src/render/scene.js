@@ -1,10 +1,10 @@
 // Builds the Three.js scene from the same map data the simulation uses, so
 // what you see is exactly what you collide with and shoot through.
 
-import * as THREE from '../../vendor/three.module.js?v=9dde13b4';
-import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=9dde13b4';
-import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=9dde13b4';
-import { buildWeaponModel } from './weapons.js?v=9dde13b4';
+import * as THREE from '../../vendor/three.module.js?v=5c4f7baa';
+import { doorAngle, trapWireLocal, TRIPWIRE } from '../sim/world.js?v=5c4f7baa';
+import { PLAYER, FLARE, NVG, POWER } from '../sim/constants.js?v=5c4f7baa';
+import { buildWeaponModel } from './weapons.js?v=5c4f7baa';
 
 // How much light there is in a room with every lamp in it switched off. Kept
 // here rather than inline because three different places have to agree on it:
@@ -93,10 +93,15 @@ function loadTexture(file, { srgb }) {
 }
 
 function materialFor(def) {
+  // A surface may say how it takes the light. Most do not and get plaster's
+  // answer, which is what everything in a flat is until it is not: the one
+  // black panel in the cinema was matte at 0.92 like the wall around it, so it
+  // caught no highlight from anything and read as a hole cut in the plaster
+  // rather than as a screen.
   const params = {
     color: def.color,
-    roughness: 0.92,
-    metalness: 0.0,
+    roughness: def.roughness ?? 0.92,
+    metalness: def.metalness ?? 0.0,
   };
 
   const tex = TEXTURES[def.name];

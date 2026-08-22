@@ -10,8 +10,8 @@
 // is the silhouette — a bullpup with the magazine on its back is not the same
 // shape as a sawn-off, and that difference is the whole point of the roster.
 
-import * as THREE from '../../vendor/three.module.js?v=9dde13b4';
-import { OPTICS, opticHeightFor, defaultOpticFor } from './optics.js?v=9dde13b4';
+import * as THREE from '../../vendor/three.module.js?v=5c4f7baa';
+import { OPTICS, opticHeightFor, defaultOpticFor } from './optics.js?v=5c4f7baa';
 
 export const MM = 0.001;
 

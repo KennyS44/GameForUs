@@ -192,21 +192,25 @@ async function compose(page, shot) {
     let drew = g.settle();
 
     // ...and if what arrived is a black flat with the mains on, the renderer
-    // and the simulation disagree about the lighting. That happened to about
-    // one picture in six and was stable within a run, so no number of extra
-    // passes would have helped: the shader programs were compiled for a scene
-    // that did not have those lamps in it. Rebuild them and look again.
-    let relit = false;
+    // and the simulation disagree about the lighting. About one picture in six,
+    // stable within a run, so no number of extra passes helps.
+    //
+    // Rebuilding every shader program is the one theory that could be tested
+    // from here, and it was: it does not cure it. The attempt is kept because
+    // it costs one frame and might yet catch a different cause — but what
+    // matters is the flag it sets, because a picture that is still black after
+    // it is a picture nobody should be handed.
+    let dark = false;
     if (g.info().power && drew.brightness < 12) {
       g.relight();
       drew = g.settle();
-      relit = true;
+      dark = drew.brightness < 12;
     }
 
     await g.frame();
     // Where he was put, as well as where he ended up: the two come apart more
     // often than you would think, and silently. See the check below.
-    return { ...g.info(), asked, drew, relit };
+    return { ...g.info(), asked, drew, dark };
   }, shot);
 }
 
@@ -317,6 +321,9 @@ const browser = await chromium.launch({
 const page = await browser.newPage({ viewport: { width, height } });
 
 const problems = [];
+// Pictures that came out unlit. Reported at the end and made an error exit,
+// so a bad frame can never quietly become somebody's reference.
+const unusable = [];
 page.on('pageerror', (e) => problems.push(String(e)));
 page.on('requestfailed', (r) => problems.push(`не загрузилось: ${r.url()}`));
 
@@ -374,9 +381,14 @@ for (const weapon of weapons) {
   if (info.power === false) {
     console.error('  ! электричество отключено — в квартире темно, это не сбой рендера');
   }
-  if (info.relit) {
+  // Not a warning: this picture is wrong, and a comparison drawn against it
+  // would be wrong twice. Known defect, cause not found — see the note by
+  // settle() in src/util/debug.js.
+  if (info.dark) {
+    unusable.push(out);
     console.error(
-      `  ! кадр вышел неосвещённым (яркость ${info.drew.brightness}), пересобрал шейдеры и переснял`,
+      `  ! КАДР НЕОСВЕЩЁН (яркость ${info.drew.brightness}) — снимок непригоден, повтори команду.`
+      + ' Известный сбой, примерно один раз из шести; причина не найдена.',
     );
   }
 
@@ -406,7 +418,11 @@ for (const weapon of weapons) {
     console.error(`  ! прицел поднят не до конца (${info.me.aim}) — добавь тиков`);
   }
 
-  if (diffPattern) {
+  // Comparing against a frame that never lit up produces a mask of the whole
+  // room and a number that means nothing. Skip it and say why.
+  if (diffPattern && info.dark) {
+    console.error('  ! сравнение пропущено: сравнивать нечего, кадр неосвещён');
+  } else if (diffPattern) {
     const beforePath = resolve(ROOT, diffPattern
       .replace('{weapon}', weapon ?? 'shot')
       .replace('{n}', String(n)));
@@ -436,7 +452,12 @@ for (const weapon of weapons) {
 await browser.close();
 server.close();
 
+if (unusable.length) {
+  console.error(`\nнепригодных кадров: ${unusable.length} — ${unusable.join(', ')}`);
+}
+
 if (problems.length) {
   console.error(`\nошибки страницы:\n  ${problems.join('\n  ')}`);
-  process.exit(1);
 }
+
+if (problems.length || unusable.length) process.exit(1);

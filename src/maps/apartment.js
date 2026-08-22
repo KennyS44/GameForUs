@@ -34,7 +34,7 @@
 //
 // Keeping them apart is what lets a door be something everyone shoots through
 // and everyone pays for, while a wall is something only the .50 crosses.
-import { turnBox } from '../sim/math.js?v=9dde13b4';
+import { turnBox } from '../sim/math.js?v=5c4f7baa';
 
 export const MATERIALS = {
   concrete: { name: 'concrete', resist: 0, color: 0x3a3a3e, hardness: 1.0 },
@@ -982,7 +982,16 @@ const DECO = {
   pot: { name: 'deco-pot', color: 0x6d5a4a },
   cloth: { name: 'deco-cloth', color: 0x2f333c },
   rug: { name: 'deco-rug', color: 0x4a4038 },
-  screen: { name: 'deco-screen', color: 0x0e1114 },
+  // Dark glass, not black paint. Nearly a mirror and barely rough, so it
+  // picks up the ceiling lamp and the wall opposite the way a switched-off
+  // television does — which is the only thing that tells you it is a surface
+  // rather than an opening.
+  screen: {
+    name: 'deco-screen', color: 0x14181d, roughness: 0.09, metalness: 0.55,
+  },
+  // Its own surround, lighter than the glass so the edge reads. The picture
+  // frames use a dark brown that vanishes against a black panel.
+  bezel: { name: 'deco-bezel', color: 0x4a4f57, roughness: 0.45 },
   chrome: { name: 'deco-chrome', color: 0x8b929c },
   cable: { name: 'deco-cable', color: 0x14161a },
 };
@@ -1010,7 +1019,7 @@ function wallBehind(x, y, z, face) {
 
 // A picture on a wall: a frame and what is inside it, hung a centimetre proud
 // of whatever wall is behind the point it is given.
-function picture(x, y, z, w, h, face, art = DECO.canvas) {
+function picture(x, y, z, w, h, face, art = DECO.canvas, edge = DECO.frame) {
   const wall = wallBehind(x, y, z, face);
   if (!wall) return [];
   const t = 0.03;
@@ -1023,10 +1032,10 @@ function picture(x, y, z, w, h, face, art = DECO.canvas) {
     ? box(u0, v0, a0, u1, v1, a1, mat)
     : box(a0, v0, u0, a1, v1, u1, mat));
   const f = 0.05;
-  at(u - w / 2, u + w / 2, y - h / 2, y - h / 2 + f, DECO.frame);
-  at(u - w / 2, u + w / 2, y + h / 2 - f, y + h / 2, DECO.frame);
-  at(u - w / 2, u - w / 2 + f, y - h / 2 + f, y + h / 2 - f, DECO.frame);
-  at(u + w / 2 - f, u + w / 2, y - h / 2 + f, y + h / 2 - f, DECO.frame);
+  at(u - w / 2, u + w / 2, y - h / 2, y - h / 2 + f, edge);
+  at(u - w / 2, u + w / 2, y + h / 2 - f, y + h / 2, edge);
+  at(u - w / 2, u - w / 2 + f, y - h / 2 + f, y + h / 2 - f, edge);
+  at(u + w / 2 - f, u + w / 2, y - h / 2 + f, y + h / 2 - f, edge);
   // The picture itself, a hair shallower than its frame.
   at(u - w / 2 + f, u + w / 2 - f, y - h / 2 + f, y + h / 2 - f, art);
   return out;
@@ -1069,7 +1078,7 @@ function rug(x0, z0, x1, z1, y) {
 
 // A screen on a wall — a television, a monitor, the cinema's own.
 function screen(x, y, z, w, h, face) {
-  return picture(x, y, z, w, h, face, DECO.screen);
+  return picture(x, y, z, w, h, face, DECO.screen, DECO.bezel);
 }
 
 const decor = [
