@@ -246,19 +246,29 @@ export function createAudio() {
     tail.connect(tailFilter).connect(tailGain).connect(out);
   }
 
-  // A boot on parquet is not a boot on tile. Each floor gets its own band and
-  // its own tail: hollow and woody over the boards, a hard click off the
-  // porcelain in the wet rooms, a flat scuff on bare concrete, next to nothing
-  // on a rug. Two men in different rooms sound like two men in different
-  // rooms, which is the entire point of listening.
+  // A boot is not a bell.
+  //
+  // This used to be a narrow band of noise plus a triangle wave an octave
+  // above it, which is a description of a heel tapping a hard floor — and it
+  // was the loudest thing in the flat. A boot on a floor is two duller things
+  // a few milliseconds apart: the sole landing, which is a low broadband thump
+  // with no pitch to it at all, and the scuff of the rubber rolling off it,
+  // which is a short breath of higher noise and much quieter.
+  //
+  // So each floor is two numbers rather than a note: how low the thump sits,
+  // and how bright and how loud the scuff over it is. Porcelain scuffs high
+  // and sharp, boards thump and barely scuff, a rug does almost neither. Two
+  // men in different rooms still sound like two men in different rooms, which
+  // is the entire point of listening — they just no longer sound like tap
+  // dancers.
   const FLOORS = {
-    floor:    { freq: 300, q: 1.0, dur: 0.11, vol: 1.00, tail: 0.055 },
-    tile:     { freq: 1250, q: 2.6, dur: 0.07, vol: 1.05, tail: 0.02 },
-    concrete: { freq: 520, q: 1.4, dur: 0.08, vol: 0.92, tail: 0.03 },
-    wood:     { freq: 340, q: 1.1, dur: 0.10, vol: 0.98, tail: 0.05 },
-    metal:    { freq: 1700, q: 3.0, dur: 0.12, vol: 1.0, tail: 0.06 },
-    fabric:   { freq: 190, q: 0.8, dur: 0.09, vol: 0.6, tail: 0.0 },
-    drywall:  { freq: 400, q: 1.2, dur: 0.09, vol: 0.9, tail: 0.03 },
+    floor:    { thump: 380, dur: 0.085, scuff: 900, bright: 0.16, vol: 1.00 },
+    tile:     { thump: 430, dur: 0.060, scuff: 2600, bright: 0.34, vol: 0.95 },
+    concrete: { thump: 400, dur: 0.070, scuff: 1500, bright: 0.22, vol: 0.90 },
+    wood:     { thump: 320, dur: 0.100, scuff: 700, bright: 0.13, vol: 0.98 },
+    metal:    { thump: 460, dur: 0.090, scuff: 3200, bright: 0.42, vol: 1.00 },
+    fabric:   { thump: 260, dur: 0.090, scuff: 400, bright: 0.06, vol: 0.55 },
+    drywall:  { thump: 380, dur: 0.080, scuff: 1000, bright: 0.18, vol: 0.88 },
   };
 
   // `own` is your own boot. It does not get panned and it does not get a wall
@@ -272,30 +282,44 @@ export function createAudio() {
     const f = FLOORS[surface] ?? FLOORS.floor;
     const t = ctx.currentTime;
     const out = own ? ownVoice() : panner(pos, 1.2, 26, muffle);
-    const src = noiseSource(f.dur, 0.7 + Math.random() * 0.25);
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = f.freq * (0.88 + Math.random() * 0.24);
-    filter.Q.value = f.q;
-    const gain = ctx.createGain();
-    const vol = Math.min(0.34, 0.05 + loudness * 0.011) * f.vol * (own ? 0.62 : 1);
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(vol, t + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0008, t + f.dur);
-    src.connect(filter).connect(gain).connect(out);
+    // This number is before the filters, and they throw most of it away: a
+    // lowpass at 400 Hz keeps about a third of a noise burst, so what reaches
+    // the ear is a third of what is written here. Measured at the output it is
+    // a third of what a footstep used to be — the old ones were louder than
+    // the room they were walking through.
+    const vol = Math.min(1.1, 0.15 + loudness * 0.043) * f.vol * (own ? 0.62 : 1);
 
-    // The ring the hard floors leave behind, and the soft ones do not.
-    if (f.tail > 0) {
-      const ring = ctx.createOscillator();
-      ring.type = 'triangle';
-      ring.frequency.value = f.freq * 2.1;
-      const rg = ctx.createGain();
-      rg.gain.setValueAtTime(vol * 0.22, t + 0.004);
-      rg.gain.exponentialRampToValueAtTime(0.0006, t + f.tail + 0.02);
-      ring.connect(rg).connect(out);
-      ring.start(t);
-      ring.stop(t + f.tail + 0.05);
-    }
+    // The sole landing. Lowpass rather than bandpass — a thump is everything
+    // below a line, and cutting the bottom out of it is what left a click —
+    // and the noise is played back slow, which drags its own spectrum down to
+    // where the filter can do something with it instead of deleting it.
+    const body = noiseSource(f.dur, 0.10 + Math.random() * 0.06);
+    const low = ctx.createBiquadFilter();
+    low.type = 'lowpass';
+    low.frequency.value = f.thump * (0.9 + Math.random() * 0.2);
+    low.Q.value = 0.9;
+    const bodyGain = ctx.createGain();
+    bodyGain.gain.setValueAtTime(0, t);
+    bodyGain.gain.linearRampToValueAtTime(vol, t + 0.004);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0006, t + f.dur);
+    body.connect(low).connect(bodyGain).connect(out);
+
+    // ...and the rubber rolling off it, a moment later and much quieter. Wide
+    // Q on purpose: any narrower and it starts to have a pitch again.
+    const scuffDur = f.dur * 0.55;
+    // The buffer has to outlive the envelope, which starts a few milliseconds
+    // late — otherwise the source stops mid-decay and puts a click back in.
+    const scuff = noiseSource(scuffDur + 0.02, 0.8 + Math.random() * 0.3);
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = f.scuff * (0.85 + Math.random() * 0.3);
+    band.Q.value = 0.7;
+    const scuffGain = ctx.createGain();
+    const at = t + 0.008 + Math.random() * 0.006;
+    scuffGain.gain.setValueAtTime(0, at);
+    scuffGain.gain.linearRampToValueAtTime(vol * f.bright, at + 0.003);
+    scuffGain.gain.exponentialRampToValueAtTime(0.0005, at + scuffDur);
+    scuff.connect(band).connect(scuffGain).connect(out);
   }
 
   function impact(pos, material) {

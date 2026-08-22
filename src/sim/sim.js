@@ -8,14 +8,14 @@
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
   GADGETS, DEFAULT_GADGET, BLIND, NVG, FLARE, POWER,
-} from './constants.js?v=f8bff953';
+} from './constants.js?v=ceeb0e5b';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=f8bff953';
+} from './math.js?v=ceeb0e5b';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=f8bff953';
+} from './world.js?v=ceeb0e5b';
 
 const GRAVITY = 18;
 
@@ -340,20 +340,34 @@ function fireBullet(world, state, shooter, origin, dir) {
     });
 
     // Can the round punch through?
+    //
+    // A weapon's penetration is quoted in centimetres of plasterboard, so what
+    // a surface costs is its thickness converted into that: steel is worth
+    // three and a half times its own thickness, a pane of glass a sixtieth of
+    // it. Until now the material's own figure was read once, to ask whether it
+    // was zero, and then thrown away — which made sixteen centimetres of steel
+    // exactly as soft as sixteen of plasterboard, and put a glass railing
+    // beyond every submachine gun on the roster.
     const thicknessCm = Math.max(1, (firstGeo.exit - firstGeo.t) * 100);
     const mat = firstGeo.material;
+    const cost = mat.penetration > 0
+      ? thicknessCm * (DAMAGE.penetrationUnit / mat.penetration)
+      : Infinity;
     // Glass is not a wall you punched through, it is a window that broke, so
     // it never counts against the allowance.
     const solid = !mat.seeThrough;
-    if (mat.penetration <= 0 || thicknessCm > penetrationLeft || (solid && wallsLeft <= 0)) {
+    if (cost > penetrationLeft || (solid && wallsLeft <= 0)) {
       if (firstGeo.kind === 'door') damageDoor(world, state, firstGeo.doorId, weapon.doorDamage, shooter);
       return; // stopped
     }
     if (firstGeo.kind === 'door') damageDoor(world, state, firstGeo.doorId, weapon.doorDamage, shooter);
 
-    penetrationLeft -= thicknessCm;
+    penetrationLeft -= cost;
     if (solid) wallsLeft--;
-    damageScale *= Math.max(0.25, 1 - (thicknessCm * DAMAGE.penetrationLossPerCm) / 100);
+    // ...and what it costs is also what it takes out of the round. A bullet
+    // that spent itself getting through a steel locker should arrive with less
+    // left than one that came through a cushion.
+    damageScale *= Math.max(0.25, 1 - (cost * DAMAGE.penetrationLossPerCm) / 100);
     start += firstGeo.exit + 0.02;
     if (start >= MAX_RANGE) return;
   }
@@ -1079,8 +1093,12 @@ function stepPlayer(world, state, p, input, dt) {
   }
 
   // ── Noise ──
+  // Feet make noise when they are on something. In the air there is nothing to
+  // step on, and a man sailing over a railing used to leave a trail of
+  // footsteps behind him — audible to the room and to the bots, from a body
+  // whose boots were nowhere near the floor. The landing has its own thud.
   const movedSpeed = Math.hypot(p.pos.x - before.x, p.pos.z - before.z) / dt;
-  if (movedSpeed > 0.25) {
+  if (movedSpeed > 0.25 && p.grounded) {
     const stride = input.run ? 0.34 : input.sneak ? 0.75 : 0.5;
     p.lastNoise += dt;
     if (p.lastNoise >= stride) {

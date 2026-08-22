@@ -1,10 +1,40 @@
 // Camera rig: turns a simulated player into a first-person view — lean, stance,
 // recoil, breathing sway — plus the flashlight and the weapon model.
 
-import * as THREE from '../../vendor/three.module.js?v=f8bff953';
-import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=f8bff953';
-import { lerp } from '../sim/math.js?v=f8bff953';
-import { buildWeaponModel } from './weapons.js?v=f8bff953';
+import * as THREE from '../../vendor/three.module.js?v=ceeb0e5b';
+import { PLAYER, FLASHLIGHT, WEAPONS, FOV, DEFAULT_WEAPON } from '../sim/constants.js?v=ceeb0e5b';
+import { lerp } from '../sim/math.js?v=ceeb0e5b';
+import { buildWeaponModel } from './weapons.js?v=ceeb0e5b';
+
+// ── Where the weapon is held ───────────────────────────────────────────────
+//
+// One place for every number that decides what the gun looks like on screen,
+// because they only make sense against each other and they are the numbers
+// that get compared with a reference screenshot.
+//
+// At the hip the weapon is carried on the right, muzzle toward the middle of
+// the screen and a little low: what the eye gets is its side — receiver,
+// magazine, the hands on it — with the stock running off the bottom corner,
+// which is how a rifle looks to the man holding it at low ready.
+const CARRY = {
+  x: 0.15,
+  y: -0.105,
+  z: -0.315,
+  // Turned across the body and nosed down a few degrees. Aiming takes all of
+  // this out and puts the sight on the axis instead.
+  pitch: -0.055,
+  yaw: 0.145,
+  roll: 0.055,
+};
+
+// ADS is computed rather than tuned: whatever puts this weapon's own sight on
+// the middle of the screen, this far from the eye, with the viewmodel's lens
+// narrowed to that angle. The narrow field is what does the work — it
+// magnifies the whole weapon while the world keeps its own wide angle, so the
+// optic grows to the size it should be and the barrel recedes the way it does
+// along a real rifle.
+const ADS_SIGHT_DIST = 0.255;
+const ADS_FOV = 30;
 
 export function createView(scene) {
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.02, 120);
@@ -119,8 +149,6 @@ export function createView(scene) {
   // grows to the size it should be, the parts nearer the muzzle recede the way
   // they do along a real rifle, and nothing about where the rounds go moves —
   // the mark is on the axis, and the axis is the middle of the screen.
-  const ADS_SIGHT_DIST = 0.40;
-  const ADS_FOV = 32;
   let viewFov = FOV;
 
   // How close a wall has to be before the muzzle would be inside it. The
@@ -220,11 +248,10 @@ export function createView(scene) {
       viewCamera.updateProjectionMatrix();
     }
 
-    // ADS is computed rather than tuned: whatever puts this weapon's own sight
-    // on the middle of the screen, a fixed distance from the eye. A scope sits
-    // 130 mm over the bore and an SMG's optic 50 mm, and neither needs a magic
-    // number of its own.
-    const hip = { x: 0.155, y: -0.205, z: -0.60 };
+    // A scope sits 130 mm over the bore and an SMG's optic 50 mm, and neither
+    // needs a magic number of its own: what ADS asks for is this weapon's own
+    // sight, on the middle of the screen, at ADS_SIGHT_DIST.
+    const hip = CARRY;
     const ads = {
       x: -weapon.sight.position.x * weapon.scale,
       y: -weapon.sight.position.y * weapon.scale,
@@ -235,16 +262,10 @@ export function createView(scene) {
       lerp(hip.y, ads.y, t) + smoothed.sway.y + bobY * 0.8,
       lerp(hip.z, ads.z, t) + smoothed.recoilKick * 0.5,
     );
-    // At the hip the weapon is carried on the right and turned a few degrees
-    // across the body, so what the eye gets is its side — receiver, magazine,
-    // the hands on it — rather than the back of a stock pointing at the lens.
-    // The muzzle rides a touch low, the way a rifle is actually carried
-    // between low ready and the shoulder. Aiming swings all of that onto the
-    // sight line.
     weapon.group.rotation.set(
-      lerp(-0.055, 0, t) + smoothed.recoilKick * 1.4,
-      lerp(0.125, 0, t) + smoothed.sway.x * 0.6 + smoothed.recoilRoll * 0.8,
-      lerp(0.062, 0, t) + smoothed.recoilRoll,
+      lerp(CARRY.pitch, 0, t) + smoothed.recoilKick * 1.4,
+      lerp(CARRY.yaw, 0, t) + smoothed.sway.x * 0.6 + smoothed.recoilRoll * 0.8,
+      lerp(CARRY.roll, 0, t) + smoothed.recoilRoll,
     );
 
     // Up against a wall: pull the weapon in and raise the muzzle, the way you

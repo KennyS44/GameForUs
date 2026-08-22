@@ -26,16 +26,26 @@
 export const MATERIALS = {
   concrete: { name: 'concrete', penetration: 0, color: 0x3a3a3e, hardness: 1.0 },
   floor: { name: 'floor', penetration: 0, color: 0x5b4835, hardness: 1.0 },
+  // `penetration` is how many centimetres of this equal fourteen of
+  // plasterboard, which is the unit every weapon's own figure is quoted in.
+  // Zero means nothing on the roster gets through it at any thickness.
   drywall: { name: 'drywall', penetration: 14, color: 0x5a544c, hardness: 0.25 },
-  wood: { name: 'wood', penetration: 6, color: 0x4a3826, hardness: 0.5 },
+  // An interior door is the one wooden thing worth shooting through, and
+  // the armour-piercing PDW is the only submachine gun that manages it.
+  wood: { name: 'wood', penetration: 10, color: 0x4a3826, hardness: 0.5 },
   // Glass is shot through like anything thin — it just gives up sooner: two
-  // rounds and the pane is out of the frame.
-  glass: { name: 'glass', penetration: 40, color: 0x88a0aa, hardness: 0.05, seeThrough: true },
-  metal: { name: 'metal', penetration: 1, color: 0x4a4e52, hardness: 0.9 },
+  // rounds and the pane is out of the frame. Buckshot included: a railing is
+  // not cover, and it used to stop every submachine gun in the building.
+  glass: { name: 'glass', penetration: 90, color: 0x88a0aa, hardness: 0.05, seeThrough: true },
+  // A steel locker is the hardest thing in the flat that is not the building
+  // itself: only the .50 goes through one.
+  metal: { name: 'metal', penetration: 4, color: 0x4a4e52, hardness: 0.9 },
   // Wet rooms are tiled, and tile behaves like the floor it is laid on: a
   // separate material only so the renderer can tell them apart.
   tile: { name: 'tile', penetration: 0, color: 0x6d6b66, hardness: 1.0 },
-  fabric: { name: 'fabric', penetration: 20, color: 0x3d3a42, hardness: 0.2 },
+  // Upholstery is not cover. Through the back of a sofa is nearly free;
+  // through one lengthways is a rifle's worth of work.
+  fabric: { name: 'fabric', penetration: 45, color: 0x3d3a42, hardness: 0.2 },
 };
 
 const WALL_H = 3.0;

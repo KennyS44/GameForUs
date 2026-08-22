@@ -77,6 +77,11 @@ export const DAMAGE = {
   armourReduction: 12,
   // Bullets lose damage passing through cover.
   penetrationLossPerCm: 3.5,
+  // Every weapon's `penetration` is in centimetres of *this*: plasterboard,
+  // the stuff the flat's interior walls are made of. It is the same number as
+  // `MATERIALS.drywall.penetration`, and the simulation converts every other
+  // surface into it — which is what makes steel expensive and glass free.
+  penetrationUnit: 14,
 };
 
 // ── The roster ─────────────────────────────────────────────────────────────

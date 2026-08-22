@@ -6,7 +6,7 @@
 //
 //   node tools/sim-smoke.mjs
 
-import { APARTMENT } from '../src/maps/apartment.js';
+import { APARTMENT, MATERIALS } from '../src/maps/apartment.js';
 import { buildWorld, hasLineOfSight, doorAngle } from '../src/sim/world.js';
 import {
   createState, addPlayer, stepSim, createInput, eyePosition, resetRound, setLoadout,
@@ -1451,6 +1451,133 @@ console.log('\nA door never pushes anyone through a wall:');
 
   restartRound();
   setLoadout(state, 'a1', DEFAULT_WEAPON);
+}
+
+// ── What each weapon shoots through ───────────────────────────────────────
+//
+// Not arithmetic about the table — a man stood behind a slab, and a shot fired
+// at him. Every weapon against every surface the flat is built from, on a
+// range with one wall in the middle of it.
+{
+  console.log('\nThrough the wall:');
+
+  check('a weapon\'s penetration is quoted in plasterboard',
+    DAMAGE.penetrationUnit === MATERIALS.drywall.penetration,
+    `${DAMAGE.penetrationUnit} vs ${MATERIALS.drywall.penetration}`);
+
+  function range(material, thickCm) {
+    const t = thickCm / 100;
+    return {
+      geometry: [
+        { min: { x: -6, y: -0.5, z: -4 }, max: { x: 6, y: 0, z: 4 }, material: MATERIALS.floor },
+        { min: { x: -t / 2, y: 0, z: -3 }, max: { x: t / 2, y: 3, z: 3 }, material: MATERIALS[material] },
+      ],
+      doors: [], lights: [], switches: [],
+      spawns: { attackers: [{ x: -3, z: 0 }], defenders: [{ x: 3, z: 0 }] },
+      bounds: { min: { x: -6, y: 0, z: -4 }, max: { x: 6, y: 3, z: 4 } },
+    };
+  }
+
+  // Fire one round down the range and report what arrived at the far side.
+  function through(w, weaponId) {
+    const s = createState(w, 7);
+    addPlayer(w, s, 'a', 'attackers', 'A');
+    addPlayer(w, s, 'd', 'defenders', 'D');
+    setLoadout(s, 'a', weaponId);
+    s.phase = 'live';
+    s.phaseTime = 300;
+    const a = s.players.a;
+    const d = s.players.d;
+    a.pos = { x: -2, y: 0, z: 0 };
+    d.pos = { x: 2, y: 0, z: 0 };
+    a.look = { yaw: -Math.PI / 2, pitch: 0 };
+    let dmg = 0;
+    for (let i = 0; i < 30; i++) {
+      stepSim(w, s, {
+        a: { ...createInput(), fire: i === 3, aim: true, yaw: -Math.PI / 2, pitch: 0 },
+        d: createInput(),
+      }, 1 / TICK_RATE);
+      for (const ev of s.events) if (ev.type === 'hit' && ev.targetId === 'd') dmg += ev.damage;
+      d.health = PLAYER.maxHealth;
+      d.alive = true;
+    }
+    return dmg;
+  }
+
+  const ROSTER = Object.keys(WEAPONS);
+  const SMGS = ROSTER.filter((id) => WEAPONS[id].cls === 'smg');
+  const RIFLES = ROSTER.filter((id) => WEAPONS[id].cls === 'rifle');
+  const SHOTGUNS = ROSTER.filter((id) => WEAPONS[id].cls === 'shotgun');
+
+  const at = (material, cm) => {
+    const w = buildWorld(range(material, cm));
+    return Object.fromEntries(ROSTER.map((id) => [id, through(w, id)]));
+  };
+
+  {
+    const concrete = at('concrete', 15);
+    check('the building itself stops everything, the .50 included',
+      ROSTER.every((id) => concrete[id] === 0),
+      ROSTER.filter((id) => concrete[id] > 0).join(', '));
+  }
+
+  {
+    const glass = at('glass', 10);
+    // A railing is not cover. This is the one that was wrong: glass used to
+    // cost as much as plasterboard, so it stopped every SMG in the building.
+    check('glass stops nothing — buckshot included',
+      ROSTER.every((id) => glass[id] > 0),
+      ROSTER.filter((id) => glass[id] === 0).join(', '));
+  }
+
+  {
+    const wall = at('drywall', 12);
+    check('a rifle goes through an interior wall',
+      RIFLES.every((id) => wall[id] > 0), RIFLES.filter((id) => !wall[id]).join(', '));
+    check('...and so do both marksman rifles',
+      wall['dmr-762'] > 0 && wall['amr-50'] > 0);
+    check('a submachine gun does not', SMGS.every((id) => wall[id] === 0),
+      SMGS.filter((id) => wall[id] > 0).join(', '));
+    check('nor does buckshot', SHOTGUNS.every((id) => wall[id] === 0),
+      SHOTGUNS.filter((id) => wall[id] > 0).join(', '));
+    // The same shot down an empty range, for something to compare it against.
+    const bare = range('drywall', 12);
+    const clean = through(buildWorld({ ...bare, geometry: [bare.geometry[0]] }), 'ar-556-piston');
+    check('and what comes through is worth much less than a clean hit',
+      wall['ar-556-piston'] < clean * 0.7,
+      `${wall['ar-556-piston'].toFixed(0)} of ${clean.toFixed(0)}`);
+  }
+
+  {
+    const door = at('wood', 6);
+    check('a closed door is no cover from a rifle',
+      RIFLES.every((id) => door[id] > 0), RIFLES.filter((id) => !door[id]).join(', '));
+    // The armour-piercing PDW is the one submachine gun that manages it, which
+    // is the whole reason to carry the small calibre.
+    check('the PDW is the only submachine gun that gets through one',
+      door['smg-57-pdw'] > 0 && SMGS.filter((id) => door[id] > 0).length === 1,
+      SMGS.filter((id) => door[id] > 0).join(', '));
+  }
+
+  {
+    const locker = at('metal', 16);
+    check('a steel locker is only beaten by the .50',
+      locker['amr-50'] > 0 && ROSTER.filter((id) => locker[id] > 0).length === 1,
+      ROSTER.filter((id) => locker[id] > 0).join(', '));
+    const wardrobe = at('wood', 30);
+    check('and so is a wardrobe',
+      wardrobe['amr-50'] > 0 && ROSTER.filter((id) => wardrobe[id] > 0).length === 1,
+      ROSTER.filter((id) => wardrobe[id] > 0).join(', '));
+  }
+
+  {
+    // Upholstery is not cover: through the back of a sofa is nearly free.
+    const cushion = at('fabric', 15);
+    check('a sofa back hides you and stops nothing but buckshot',
+      SMGS.every((id) => cushion[id] > 0) && RIFLES.every((id) => cushion[id] > 0)
+        && SHOTGUNS.every((id) => cushion[id] === 0),
+      `${SMGS.filter((id) => !cushion[id]).join(', ')} ${SHOTGUNS.filter((id) => cushion[id]).join(', ')}`);
+  }
 }
 
 // ── Bots that walk the flat ───────────────────────────────────────────────
