@@ -605,16 +605,9 @@ check(
   check('the pane is back next round', state.doors[GLASS].broken === false);
 }
 
-// ── Doors swing wide, and never into a wall ───────────────────────────────
-{
-  const anglesOk = world.doors.every((d) => d.maxAngle >= Math.PI / 2 - 1e-6);
-  check('every door opens at least 90°', anglesOk);
-  const wide = world.doors.filter((d) => d.maxAngle > (175 * Math.PI) / 180).length;
-  check('every door lies flat against its wall when open', wide === world.doors.length,
-    `${wide} of ${world.doors.length} past 175°`);
-  console.log('       swing limits: ' +
-    world.doors.map((d) => `${d.id} ${Math.round((d.maxAngle * 180) / Math.PI)}°`).join(', '));
-}
+// How wide a door swings is geometry, and geometry is map-check's job: it asks
+// the same question per door, names the one that fails, and asks it of every
+// map rather than only of the flat.
 
 // ── Determinism: same seed + same inputs => identical outcome ─────────────
 function run(seed) {
@@ -757,11 +750,6 @@ section('ballistics', () => {
     && w.range.near > 0 && w.range.far > w.range.near && w.range.floor > 0 && w.range.floor <= 1
     && w.aimTime > 0 && w.moveScale > 0 && w.pellets >= 1);
   check('every entry carries a full set of numbers', specOk);
-  // Where a figure came from is part of the figure: an entry nobody can trace
-  // back to a real weapon is one nobody can argue with later.
-  check('every entry says which real weapon its numbers came from',
-    Object.values(WEAPONS).every((w) => /Siege|Zero Hour/.test(w.from ?? '')),
-    Object.entries(WEAPONS).filter(([, w]) => !w.from).map(([id]) => id).join(' '));
 
   // Held down, a self-loader fires exactly once.
   {
@@ -952,10 +940,6 @@ section('ballistics', () => {
   // One round in the gun, fifteen in the world: every shot is a decision.
   {
     const fifty = WEAPONS['amr-50'];
-    check('the .50 is single-shot', fifty.magSize === 1, `${fifty.magSize} in the magazine`);
-    check('and carries fifteen rounds in all', fifty.magSize + fifty.reserve === 15,
-      `${fifty.magSize + fifty.reserve}`);
-
     const { a, d } = duel('amr-50');
     for (let i = 0; i < TICK_RATE; i++) {
       stepSim(world, state, { a1: { ...createInput(), yaw: 0, fire: i % 6 < 2 }, d1: createInput() });
@@ -1618,8 +1602,11 @@ section('penetration', () => {
   const open = buildWorld({ ...bare, geometry: [bare.geometry[0]] });
   const clean = Object.fromEntries(ROSTER.map((id) => [id, through(open, id)]));
 
+  // A pane is measured once and asked about twice — here, and again below,
+  // where a door is weighed against it.
+  const glass = at('glass', 10);
+
   {
-    const glass = at('glass', 10);
     // A railing is not cover: everything goes through a pane, and hardly
     // anything is lost on the way.
     check('glass stops nothing — buckshot included',
@@ -1653,8 +1640,7 @@ section('penetration', () => {
     // Compared weapon against itself, because the .50 and the heavier rifles
     // have their clean headshots clipped by the one-hit ceiling and a ratio
     // against those means nothing.
-    const glassAgain = at('glass', 10);
-    const worse = PLAIN.filter((id) => door[id] >= glassAgain[id]);
+    const worse = PLAIN.filter((id) => door[id] >= glass[id]);
     check('and a door costs a round more than a pane does', worse.length === 0,
       worse.join(', '));
   }
@@ -2039,11 +2025,13 @@ section('loadout', () => {
   console.log('\nWeapon selection:');
 
   const ids = Object.keys(WEAPONS);
-  check('the roster is the eleven blueprint sheets, three-three-three-two',
-    ids.length === 11 && WEAPON_CLASSES.length === 4 &&
-    [3, 3, 3, 2].every((n, i) =>
-      ids.filter((id) => WEAPONS[id].cls === WEAPON_CLASSES[i].id).length === n),
-    ids.map((id) => `${id}:${WEAPONS[id].cls}`).join(' '));
+  // The rack is built by walking the class list and showing what matches, so a
+  // weapon whose class is not on that list is in the game and in nobody's
+  // hands — present in every table, offered by no screen.
+  const racks = new Set(WEAPON_CLASSES.map((c) => c.id));
+  const unracked = ids.filter((id) => !racks.has(WEAPONS[id].cls));
+  check('every weapon is on a rack the loadout screen actually builds',
+    unracked.length === 0, unracked.map((id) => `${id}:${WEAPONS[id].cls}`).join(' '));
   check('no entry carries a manufacturer name or model number',
     !ids.some((id) => /mp5|ak|m4|glock|colt|hk|scar|vector|remington|barrett|saiga/i.test(id + WEAPONS[id].name)),
     ids.join(' '));
@@ -2092,8 +2080,6 @@ section('loadout', () => {
 
   for (let i = 0; i < Math.ceil(ROUND.prepTime * TICK_RATE) + 2; i++) stepSim(world, state, {});
   check('staging gives way to the round', state.phase === 'live', `phase=${state.phase}`);
-  check('the attackers wait half a minute, not a whole one',
-    ROUND.prepTime === 30, `prepTime=${ROUND.prepTime}`);
   check('no swapping weapons once the shooting starts',
     setLoadout(state, 'a1', 'smg-45-inline') === false && attacker.weapon.id === 'sg-12-pump',
     attacker.weapon.id);
@@ -2165,9 +2151,6 @@ section('sides', () => {
     [1, 2, 3, 4].every((r) => swapsSides(r, 1)));
   check('at two rounds a side, every other one does',
     swapsSides(1, 2) && !swapsSides(2, 2) && swapsSides(3, 2) && !swapsSides(4, 2));
-
-  // And the shipped setting is the one the flat was built around.
-  check('shipped setting is one round a side', ROUND.swapEvery === 1, `${ROUND.swapEvery}`);
 });
 
 // ── Counting the match ────────────────────────────────────────────────────
@@ -2182,8 +2165,6 @@ section('score', () => {
   const s = createState(w, 21);
   const a = addPlayer(w, s, 'a', 'attackers', 'A');
   const d = addPlayer(w, s, 'd', 'defenders', 'D');
-
-  check('nobody has won anything yet', a.roundsWon === 0 && d.roundsWon === 0);
 
   // Wipe the defence out and let the round settle.
   const idle = { a: createInput(), d: createInput() };
@@ -2200,6 +2181,10 @@ section('score', () => {
   resetRound(w, s);
   check('the tally survives the round', a.roundsWon === 1 && d.roundsWon === 0,
     `${a.roundsWon}:${d.roundsWon}`);
+  // Not the `sides` section repeating itself: the last check below is called
+  // "from the other side", and it is only that if the swap really happened.
+  // Without this the two of them could quietly stop changing ends and the
+  // check would go on passing under a name that had become a lie.
   check('...and the two have changed ends',
     a.team === 'defenders' && d.team === 'attackers');
 

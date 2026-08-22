@@ -119,6 +119,10 @@ const allSpawns = Object.values(MAP.spawns).flat();
 const spawnOn = (floor) =>
   allSpawns.find((s) => ((s.y ?? 0) > 0.1 ? 1 : 0) === floor);
 
+// Which rooms the walk below already had to find a standing spot in, so that
+// the room list afterwards asks only about the ones it never reached.
+const walked = new Set();
+
 for (const floor of [0, 1]) {
   const here = MAP.rooms.filter((r) => r.floor === floor);
   if (!here.length) continue;
@@ -133,17 +137,26 @@ for (const floor of [0, 1]) {
   for (const r of here) {
     if (r.shaft || r.hole || r.outside) continue;
     const p = anySpot(r);
+    walked.add(r.id);
     check(`reach ${r.id}`, !!p && reached(p.x, p.z), p ? `(${p.x}, ${p.z})` : 'nowhere to stand');
   }
 }
 
-console.log('\nRooms:');
 // The room list is what the floor plans are drawn from. If a rectangle in it
 // stops matching the walls around it, the plan starts lying — so every room
-// has to be a place a player can actually stand.
-for (const r of MAP.rooms) {
-  if (r.shaft || r.hole) continue; // a shaft is stairs, a void has no floor
-  check(`room "${r.id}" is a real space on floor ${r.floor}`, !!anySpot(r), 'nowhere to stand in it');
+// has to be a place a player can actually stand. The walk above already asked
+// that of everything it reached, and asking twice only prints twice: what is
+// left here are the rooms it skipped — the terrace, and any storey nobody
+// spawns on.
+{
+  const rest = MAP.rooms.filter((r) => !r.shaft && !r.hole && !walked.has(r.id));
+  if (rest.length) {
+    console.log('\nRooms the walk did not cover:');
+    for (const r of rest) {
+      check(`room "${r.id}" is a real space on floor ${r.floor}`, !!anySpot(r),
+        'nowhere to stand in it');
+    }
+  }
 }
 
 console.log('\nSpawns and fittings:');
@@ -216,8 +229,16 @@ for (const d of world.doors) {
   if (startsForced) clash = panelClashes(d, 1); // it is open from the first tick
   else for (let i = 0; i <= 12 && !clash; i++) clash = panelClashes(d, i / 12);
   check(`door "${d.id}" swings without hitting anything`, clash === null, clash ?? '');
-  check(`door "${d.id}" opens at least 100°`, d.maxAngle > (100 * Math.PI) / 180,
-    `${Math.round((d.maxAngle * 180) / Math.PI)}°`);
+
+  // Thrown fully open, a door should be flat against its wall and touching the
+  // frame — not stopped a foot short of it in the middle of the doorway. Both
+  // halves are needed: the gap alone is small for a door that swings 178° and
+  // just as small for one that barely opens at all, because the tip of a panel
+  // that never moved is against the wall it started on.
+  const gap = Math.abs(Math.sin(Math.PI - d.maxAngle)) * d.width;
+  check(`door "${d.id}" opens flat against the wall`,
+    d.maxAngle > (100 * Math.PI) / 180 && gap < 0.2,
+    `${Math.round((d.maxAngle * 180) / Math.PI)}°, tip ${gap.toFixed(2)} m off the wall`);
 
   // ...and nothing is parked in the doorway itself.
   const floorY = d.floorY ? F2 : 0;
@@ -386,15 +407,6 @@ for (let i = 0; i < world.boxes.length; i++) {
 for (const c of clashes) console.log(`       ${c}`);
 check(`no two of the ${world.boxes.length} surfaces are drawn in the same place`,
   clashes.length === 0, `${clashes.length} pair(s)`);
-
-console.log('\nDoors:');
-// A door thrown fully open should be flat against its wall, touching the
-// frame — not stopped a foot short of it in the middle of the doorway.
-for (const d of world.doors) {
-  const gap = Math.abs(Math.sin(Math.PI - d.maxAngle)) * d.width;
-  check(`door "${d.id}" opens flat against the wall`, gap < 0.2,
-    `${Math.round((d.maxAngle * 180) / Math.PI)}°, tip ${gap.toFixed(2)} m off the wall`);
-}
 
 // Walk a player up each staircase for real, through the simulation.
 // Walks a player through a list of waypoints the way a person would: face the
