@@ -23,29 +23,43 @@
 //     laundry, the terrace doors are glass, and the store has a hole in its
 //     floor you can drop through into the bathroom below.
 
+// Two numbers decide what a bullet does to a surface, and they are not the
+// same number:
+//
+//   `resist` — points of a weapon's penetration eaten per centimetre. Zero
+//     means nothing on the roster gets through it at any thickness. Every
+//     weapon carries a budget of these: 2 for buckshot, 13 for a rifle, 60 for
+//     the .50.
+//   `soak`   — per cent of the round's damage lost per centimetre.
+//
+// Keeping them apart is what lets a door be something everyone shoots through
+// and everyone pays for, while a wall is something only the .50 crosses.
 export const MATERIALS = {
-  concrete: { name: 'concrete', penetration: 0, color: 0x3a3a3e, hardness: 1.0 },
-  floor: { name: 'floor', penetration: 0, color: 0x5b4835, hardness: 1.0 },
-  // `penetration` is how many centimetres of this equal fourteen of
-  // plasterboard, which is the unit every weapon's own figure is quoted in.
-  // Zero means nothing on the roster gets through it at any thickness.
-  drywall: { name: 'drywall', penetration: 14, color: 0x5a544c, hardness: 0.25 },
-  // An interior door is the one wooden thing worth shooting through, and
-  // the armour-piercing PDW is the only submachine gun that manages it.
-  wood: { name: 'wood', penetration: 10, color: 0x4a3826, hardness: 0.5 },
+  concrete: { name: 'concrete', resist: 0, color: 0x3a3a3e, hardness: 1.0 },
+  floor: { name: 'floor', resist: 0, color: 0x5b4835, hardness: 1.0 },
+  // An interior wall is not cover you shoot through — it is cover. One weapon
+  // in the building disagrees, and carrying it costs a fifth of your walking
+  // speed.
+  drywall: { name: 'drywall', resist: 3.5, soak: 3.5, color: 0x5a544c, hardness: 0.25 },
+  // A door panel is six centimetres of this: everything on the roster gets
+  // through one, buckshot included, and everything arrives a quarter weaker.
+  // Furniture is the same stuff by the half-metre, which is why a wardrobe
+  // stops what a door does not.
+  wood: { name: 'wood', resist: 0.233, soak: 4.0, color: 0x4a3826, hardness: 0.5 },
   // Glass is shot through like anything thin — it just gives up sooner: two
-  // rounds and the pane is out of the frame. Buckshot included: a railing is
-  // not cover, and it used to stop every submachine gun in the building.
-  glass: { name: 'glass', penetration: 90, color: 0x88a0aa, hardness: 0.05, seeThrough: true },
-  // A steel locker is the hardest thing in the flat that is not the building
-  // itself: only the .50 goes through one.
-  metal: { name: 'metal', penetration: 4, color: 0x4a4e52, hardness: 0.9 },
+  // rounds and the pane is out of the frame. It barely slows a round and
+  // barely weakens it, because a railing is not cover.
+  glass: {
+    name: 'glass', resist: 0.07, soak: 1.0, color: 0x88a0aa, hardness: 0.05, seeThrough: true,
+  },
+  // A steel locker is as good as a wall, and beaten by the same one weapon.
+  metal: { name: 'metal', resist: 3.5, soak: 4.5, color: 0x4a4e52, hardness: 0.9 },
   // Wet rooms are tiled, and tile behaves like the floor it is laid on: a
   // separate material only so the renderer can tell them apart.
-  tile: { name: 'tile', penetration: 0, color: 0x6d6b66, hardness: 1.0 },
-  // Upholstery is not cover. Through the back of a sofa is nearly free;
-  // through one lengthways is a rifle's worth of work.
-  fabric: { name: 'fabric', penetration: 45, color: 0x3d3a42, hardness: 0.2 },
+  tile: { name: 'tile', resist: 0, color: 0x6d6b66, hardness: 1.0 },
+  // Upholstery hides you and stops very little. Through the back of a sofa is
+  // nearly free; through one lengthways is a marksman's job.
+  fabric: { name: 'fabric', resist: 0.31, soak: 1.5, color: 0x3d3a42, hardness: 0.2 },
 };
 
 const WALL_H = 3.0;

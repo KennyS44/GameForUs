@@ -8,14 +8,14 @@
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
   GADGETS, DEFAULT_GADGET, BLIND, NVG, FLARE, POWER,
-} from './constants.js?v=ceeb0e5b';
+} from './constants.js?v=f541ce5d';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=ceeb0e5b';
+} from './math.js?v=f541ce5d';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=ceeb0e5b';
+} from './world.js?v=f541ce5d';
 
 const GRAVITY = 18;
 
@@ -281,7 +281,9 @@ const MAX_RANGE = 60;
 
 function fireBullet(world, state, shooter, origin, dir) {
   const weapon = WEAPONS[shooter.weapon.id];
-  let penetrationLeft = weapon.penetration; // in centimetres of drywall
+  // A budget of points, spent against each surface's `resist`. Two for
+  // buckshot, thirteen for a rifle, sixty for the .50.
+  let penetrationLeft = weapon.penetration;
   // How many solid surfaces this round is allowed to cross. Centimetres alone
   // would let the .50 walk the length of the flat through six partitions; a
   // rifle that goes through one wall is a threat, one that goes through every
@@ -341,18 +343,14 @@ function fireBullet(world, state, shooter, origin, dir) {
 
     // Can the round punch through?
     //
-    // A weapon's penetration is quoted in centimetres of plasterboard, so what
-    // a surface costs is its thickness converted into that: steel is worth
-    // three and a half times its own thickness, a pane of glass a sixtieth of
-    // it. Until now the material's own figure was read once, to ask whether it
-    // was zero, and then thrown away — which made sixteen centimetres of steel
-    // exactly as soft as sixteen of plasterboard, and put a glass railing
-    // beyond every submachine gun on the roster.
+    // Two separate questions, and they used to be one. What it costs to get
+    // through a surface is `resist` — points of a weapon's penetration per
+    // centimetre — and what it takes out of the round on the way is `soak`.
+    // A door is the case that needs them apart: everything on the roster goes
+    // through one, and everything that does arrives weaker for it.
     const thicknessCm = Math.max(1, (firstGeo.exit - firstGeo.t) * 100);
     const mat = firstGeo.material;
-    const cost = mat.penetration > 0
-      ? thicknessCm * (DAMAGE.penetrationUnit / mat.penetration)
-      : Infinity;
+    const cost = mat.resist > 0 ? thicknessCm * mat.resist : Infinity;
     // Glass is not a wall you punched through, it is a window that broke, so
     // it never counts against the allowance.
     const solid = !mat.seeThrough;
@@ -364,10 +362,8 @@ function fireBullet(world, state, shooter, origin, dir) {
 
     penetrationLeft -= cost;
     if (solid) wallsLeft--;
-    // ...and what it costs is also what it takes out of the round. A bullet
-    // that spent itself getting through a steel locker should arrive with less
-    // left than one that came through a cushion.
-    damageScale *= Math.max(0.25, 1 - (cost * DAMAGE.penetrationLossPerCm) / 100);
+    const loss = thicknessCm * (mat.soak ?? DAMAGE.penetrationLossPerCm);
+    damageScale *= Math.max(0.25, 1 - loss / 100);
     start += firstGeo.exit + 0.02;
     if (start >= MAX_RANGE) return;
   }

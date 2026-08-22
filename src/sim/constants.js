@@ -75,13 +75,10 @@ export const DAMAGE = {
   // punishes the low-damage weapons hardest and would push an SMG to six
   // rounds a kill.
   armourReduction: 12,
-  // Bullets lose damage passing through cover.
+  // What a centimetre of cover takes out of a round, when the material has
+  // nothing to say about it. Every material in the flat does say — see `soak`
+  // in MATERIALS — so this is only the fallback.
   penetrationLossPerCm: 3.5,
-  // Every weapon's `penetration` is in centimetres of *this*: plasterboard,
-  // the stuff the flat's interior walls are made of. It is the same number as
-  // `MATERIALS.drywall.penetration`, and the simulation converts every other
-  // surface into it — which is what makes steel expensive and glass free.
-  penetrationUnit: 14,
 };
 
 // ── The roster ─────────────────────────────────────────────────────────────

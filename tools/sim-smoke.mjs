@@ -1461,9 +1461,15 @@ console.log('\nA door never pushes anyone through a wall:');
 {
   console.log('\nThrough the wall:');
 
-  check('a weapon\'s penetration is quoted in plasterboard',
-    DAMAGE.penetrationUnit === MATERIALS.drywall.penetration,
-    `${DAMAGE.penetrationUnit} vs ${MATERIALS.drywall.penetration}`);
+  // Every surface says both things, or it is quietly using a default for one
+  // of them: what it costs to cross, and what it takes out of the round.
+  {
+    const bad = Object.values(MATERIALS)
+      .filter((m) => m.resist > 0 && !(m.soak > 0))
+      .map((m) => m.name);
+    check('anything you can shoot through says what it takes out of the round',
+      bad.length === 0, bad.join(', '));
+  }
 
   function range(material, thickCm) {
     const t = thickCm / 100;
@@ -1478,7 +1484,10 @@ console.log('\nA door never pushes anyone through a wall:');
     };
   }
 
-  // Fire one round down the range and report what arrived at the far side.
+  // Fire a handful of rounds down the range and report what arrived at the far
+  // side. A handful rather than one: every weapon has a cone, and a single
+  // round that clips a head instead of a chest makes a ratio that means
+  // nothing. Summed over six, the pattern averages out.
   function through(w, weaponId) {
     const s = createState(w, 7);
     addPlayer(w, s, 'a', 'attackers', 'A');
@@ -1492,9 +1501,14 @@ console.log('\nA door never pushes anyone through a wall:');
     d.pos = { x: 2, y: 0, z: 0 };
     a.look = { yaw: -Math.PI / 2, pitch: 0 };
     let dmg = 0;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 60; i++) {
+      // Every weapon here fires as fast as the range lets it, pump gun
+      // included, so the count is the same for all of them.
+      const shoot = i % 8 === 3;
+      if (shoot) a.weapon.cooldown = 0;
+      a.recoil = { pitch: 0, yaw: 0 };
       stepSim(w, s, {
-        a: { ...createInput(), fire: i === 3, aim: true, yaw: -Math.PI / 2, pitch: 0 },
+        a: { ...createInput(), fire: shoot, aim: true, yaw: -Math.PI / 2, pitch: 0 },
         d: createInput(),
       }, 1 / TICK_RATE);
       for (const ev of s.events) if (ev.type === 'hit' && ev.targetId === 'd') dmg += ev.damage;
@@ -1508,6 +1522,10 @@ console.log('\nA door never pushes anyone through a wall:');
   const SMGS = ROSTER.filter((id) => WEAPONS[id].cls === 'smg');
   const RIFLES = ROSTER.filter((id) => WEAPONS[id].cls === 'rifle');
   const SHOTGUNS = ROSTER.filter((id) => WEAPONS[id].cls === 'shotgun');
+  // One bullet each, and no one-shot ceiling: the weapons whose arriving
+  // damage can be compared with a clean hit without the pellet pattern or the
+  // .50's own cap getting in the way.
+  const PLAIN = ROSTER.filter((id) => WEAPONS[id].pellets === 1 && !WEAPONS[id].oneShot);
 
   const at = (material, cm) => {
     const w = buildWorld(range(material, cm));
@@ -1521,42 +1539,51 @@ console.log('\nA door never pushes anyone through a wall:');
       ROSTER.filter((id) => concrete[id] > 0).join(', '));
   }
 
+  // The same shot down an empty range, for everything else to be measured
+  // against.
+  const bare = range('drywall', 12);
+  const open = buildWorld({ ...bare, geometry: [bare.geometry[0]] });
+  const clean = Object.fromEntries(ROSTER.map((id) => [id, through(open, id)]));
+
   {
     const glass = at('glass', 10);
-    // A railing is not cover. This is the one that was wrong: glass used to
-    // cost as much as plasterboard, so it stopped every SMG in the building.
+    // A railing is not cover: everything goes through a pane, and hardly
+    // anything is lost on the way.
     check('glass stops nothing — buckshot included',
       ROSTER.every((id) => glass[id] > 0),
       ROSTER.filter((id) => glass[id] === 0).join(', '));
+    const worst = Math.min(...PLAIN.map((id) => glass[id] / clean[id]));
+    check('and a pane barely weakens the round', worst > 0.85,
+      `worst case keeps ${(worst * 100).toFixed(0)}%`);
   }
 
   {
+    // A wall is cover. One weapon in the building disagrees.
     const wall = at('drywall', 12);
-    check('a rifle goes through an interior wall',
-      RIFLES.every((id) => wall[id] > 0), RIFLES.filter((id) => !wall[id]).join(', '));
-    check('...and so do both marksman rifles',
-      wall['dmr-762'] > 0 && wall['amr-50'] > 0);
-    check('a submachine gun does not', SMGS.every((id) => wall[id] === 0),
-      SMGS.filter((id) => wall[id] > 0).join(', '));
-    check('nor does buckshot', SHOTGUNS.every((id) => wall[id] === 0),
-      SHOTGUNS.filter((id) => wall[id] > 0).join(', '));
-    // The same shot down an empty range, for something to compare it against.
-    const bare = range('drywall', 12);
-    const clean = through(buildWorld({ ...bare, geometry: [bare.geometry[0]] }), 'ar-556-piston');
-    check('and what comes through is worth much less than a clean hit',
-      wall['ar-556-piston'] < clean * 0.7,
-      `${wall['ar-556-piston'].toFixed(0)} of ${clean.toFixed(0)}`);
+    check('an interior wall is only beaten by the .50',
+      wall['amr-50'] > 0 && ROSTER.filter((id) => wall[id] > 0).length === 1,
+      ROSTER.filter((id) => wall[id] > 0).join(', '));
+    check('and even that arrives as a hard hit rather than a kill',
+      wall['amr-50'] < clean['amr-50'],
+      `${wall['amr-50'].toFixed(0)} of ${clean['amr-50'].toFixed(0)}`);
   }
 
   {
+    // A door is not cover — it is a thing you shoot through and pay for.
     const door = at('wood', 6);
-    check('a closed door is no cover from a rifle',
-      RIFLES.every((id) => door[id] > 0), RIFLES.filter((id) => !door[id]).join(', '));
-    // The armour-piercing PDW is the one submachine gun that manages it, which
-    // is the whole reason to carry the small calibre.
-    check('the PDW is the only submachine gun that gets through one',
-      door['smg-57-pdw'] > 0 && SMGS.filter((id) => door[id] > 0).length === 1,
-      SMGS.filter((id) => door[id] > 0).join(', '));
+    check('everything on the roster shoots through a closed door',
+      ROSTER.every((id) => door[id] > 0),
+      ROSTER.filter((id) => door[id] === 0).join(', '));
+    const kept = PLAIN.map((id) => door[id] / clean[id]);
+    check('...and everything pays for it', Math.max(...kept) < 0.9,
+      `best case keeps ${(Math.max(...kept) * 100).toFixed(0)}%`);
+    // Compared weapon against itself, because the .50 and the heavier rifles
+    // have their clean headshots clipped by the one-hit ceiling and a ratio
+    // against those means nothing.
+    const glassAgain = at('glass', 10);
+    const worse = PLAIN.filter((id) => door[id] >= glassAgain[id]);
+    check('and a door costs a round more than a pane does', worse.length === 0,
+      worse.join(', '));
   }
 
   {
@@ -1564,10 +1591,14 @@ console.log('\nA door never pushes anyone through a wall:');
     check('a steel locker is only beaten by the .50',
       locker['amr-50'] > 0 && ROSTER.filter((id) => locker[id] > 0).length === 1,
       ROSTER.filter((id) => locker[id] > 0).join(', '));
+    // Half a metre of wardrobe is not a door, even though it is the same wood.
     const wardrobe = at('wood', 30);
-    check('and so is a wardrobe',
-      wardrobe['amr-50'] > 0 && ROSTER.filter((id) => wardrobe[id] > 0).length === 1,
-      ROSTER.filter((id) => wardrobe[id] > 0).join(', '));
+    check('a wardrobe stops every submachine gun but the PDW',
+      SMGS.filter((id) => wardrobe[id] > 0).join(',') === 'smg-57-pdw',
+      SMGS.filter((id) => wardrobe[id] > 0).join(', '));
+    check('and what gets through it is nearly spent',
+      wardrobe['ar-556-piston'] < clean['ar-556-piston'] * 0.35,
+      `${wardrobe['ar-556-piston'].toFixed(0)} of ${clean['ar-556-piston'].toFixed(0)}`);
   }
 
   {
