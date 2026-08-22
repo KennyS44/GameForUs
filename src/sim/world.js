@@ -4,9 +4,9 @@
 
 import {
   rayBox, rayTurnedBox, boxOverlaps, pointInBox, pushOutOfBox, clamp,
-} from './math.js?v=5c4f7baa';
-import { DOOR } from './constants.js?v=5c4f7baa';
-import { buildNav } from './nav.js?v=5c4f7baa';
+} from './math.js?v=61b09a34';
+import { DOOR } from './constants.js?v=61b09a34';
+import { buildNav } from './nav.js?v=61b09a34';
 
 const DOOR_HEIGHT = 2.05;
 const DOOR_THICKNESS = 0.06;
@@ -207,12 +207,45 @@ function playerBox(pos, radius, height) {
   };
 }
 
+// The same body, with its feet lifted clear of whatever it is standing on.
+//
+// For "would a body fit here?" the floor must not be part of the answer, and
+// with a box from the soles up it always was: a man stands a centimetre inside
+// the top of the slab — the vertical resolution deliberately leaves him there
+// rather than snapping him up onto a surface he is beside — so every spot in
+// the building read as blocked. Every push that asked this question was being
+// refused, everywhere, which is why a body could walk clean through a bed.
+const FOOT_CLEARANCE = 0.06;
+function standingBox(pos, radius, height) {
+  return {
+    min: { x: pos.x - radius, y: pos.y + FOOT_CLEARANCE, z: pos.z - radius },
+    max: { x: pos.x + radius, y: pos.y + height, z: pos.z + radius },
+  };
+}
+
 // Resolve one axis of movement against the static geometry.
 // Returns the corrected coordinate on that axis.
 function resolveAxis(world, pos, radius, height, axis, delta, stepHeight) {
   const next = { ...pos };
   next[axis] += delta;
   const pb = playerBox(next, radius, height);
+  // Which way we are going. Held apart from `delta` on purpose: the loop used
+  // to zero `delta` to mean "already stopped", and every box after the first
+  // then read that as "travelling backwards" and put the body against the face
+  // on its far side. Meet two boxes at once — the bed you leant on and the wall
+  // behind it — and the second one posts you out through the wall to the far
+  // end of the building. Direction is a fact about the step, so it is decided
+  // once and never written to.
+  const dir = Math.sign(delta);
+  // Where this axis started. A collision may take back part of a step; it may
+  // never hand out ground the step never covered. Everything below is clamped
+  // between here and where the step was trying to reach, which is what makes a
+  // twenty-metre throw impossible rather than merely unlikely — and it is the
+  // whole guard for a body that is somehow already inside something, which can
+  // then stop moving deeper but is never posted out the far side.
+  const startAt = pos[axis];
+  const lo = Math.min(startAt, next[axis]);
+  const hi = Math.max(startAt, next[axis]);
 
   for (const b of world.flat) {
     if (!boxOverlaps(pb, b)) continue;
@@ -222,8 +255,8 @@ function resolveAxis(world, pos, radius, height, axis, delta, stepHeight) {
     // the top of it by gravity — falling "onto" a surface they were beside
     // rather than above.
     if (axis === 'y') {
-      if (delta < 0 && b.max.y > pos.y + 1e-3) continue;
-      if (delta > 0 && b.min.y < pos.y + height - 1e-3) continue;
+      if (dir < 0 && b.max.y > pos.y + 1e-3) continue;
+      if (dir > 0 && b.min.y < pos.y + height - 1e-3) continue;
     }
 
     // Step over low obstacles instead of stopping dead on them.
@@ -233,16 +266,21 @@ function resolveAxis(world, pos, radius, height, axis, delta, stepHeight) {
         && !world.turned.some((o) => pushOutOfBox(o, lifted.x, lifted.y, lifted.z, radius, height))) {
         next.y = b.max.y;
         pos.y = b.max.y;
+        // The body is standing higher now, so the boxes still to be asked have
+        // to be asked about where it actually is.
+        pb.min.y = next.y;
+        pb.max.y = next.y + height;
         continue;
       }
     }
 
-    if (delta > 0) next[axis] = b.min[axis] - (axis === 'y' ? height : radius) - 1e-4;
-    else next[axis] = b.max[axis] + (axis === 'y' ? 0 : radius) + 1e-4;
+    const face = dir > 0
+      ? b.min[axis] - (axis === 'y' ? height : radius) - 1e-4
+      : b.max[axis] + (axis === 'y' ? 0 : radius) + 1e-4;
+    next[axis] = Math.min(hi, Math.max(lo, face));
 
     pb.min[axis] = next[axis] - (axis === 'y' ? 0 : radius);
     pb.max[axis] = next[axis] + (axis === 'y' ? height : radius);
-    delta = 0;
   }
   return next;
 }
@@ -252,7 +290,7 @@ function resolveAxis(world, pos, radius, height, axis, delta, stepHeight) {
 // resolution uses. A door deciding where to shove somebody has to ask this,
 // or it will push them into the one piece of furniture standing at an angle.
 function bodyClear(world, pos, radius, height) {
-  const body = playerBox(pos, radius, height);
+  const body = standingBox(pos, radius, height);
   if (world.flat.some((b) => boxOverlaps(body, b))) return false;
   return !world.turned.some((b) => pushOutOfBox(b, pos.x, pos.y, pos.z, radius, height));
 }
@@ -319,13 +357,26 @@ function resolveDoors(world, state, pos, radius, height) {
 // daylight. Twice, because leaving one box can walk you into the next.
 function resolveTurned(world, pos, radius, height) {
   if (!world.turned.length) return;
+  // A push is a nudge, never a shove — the same rule a closing door keeps. Deep
+  // inside a box the shortest way out is the far side, so an uncapped push
+  // carries a body clean through the thing it was leaning on, and out of a
+  // three-metre table that is a metre and a half of free travel.
+  const MAX_PUSH = 0.4;
   for (let pass = 0; pass < 2; pass++) {
     let moved = false;
     for (const b of world.turned) {
       const push = pushOutOfBox(b, pos.x, pos.y, pos.z, radius, height);
       if (!push) continue;
-      pos.x += push.x;
-      pos.z += push.z;
+      if (Math.hypot(push.x, push.z) > MAX_PUSH) continue;
+      const to = { x: pos.x + push.x, y: pos.y, z: pos.z + push.z };
+      // Out of the furniture, never into the wall behind it. Only the building
+      // gets a veto: asking for a spot clear of every other stick of furniture
+      // would refuse every push made anywhere near a table, because a body
+      // standing under a tabletop overlaps it by definition — and refusing the
+      // push is how you end up walking through the legs.
+      if (world.flat.some((o) => boxOverlaps(standingBox(to, radius, height), o))) continue;
+      pos.x = to.x;
+      pos.z = to.z;
       moved = true;
     }
     if (!moved) return;

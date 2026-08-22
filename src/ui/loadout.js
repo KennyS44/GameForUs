@@ -10,7 +10,7 @@
 
 import {
   WEAPONS, WEAPON_CLASSES, GADGETS, OPTICS, OPTICS_BY_CLASS, defaultOptic,
-} from '../sim/constants.js?v=5c4f7baa';
+} from '../sim/constants.js?v=61b09a34';
 
 const $ = (id) => document.getElementById(id);
 

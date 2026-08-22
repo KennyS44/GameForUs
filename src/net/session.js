@@ -5,13 +5,14 @@
 // session for a networked one — or later, a dedicated-server one — changes
 // nothing else.
 
-import { buildWorld } from '../sim/world.js?v=5c4f7baa';
+import { buildWorld } from '../sim/world.js?v=61b09a34';
 import {
   createState, addPlayer, removePlayer, stepSim, createInput, resetRound, setLoadout, setGadget,
+  setKit,
   setOptic,
-} from '../sim/sim.js?v=5c4f7baa';
-import { createBotBrain } from '../sim/bot.js?v=5c4f7baa';
-import { DT } from '../sim/constants.js?v=5c4f7baa';
+} from '../sim/sim.js?v=61b09a34';
+import { createBotBrain } from '../sim/bot.js?v=61b09a34';
+import { DT } from '../sim/constants.js?v=61b09a34';
 
 // ── Solo / training ───────────────────────────────────────────────────────
 
@@ -36,12 +37,19 @@ export function createLocalSession({ map, name = 'Игрок', bots = 1, mates =
   // Nor the same kit: the first one wires a doorway, the second carries flares
   // for the dark, the rest hold theirs shut and shout about it. Staging is
   // when the ones with something to fit go and fit it.
+  //
+  // Both ends are handed out at once, because the sides change every round and
+  // only the kit for the side he is on is in a bot's hands at any moment. Fit
+  // him out for one end only and the first swap turns the whole defence into
+  // four men carrying the same thing.
   const botKit = ['trap', 'flare', 'wedge', 'alarm', 'wedge'];
+  const botAssault = ['charge', 'smoke', 'flash', 'nvg', 'charge'];
   for (let i = 0; i < bots; i++) {
     const id = `bot${i}`;
     addPlayer(world, state, id, 'defenders', `Бот ${i + 1}`);
     setLoadout(state, id, botGuns[i % botGuns.length]);
-    setGadget(state, id, botKit[i % botKit.length]);
+    setKit(state, id, botKit[i % botKit.length]);
+    setKit(state, id, botAssault[i % botAssault.length]);
     botIds.push(id);
   }
   // Your own side. Named rather than numbered, because you will be watching
@@ -51,7 +59,8 @@ export function createLocalSession({ map, name = 'Игрок', bots = 1, mates =
     const id = `mate${i}`;
     addPlayer(world, state, id, 'attackers', mateNames[i % mateNames.length]);
     setLoadout(state, id, botGuns[(i + 1) % botGuns.length]);
-    setGadget(state, id, i === 0 ? 'charge' : 'smoke');
+    setKit(state, id, i === 0 ? 'charge' : 'smoke');
+    setKit(state, id, i === 0 ? 'trap' : 'alarm');
     botIds.push(id);
   }
 

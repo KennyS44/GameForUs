@@ -249,6 +249,47 @@ for (const d of world.doors) {
     `(${d.pos.x}, ${d.pos.z})`);
 }
 
+// Nothing stands in a doorway.
+//
+// Not a rule about walking — a plant is drawn and never simulated, so a body
+// goes straight through one — but a rule about what a doorway looks like. A
+// pot plant framed dead centre in an opening, or the corner of a desk sticking
+// into one, reads as furniture nobody thought about, and both were in the flat.
+// So this asks of the drawn pieces and the solid ones alike.
+console.log('\nNothing is parked in a doorway:');
+{
+  const ACROSS = 0.35;
+  const HEAD = 2.05;
+  const parts = [
+    ...world.boxes.filter((b) => b.tag === 'furniture').map((b) => ({ b, kind: 'мебель' })),
+    ...(MAP.decor ?? []).map((b) => ({ b, kind: 'декор' })),
+  ];
+  const blocked = [];
+  for (const d of world.doors) {
+    const half = d.width / 2;
+    const gate = {
+      minX: d.pos.x - (d.axis === 'x' ? half : ACROSS),
+      maxX: d.pos.x + (d.axis === 'x' ? half : ACROSS),
+      minZ: d.pos.z - (d.axis === 'x' ? ACROSS : half),
+      maxZ: d.pos.z + (d.axis === 'x' ? ACROSS : half),
+    };
+    const caught = new Set();
+    for (const { b, kind } of parts) {
+      const bb = bounds(b);
+      // Only what stands in the opening: a lintel above the head or a threshold
+      // strip under the feet is the doorway itself, not something left in it.
+      if (bb.max.y <= d.floorY + 0.05 || bb.min.y >= d.floorY + HEAD) continue;
+      if (bb.min.x < gate.maxX && bb.max.x > gate.minX
+        && bb.min.z < gate.maxZ && bb.max.z > gate.minZ) {
+        caught.add(`${kind} at (${((bb.min.x + bb.max.x) / 2).toFixed(1)}, ${((bb.min.z + bb.max.z) / 2).toFixed(1)})`);
+      }
+    }
+    if (caught.size) blocked.push(`${d.id}: ${[...caught].join(', ')}`);
+  }
+  check(`none of the ${world.doors.length} doorways has anything left standing in it`,
+    blocked.length === 0, blocked.join('; '));
+}
+
 // Furniture may cut a room in half diagonally, but it may never cut a room's
 // doors off from each other: from any door of a room you must be able to walk
 // to any other door of it without leaving the room.

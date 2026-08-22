@@ -32,7 +32,7 @@ import {
   FLARE,
 } from '../src/sim/constants.js';
 import { nearestNode, nodePos, findPath, smoothPath } from '../src/sim/nav.js';
-import { turnBox, pointInBox } from '../src/sim/math.js';
+import { turnBox, pointInBox, boxOverlaps, pushOutOfBox } from '../src/sim/math.js';
 import { createBotBrain } from '../src/sim/bot.js';
 import { createHostSession, createLocalSession } from '../src/net/session.js';
 
@@ -1774,6 +1774,145 @@ section('turned', () => {
   }
 });
 
+// ── Leaning on the furniture ──────────────────────────────────────────────
+//
+// The same question the doors are asked, asked of everything else you can walk
+// into: lean on it and you stop, you do not arrive somewhere else. It is the
+// same class of bug and it was in the flat for real — the resolution put a body
+// that already overlapped a box against the face on the far side of it, so
+// leaning on a wardrobe threw the player the length of the building and into
+// the wall at the end of it.
+//
+// So every piece of furniture in the flat is walked into, from four sides, and
+// what is watched is the path rather than the endpoint: going round the end of
+// a table is fine, crossing through the middle of it is not.
+section('furniture', () => {
+  console.log('\nWalking into the furniture:');
+
+  const w = buildWorld(APARTMENT);
+  const F2 = APARTMENT.upperFloorY;
+  const r = PLAYER.radius;
+  const h = PLAYER.heightStand;
+  const pieces = w.boxes.filter((b) => b.tag === 'furniture');
+
+  // Resting against something is not being inside it. A body walks in at seven
+  // centimetres a tick and is pushed back out on the same tick, and one wedged
+  // into a corner stays a little way in on purpose — the push out of the shelf
+  // would drive it into the cupboard behind, so it is refused and the body
+  // stops where it is. So this measures how far in anything ever got, and what
+  // is being watched for is a figure that grows: sinking, rather than resting.
+  //
+  // The feet are lifted clear of the floor for the square boxes, because a body
+  // stands a centimetre inside the top of the slab and every spot in the flat
+  // would otherwise read as occupied.
+  const LIFT = 0.06;
+  const body = (p, shrink = 0) => ({
+    min: { x: p.x - r + shrink, y: p.y + LIFT, z: p.z - r + shrink },
+    max: { x: p.x + r - shrink, y: p.y + h, z: p.z + r - shrink },
+  });
+  // How deep the body is in anything, in metres: the square boxes by how far
+  // they overlap, the turned ones by the circle the resolution itself uses.
+  const depthAt = (p) => {
+    let worst = 0;
+    let what = null;
+    for (const b of w.flat) {
+      const pb = body(p);
+      if (!boxOverlaps(pb, b)) continue;
+      const into = Math.min(
+        Math.min(pb.max.x - b.min.x, b.max.x - pb.min.x),
+        Math.min(pb.max.z - b.min.z, b.max.z - pb.min.z),
+      );
+      if (into > worst) { worst = into; what = b; }
+    }
+    for (const b of w.turned) {
+      const push = pushOutOfBox(b, p.x, p.y, p.z, r, h);
+      if (!push) continue;
+      const into = Math.hypot(push.x, push.z);
+      if (into > worst) { worst = into; what = b; }
+    }
+    return { depth: worst, box: what };
+  };
+  const stuckIn = (p) => (depthAt(p).depth > 0.02 ? depthAt(p).box : null);
+
+  let worstJump = 0;
+  let farthest = '';
+  let flung = null;
+  let buried = '';
+  let deepest = 0;
+  let tried = 0;
+
+  for (const b of pieces) {
+    const bb = b.aabb ?? b;
+    const floorY = bb.min.y >= F2 - 0.2 ? F2 : 0;
+    const mid = { x: (bb.min.x + bb.max.x) / 2, z: (bb.min.z + bb.max.z) / 2 };
+    const where = `(${mid.x.toFixed(1)}, ${mid.z.toFixed(1)})`;
+
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const off = r + 0.3;
+      const from = {
+        x: dx ? (dx > 0 ? bb.min.x - off : bb.max.x + off) : mid.x,
+        y: floorY,
+        z: dz ? (dz > 0 ? bb.min.z - off : bb.max.z + off) : mid.z,
+      };
+      // You cannot test walking into something from a spot a body does not fit
+      // in to begin with — inside the wardrobe, say, or in the wall behind it.
+      if (stuckIn(from)) continue;
+      // Nor from outside the building: the map's own edge clamp would yank the
+      // body back in, and that is the clamp doing its job, not the furniture.
+      if (from.x < w.bounds.min.x + r || from.x > w.bounds.max.x - r
+        || from.z < w.bounds.min.z + r || from.z > w.bounds.max.z - r) continue;
+      tried++;
+
+      const s = createState(w, 5);
+      const p = addPlayer(w, s, 'p', 'attackers', 'P');
+      // A second man on the other side, or the round ends the moment it starts
+      // and everyone is put back on a spawn — which reads as a teleport and is
+      // the test tripping over itself.
+      addPlayer(w, s, 'q', 'defenders', 'Q');
+      s.phase = 'live';
+      s.phaseTime = 300;
+      p.pos = { ...from };
+      const yaw = Math.atan2(-dx, -dz);
+      const walk = { ...createInput(), moveZ: 1, run: true, yaw };
+
+      let last = { ...p.pos };
+      for (let i = 0; i < 30; i++) {
+        stepSim(w, s, { p: walk, q: createInput() });
+        const jump = Math.hypot(p.pos.x - last.x, p.pos.z - last.z);
+        if (jump > worstJump) {
+          worstJump = jump;
+          farthest = `${where} moved the player ${jump.toFixed(2)} m in one tick`;
+        }
+        // Did the step cross the piece itself rather than go round it?
+        for (let k = 1; k <= 20 && !flung; k++) {
+          const mx = last.x + (p.pos.x - last.x) * (k / 20);
+          const mz = last.z + (p.pos.z - last.z) * (k / 20);
+          if (jump > 0.02 && pointInBox(b, mx, p.pos.y + 0.6, mz)) {
+            flung = `${where}: walked in from (${from.x.toFixed(2)}, ${from.z.toFixed(2)})`
+              + ` and crossed it in one step of ${jump.toFixed(2)} m`;
+          }
+        }
+        const { depth, box } = depthAt(p.pos);
+        if (depth > deepest) {
+          deepest = depth;
+          buried = `${where}: walked in from (${from.x.toFixed(2)}, ${from.z.toFixed(2)})`
+            + ` and sank ${depth.toFixed(2)} m into ${box?.material?.name ?? 'geometry'}`;
+        }
+        last = { ...p.pos };
+      }
+    }
+  }
+
+  console.log(`  (${tried} approaches to ${pieces.length} pieces, largest push ${worstJump.toFixed(3)} m,`
+    + ` deepest ${deepest.toFixed(3)} m)`);
+  check('leaning on the furniture never carries you through it', !flung, flung ?? '');
+  // A tick of running is seven centimetres, and the body is pushed back out on
+  // the tick it went in: anything under that is resting against the thing, and
+  // anything much over it is sinking into it.
+  check('...nor lets you sink into it', deepest < 0.08, buried);
+  check('...nor moves you further than a stride in one tick', worstJump < 0.6, farthest);
+});
+
 // ── Bots that walk the flat ───────────────────────────────────────────────
 //
 // The three claims worth holding onto: there is a route between any two places
@@ -2151,6 +2290,32 @@ section('sides', () => {
     [1, 2, 3, 4].every((r) => swapsSides(r, 1)));
   check('at two rounds a side, every other one does',
     swapsSides(1, 2) && !swapsSides(2, 2) && swapsSides(3, 2) && !swapsSides(4, 2));
+
+  // ── What the swap must not quietly cost ──
+  //
+  // Taking the other side's device off a man is right; handing him the side's
+  // default instead is not, and it threw his choice away for good. Four bots
+  // came out of the first round carrying four different things and went into
+  // the second carrying four of the same, for the rest of the match.
+  {
+    const solo = createLocalSession({ map: APARTMENT, bots: 4, mates: 2 });
+    const kitOf = () => Object.values(solo.state.players)
+      .filter((x) => x.id.startsWith('bot')).map((x) => x.gadget);
+    const spread = (list) => new Set(list).size;
+
+    check('four bots start with four different devices', spread(kitOf()) === 4, kitOf().join(' '));
+    for (let round = 2; round <= 5; round++) {
+      resetRound(solo.world, solo.state);
+      const now = kitOf();
+      check(`round ${round}: still four different ones`, spread(now) === 4, now.join(' '));
+      check(`round ${round}: and every one of them is his own side's`,
+        now.every((g, i) => GADGETS[g].team === Object.values(solo.state.players)
+          .filter((x) => x.id.startsWith('bot'))[i].team), now.join(' '));
+    }
+    // Back on the side he started on, a man finds what he set up for it.
+    check('two rounds later he has his own kit back again',
+      kitOf().join(' ') === 'trap flare wedge alarm', kitOf().join(' '));
+  }
 });
 
 // ── Counting the match ────────────────────────────────────────────────────

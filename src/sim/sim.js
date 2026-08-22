@@ -8,14 +8,14 @@
 import {
   PLAYER, LOOK, DAMAGE, WEAPONS, DEFAULT_WEAPON, DOOR, FLASHLIGHT, NOISE, ROUND, DT,
   GADGETS, DEFAULT_GADGET, BLIND, NVG, FLARE, POWER, OPTICS, defaultOptic, opticFits,
-} from './constants.js?v=5c4f7baa';
+} from './constants.js?v=61b09a34';
 import {
   clamp, approach, dirFromAngles, distXZ, makeRng, rayBox,
-} from './math.js?v=5c4f7baa';
+} from './math.js?v=61b09a34';
 import {
   moveAndCollide, groundedAt, raycastGeometry, doorFrame, worldToLocal, dirToLocal,
   hasLineOfSight, trapWireBox,
-} from './world.js?v=5c4f7baa';
+} from './world.js?v=61b09a34';
 
 const GRAVITY = 18;
 
@@ -70,6 +70,12 @@ function createPlayer(id, team, spawn, name) {
     // default depends on which door you came in through.
     gadget: DEFAULT_GADGET[team],
     gadgetLeft: GADGETS[DEFAULT_GADGET[team]].count,
+    // What they chose for each side, kept separately. The two sides change ends
+    // every round and carry different lists, so one field cannot hold both: a
+    // defender's wedge means nothing to the attacker he becomes next round. Kept
+    // the same way as the sights on the guns — remembered per side, so coming
+    // back to a side brings back what you set up for it.
+    kit: { attackers: DEFAULT_GADGET.attackers, defenders: DEFAULT_GADGET.defenders },
     gadgetCooldown: 0,
     // Night vision: only if it was the device they picked, and only while
     // they have it down over their eyes. A torch and a tube are never worn at
@@ -618,6 +624,22 @@ export function setGadget(state, id, gadgetId) {
 
   p.gadget = gadgetId;
   p.gadgetLeft = def.count;
+  // Filed under the side it belongs to, so changing ends and coming back finds
+  // it still there.
+  if (p.kit) p.kit[def.team] = gadgetId;
+  return true;
+}
+
+// Write down what this player carries on a side without putting it in their
+// hands now. A session uses it to fit a bot out for both ends before the match
+// starts, so that changing ends turns him into a different attacker rather than
+// into a copy of every other one.
+export function setKit(state, id, gadgetId) {
+  const p = state.players[id];
+  const def = GADGETS[gadgetId];
+  if (!p || !def || !p.kit) return false;
+  p.kit[def.team] = gadgetId;
+  if (def.team === p.team) return setGadget(state, id, gadgetId);
   return true;
 }
 
@@ -1596,7 +1618,15 @@ export function resetRound(world, state) {
     p.weapon.cooldown = 0;
     p.triggerDown = false;
     // Same rule for the device: the pick survives the round, the kit does not.
-    const gadgetId = GADGETS[p.gadget]?.team === p.team ? p.gadget : DEFAULT_GADGET[p.team];
+    //
+    // Changing ends is where this used to go wrong. A device belonging to the
+    // side just left has to come off — a defender has no use for a breaching
+    // charge — but handing out the side's default instead threw the choice away
+    // for good, and by the second round every bot in the flat was carrying the
+    // same thing. So the side you are on decides which of your two picks you get
+    // back, and neither is ever lost.
+    const own = GADGETS[p.gadget]?.team === p.team ? p.gadget : p.kit?.[p.team];
+    const gadgetId = GADGETS[own]?.team === p.team ? own : DEFAULT_GADGET[p.team];
     p.gadget = gadgetId;
     p.gadgetLeft = GADGETS[gadgetId].count;
     p.gadgetCooldown = 0;

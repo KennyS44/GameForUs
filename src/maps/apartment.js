@@ -34,7 +34,7 @@
 //
 // Keeping them apart is what lets a door be something everyone shoots through
 // and everyone pays for, while a wall is something only the .50 crosses.
-import { turnBox } from '../sim/math.js?v=5c4f7baa';
+import { turnBox } from '../sim/math.js?v=61b09a34';
 
 export const MATERIALS = {
   concrete: { name: 'concrete', resist: 0, color: 0x3a3a3e, hardness: 1.0 },
@@ -688,7 +688,10 @@ const furniture = ([
   ...onLegs(-2.8, 1.9, -2.2, 2.9, 0, { h: 0.8 }),
 
   // Guest room by the entrance hall.
-  ...bed(4.4, 0.3, 6.4, 2.4, 0, { head: 'n' }),
+  // Headboard against the solid half of the wall. It used to stand against the
+  // half with the way through in it, so from the hall you looked through the
+  // opening straight into the side of a bed.
+  ...bed(3.3, 0.3, 5.3, 2.4, 0, { head: 'n' }),
   ...wardrobe(8.2, 0.3, 8.8, 2.0, 0),
 
   // Spa.
@@ -712,7 +715,7 @@ const furniture = ([
   ...onLegs(3.7, -12.9, 4.9, -12.6, F2, { h: 0.78 }),
 
   // Study.
-  ...desk(-0.6, -12.3, 1.6, -11.5, F2),
+  ...desk(-0.9, -12.3, 1.3, -11.5, F2), // its corner used to sit in the doorway
   ...chair(0.5, -10.9, F2, { facing: 'n' }),
   ...shelves(3.4, -12.3, 4.6, -11.9, F2, { h: 1.8, back: 'n' }),
 
@@ -1085,7 +1088,7 @@ const decor = [
   // ── Ground floor ──
   // Entrance hall: something to look at while the door is being opened.
   ...picture(-2.5, 1.6, 2.35, 0.7, 0.9, 'e'),
-  ...plant(2.4, 3.6, 0),
+  ...plant(2.4, 2.5, 0), // beside the guest doorway, not standing in it
   ...rug(-1.6, 3.2, 1.6, 5.4, 0),
 
   // Cinema: the screen the seats are pointed at, and a strip light cable.
@@ -1095,7 +1098,7 @@ const decor = [
   // Dining and kitchen.
   ...picture(-2.3, 1.7, -12.44, 1.1, 0.8, 's'),
   ...rug(-3.8, -11.1, -0.8, -9.3, 0),
-  ...plant(-4.9, -9.6, 0),
+  ...plant(-4.55, -8.7, 0), // along the wall, clear of the door to the court
   ...picture(4.0, 1.7, -12.44, 0.6, 0.6, 's', DECO.paper),
 
   // Study and guest bedroom.
@@ -1111,7 +1114,7 @@ const decor = [
 
   // Spa and guest room.
   ...plant(11.0, 5.0, 0),
-  ...rug(4.3, 2.55, 6.7, 3.35, 0), // at the foot of the bed, not under it
+  ...rug(3.2, 2.55, 5.2, 3.35, 0), // at the foot of the bed, not under it
 
   // The court is outdoors: a planted corner and the tree in the tub.
   ...plant(-6.8, -9.0, 0.5, { r: 0.22, top: 1.6 }),
