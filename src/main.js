@@ -1,21 +1,21 @@
 // Entry point: menus, room setup, and starting a match.
 
-import { APARTMENT } from './maps/apartment.js?v=08fb6a1e';
+import { APARTMENT } from './maps/apartment.js?v=09f108eb';
 // The same projection tools/floorplan.mjs draws the sheets with, so a mark and
 // the wall it is next to are worked out from one set of numbers.
-import { PLAN, UPPER_FROM } from './maps/plan.js?v=08fb6a1e';
-import { createGame } from './game.js?v=08fb6a1e';
-import { createAudio } from './audio/audio.js?v=08fb6a1e';
-import { createInputSource, saveSettings } from './input/input.js?v=08fb6a1e';
-import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=08fb6a1e';
+import { PLAN, UPPER_FROM } from './maps/plan.js?v=09f108eb';
+import { createGame } from './game.js?v=09f108eb';
+import { createAudio } from './audio/audio.js?v=09f108eb';
+import { createInputSource, saveSettings } from './input/input.js?v=09f108eb';
+import { createLocalSession, createHostSession, createClientSession } from './net/session.js?v=09f108eb';
 import {
   createHostTransport, createClientTransport, makeRoomCode, normaliseCode,
-} from './net/transport.js?v=08fb6a1e';
-import { createLoadout } from './ui/loadout.js?v=08fb6a1e';
-import { createArmoury, savedOptics, saveOptic } from './ui/armoury.js?v=08fb6a1e';
-import { storageGet, storageSet } from './util/storage.js?v=08fb6a1e';
-import { DEBUG, AUTO_SOLO, AUTO_RANGE, SOLO_BOTS, SOLO_MATES } from './util/flags.js?v=08fb6a1e';
-import { swapsSides } from './sim/sim.js?v=08fb6a1e';
+} from './net/transport.js?v=09f108eb';
+import { createLoadout } from './ui/loadout.js?v=09f108eb';
+import { createArmoury, savedOptics, saveOptic } from './ui/armoury.js?v=09f108eb';
+import { storageGet, storageSet } from './util/storage.js?v=09f108eb';
+import { DEBUG, AUTO_SOLO, AUTO_RANGE, SOLO_BOTS, SOLO_MATES } from './util/flags.js?v=09f108eb';
+import { swapsSides } from './sim/sim.js?v=09f108eb';
 
 const $ = (id) => document.getElementById(id);
 
@@ -283,7 +283,7 @@ async function startRange(weaponId) {
   storageSet(WEAPON_KEY, weaponId);
   let RANGE;
   try {
-    ({ RANGE } = await import('./maps/range.js?v=08fb6a1e'));
+    ({ RANGE } = await import('./maps/range.js?v=09f108eb'));
   } catch {
     setStatus($('net-status'), 'Полигон не открылся.', 'error');
     showScreen('armoury');
@@ -296,11 +296,14 @@ async function startRange(weaponId) {
     session.chooseWeapon?.(weaponId);
     for (const [w, o] of Object.entries(savedOptics())) session.chooseOptic?.(w, o);
     onRange = true;
-    startGame(session);
-    // Past the racks and the staging minute: on a range there is nothing to
-    // stage and nobody to hide from.
+    // Past the racks and the staging minute before the runtime ever sees the
+    // round, not after: there is nothing to stage on a range and nobody to
+    // hide from, and doing it afterwards flashed the loadout screen up for as
+    // long as it took the loop to notice — long enough to see, and long enough
+    // that the pause screen refused to open while it was there.
     session.state.phase = 'live';
     session.state.phaseTime = 3600;
+    startGame(session);
   });
 }
 
@@ -326,9 +329,16 @@ function startGame(session) {
       // nobody else is waiting, so the round really does stop.
       const solo = session.kind === 'local';
       if (solo) game.pause();
-      $('pause-hint').textContent = solo
-        ? 'Раунд остановлен. Escape — вернуться в игру.'
-        : 'Раунд продолжается. Вас всё ещё можно убить.';
+      // The range is not a match, so the pause screen must not talk like one.
+      // The way out of it was there all along — Escape, then the button that
+      // said "leave the match" — which is a poor sign to hang over the only
+      // door in a room you came into to try a sight for ten seconds.
+      $('pause-hint').textContent = onRange
+        ? 'Полигон. Стрельба остановлена, Escape — вернуться к ней.'
+        : solo
+          ? 'Раунд остановлен. Escape — вернуться в игру.'
+          : 'Раунд продолжается. Вас всё ещё можно убить.';
+      $('btn-quit').textContent = onRange ? 'В оружейную' : 'Выйти из матча';
       if (screens.round.hidden) showScreen('pause');
     },
     onPhase: (phase) => {
@@ -600,7 +610,7 @@ showScreen('main');
 // below is never fetched, so `window.__gfu` stays undefined on the live site,
 // and there is nothing to remember to take out again. See src/util/flags.js.
 if (DEBUG) {
-  import('./util/debug.js?v=08fb6a1e').then(({ installDebug }) => {
+  import('./util/debug.js?v=09f108eb').then(({ installDebug }) => {
     installDebug({ input, getGame: () => game, startSolo, showMenu });
     // Started only after the handle exists, so a tool that asks for both never
     // races the match into being before it can steer it.
